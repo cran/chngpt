@@ -1,0 +1,15 @@
+9aa1317534a1c711a10fcc1243467e20 *ChangeLog
+4f0a77cd566718e0920b679f45f39641 *DESCRIPTION
+a2eb703bea842404989c90db9ab56ded *NAMESPACE
+7728b8b5c65d20178039359743e84854 *R/chngpt.logistics.R
+dcecb41e45ce01edb69286faa4802e95 *R/chngpt.score.test.R
+ec46d225ba87d4b1cfb923bcfc05801b *R/sim.sigmoid.R
+cfa63792b2d52473e58ca21697b2d36b *R/simulations.R
+631e421f6e8cf65adc0efaa5afc7aa10 *R/youtilcopy.R
+1b1e6f25cf82f18e40761114db64489e *data/sim.alphas.rda
+328426ab9a83a6c1878915de09eb97e9 *man/chngpt.logistic.Rd
+3cad03c6757c3ce6a60ee9c99d87ebe2 *man/chngpt.score.test.Rd
+636f9664697a489254e32bc51939db74 *man/sim.alphas.Rd
+64fdb50fb831369de3048fb7b38be68f *man/sim.my.Rd
+d34ad817114b329fb91cdb341d383f4a *man/sim.pastor.Rd
+789ff2a082430e8d72127201db292672 *man/sim.sigmoid.Rd

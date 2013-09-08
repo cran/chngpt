@@ -1,0 +1,5 @@
+export(chngpt.score.test, plot.chngpt.score.test, chngpt.logistic, chngpt.logistic.2)
+export(antoka.test)
+export(sim.pastor, sim.my, sim.sigmoid) 
+
+

@@ -1,0 +1,10 @@
+2013-05-25  V_0.0.1 Youyi Fong
+
+    * create package
+
+2013-08-14  V_0.0.2 Youyi Fong
+
+    * add set.seed(1) to chngpt.score.test so that the results are
+	reproducible
+
+
