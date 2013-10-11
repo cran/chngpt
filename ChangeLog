@@ -1,10 +1,14 @@
-2013-05-25  V_0.0.1 Youyi Fong
+2013-05-25  V_0.1-1 Youyi Fong
 
     * create package
 
-2013-08-14  V_0.0.2 Youyi Fong
+2013-08-14  V_0.1-2 Youyi Fong
 
     * add set.seed(1) to chngpt.score.test so that the results are
-	reproducible
-
-
+    reproducible
+    * rename chngpt.score.test to chngpt.test
+	* MASS is used for generating reference distribution samples while mvrnorm
+	is used in sim.sigmoid. In principle, should be able to use a single
+	package, but since the simulation studies for the paper has already been
+	run, just leave it as it is
+	* let search.all.thresholds be true if n < 500

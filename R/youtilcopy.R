@@ -460,13 +460,16 @@ mytex.end=function(file.name){
     if (!endsWith(file.name,".tex")) file.name=file.name%+%".tex"
     cat ("\n\\end{document}", file=file.name, append=TRUE)
 }
-mytex=function(dat=NULL, file.name="temp", digits=NULL, display=NULL, align="r", append=FALSE, preamble="", keep.row.names=TRUE, floating=FALSE, lines=TRUE, ...) {
+mytex=function(dat=NULL, file.name="temp", digits=NULL, display=NULL, align="r", append=FALSE, preamble="", include.rownames=TRUE, include.dup.rownames=TRUE, 
+    floating=FALSE, lines=TRUE, ...) {
     
 #    if(exists("tablePath") && file.exists(tablePath)) {
 #        file.name=tablePath%+%"/"%+%file.name
 #    } else {
 #        file.name=file.name
 #    }    
+
+    if (include.dup.rownames) include.rownames=F
     
     require(xtable)
     if (!endsWith(file.name,".tex")) file.name=file.name%+%".tex"
@@ -506,15 +509,20 @@ mytex=function(dat=NULL, file.name="temp", digits=NULL, display=NULL, align="r",
                 if (!is.null(dat1)) {
                     if (!is.null(attr(dat1,"caption"))) caption=attr(dat1,"caption") else caption=NULL
                     
+                    if (include.dup.rownames) {
+                        tmp=data.frame(row = rownames(dat1),data.frame(dat1))
+                        colnames(tmp)[-1]=colnames(dat1)
+                        dat1=tmp
+                        .ncol=.ncol+1
+                    }
                     if (lines) hline.after=c(-1,0,nrow(dat1)) else hline.after=c()
                     if (length(align)==1) align=rep(align,.ncol+1)
-                    if (!keep.row.names) rownames(dat1)=1:nrow(dat1) # there is no way to not print rownames by xtable, here we make it not so distracting
                     print(..., xtable(dat1, 
                         digits=(if(is.null(digits)) rep(3, .ncol+1) else digits), # cannot use ifelse here!!!
                         display=(if(is.null(display)) rep("f", .ncol+1) else display), # or here
                         align=align, caption=caption, ...), 
                         hline.after=hline.after,
-                            type = "latex", file = file.name, append = TRUE, floating = floating )
+                            type = "latex", file = file.name, append = TRUE, floating = floating, include.rownames=include.rownames )
                 }
                 cat ("\n", file=file.name, append=TRUE)
             }
@@ -523,7 +531,7 @@ mytex=function(dat=NULL, file.name="temp", digits=NULL, display=NULL, align="r",
     }
     
     if(!append) mytex.end(file.name)
-    print ("data saved to "%+%getwd()%+%"/"%+%file.name)
+    cat ("Saving data to "%+%getwd()%+%"/"%+%file.name%+%"\n")
 }
 #x=matrix(0,2,2)
 #attr(x,"caption")="cap"
@@ -2681,7 +2689,7 @@ remove.prefix=function(s,sep="_"){
 
 # make table that shows both counts/frequency and proportions
 # style 1: count only; 2: count + percentage; 3: percentage only
-table.prop=function (x,y,digit=1,style=1) {
+table.prop=function (x,y,digit=1,style=2) {
     tbl=table(x,y)
     prop = apply (tbl, 2, prop.table)
     if (style==2) {
@@ -2707,6 +2715,63 @@ methods4<-function(classes, super=FALSE, ANY=FALSE){
     sigs[sapply(sigs,length)>0] 
 } 
  
+
+# make two tables, rotating v1 and v2
+# fit is an object that needs to have coef and vcov
+# list the effect of one variable at -1, 0, 1 of another variable
+# v1.type and v2.type: continuous, binary, etc
+interaction.table=function(fit, v1, v2, v1.type="continuous", v2.type="continuous", logistic.regression=TRUE){
+    
+    coef.=coef(fit) 
+    cov.=vcov(fit)    
+    var.names=names(coef.)
+    v1.ind = match(v1, var.names)
+    v2.ind = match(v2, var.names)
+    itxn.ind = match(v1%+%":"%+%v2, var.names)
+    if(is.na(itxn.ind)) itxn.ind = match(v2%+%":"%+%v1, var.names)
+    if (any(is.na(c(v1.ind, v2.ind, itxn.ind)))) {
+        stop("v1, v2, or interaction not found in var.names")
+    }
+    
+    ret=list()
+    for (i in 1:2) {
+        
+        if (i==1) {
+            ind.1=v1.ind; type.1=v1.type
+            ind.2=v2.ind; type.2=v2.type
+        } else {
+            ind.1=v2.ind; type.1=v2.type
+            ind.2=v1.ind; type.2=v1.type
+        }
+        
+        lin.combs=NULL
+        if(type.2!="binary") {
+            lin.comb.1=rep(0, length(coef.)); lin.comb.1[ind.1]=1; lin.comb.1[itxn.ind]=-1; lin.combs=rbind(lin.combs, "-1"=lin.comb.1)
+        }
+        lin.comb.1=rep(0, length(coef.)); lin.comb.1[ind.1]=1; lin.comb.1[itxn.ind]=0;  lin.combs=rbind(lin.combs, "0"=lin.comb.1)
+        lin.comb.1=rep(0, length(coef.)); lin.comb.1[ind.1]=1; lin.comb.1[itxn.ind]=1;  lin.combs=rbind(lin.combs, "1"=lin.comb.1)
+    
+        effect = lin.combs%*%coef.
+        sd. = sqrt(diag(lin.combs%*%cov.%*%t(lin.combs)))
+        p.val = pnorm(abs(effect)/sd., lower.tail=FALSE)
+        lci=effect-1.96*sd.
+        uci=effect+1.96*sd.
+        
+        res = cbind(effect, lci, uci, p.val)
+        colnames(res)=c("coef","(lower","upper)","p value")
+        if (logistic.regression) {
+            res[,1:3]=exp(res[,1:3])
+            colnames(res)[1]="OR"
+        }
+        
+        ret[[i]]=res 
+    }    
+    
+    names(ret) = "Effect of increasing "%+%c(v1,v2) %+% " by 1 at selected values of " %+% c(v2,v1)
+    ret
+       
+}
+
 
 # this function contains "\""), which makes all the following line be miss-interpreted as being in quotes
 myprint.default = function (..., newline=TRUE, digits=3) {     

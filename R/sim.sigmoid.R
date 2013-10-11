@@ -30,7 +30,8 @@ sim.sigmoid = function (label, n, seed, alpha, beta, coef.z=log(1.4), x.distr="n
             stop("x.distr not supported: "%+%x.distr)
         }
         
-        tmp=rmvnorm(n, mean = c(mu,0), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2))
+        tmp=rmvnorm(n, mean = c(mu,0), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use mvtnorm
+        #tmp=mvrnorm(n, mu = c(mu,0), Sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use MASS
         x=tmp[,1]
         z=tmp[,2]
     
@@ -48,11 +49,13 @@ sim.sigmoid = function (label, n, seed, alpha, beta, coef.z=log(1.4), x.distr="n
     } else {
         
         if (label=="sigmoid2") {
-            coef.=c(alpha, coef.z, beta, 0)
+            coef.=c(alpha, coef.z,     beta, 0)
         } else if (label=="sigmoid3") {        
-            coef.=c(alpha, coef.z, beta, log(1.5))         
+            coef.=c(alpha, coef.z, log(.67),  beta)
         } else if (label=="sigmoid4") {        
-            coef.=c(alpha, coef.z, beta, log(1/1.5))         
+            coef.=c(alpha, coef.z, -log(.67), beta)         
+        } else if (label=="sigmoid5") {        
+            coef.=c(alpha, coef.z, 0,         beta)         
         } else {
             stop("label not supported: "%+%label)    
         }

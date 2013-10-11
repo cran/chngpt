@@ -1,5 +1,2 @@
-export(chngpt.score.test, plot.chngpt.score.test, chngpt.logistic, chngpt.logistic.2)
-export(antoka.test)
+export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm, coef.chngptm, vcov.chngptm, summary.chngptm, antoch.test)
 export(sim.pastor, sim.my, sim.sigmoid) 
-
-
