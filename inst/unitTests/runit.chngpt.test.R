@@ -1,9 +1,5 @@
-### --- Test setup ---
-
-if(FALSE) {
-  library("RUnit")
-  library("chngpt")
-}
+library("RUnit")
+library("chngpt")
     
 test.chngpt.test <- function() {
 
@@ -11,7 +7,9 @@ tolerance=1e-3
 # more stringent tolerance for one system to ensure algorithm accuracy
 if (R.Version()$system %in% c("x86_64, mingw32")) {
     tolerance=1e-6
-} 
+} else if (substr(R.Version()$system, 1, 10)=="sparc-sun-" | substr(R.Version()$system, 1, 4)=="i686") { 
+    tolerance=1e-1
+}
 RNGkind("Mersenne-Twister", "Inversion")
 
 data=sim.sigmoid("sigmoid4", n=250, seed=1, alpha=sim.alphas[["sigmoid4_norm"]]["3.4","0"], beta=0, x.distr="norm", e.=3.4, b.=-Inf)

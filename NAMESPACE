@@ -1,2 +1,5 @@
 export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm, coef.chngptm, vcov.chngptm, summary.chngptm, antoch.test)
 export(sim.pastor, sim.my, sim.sigmoid) 
+
+import(kyotil)
+importFrom(MASS, mvrnorm)
