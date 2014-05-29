@@ -45,6 +45,10 @@ sim.my = function (n, seed, label, alpha, beta, e.=NULL, b.=NULL, tr.=NULL) {
     sd.err=ifelse(x.star>3.5, 0.05, 1.5-0.414*x.star)            
     x=rnorm(n, x.star, sd.err)
     
+ 
+    
+    
+    
     dat=data.frame (
         y=y,
         x.star=x.star,

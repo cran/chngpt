@@ -11,11 +11,15 @@ Performs the change point tests.
 }
 \usage{
 chngpt.test (formula.null, formula.chngpt, data, 
-    interaction.method=c("lr", "score", "lr.norm",    
-        "weighted.max", "weighted.one.sided", "weighted.single",    
-        "main.itxn", "main.only", "itxn.only",    "wald"), 
-    chngpts=NULL, lb.quantile=.1, ub.quantile=.9, chngpts.cnt=50, b.=-30, single.weight=1,
+    interaction.method=c(
+        "lr.mc", "lr.pastor", 
+        "weighted.two.sided", "weighted.one.sided", "weighted.single.arg", 
+        "main.itxn", "main.only", "itxn.only"), 
+    chngpts=NULL, lb.quantile=.1, ub.quantile=.9, 
+    chngpts.cnt=50, 
+    b.=-30, single.weight=1,
     p.val.method=c("max"), ret.p.val=TRUE, mc.n=5e4, 
+    prob.weights=NULL,
     verbose=FALSE 
 )
 
@@ -63,9 +67,12 @@ string.
 numeric. Slope of logistic function that approximates the step function 
 }
   \item{interaction.method}{
-string. 
+string. See details.
 }
   \item{single.weight}{
+numeric. 
+}
+  \item{prob.weights}{
 numeric. 
 }
   \item{verbose}{
@@ -85,6 +92,14 @@ An object of type chngpt.test.
 }
 \details{
     If there are missing values in the chngpt formula, those rows will be removed from the whole dataset, including null model and chngpt model
+
+Different values of interaction.method correspond to maximum of the following.
+\preformatted{
+    lr.mc: likelihood ratio statistics
+    weighted.two.sided: a series of weighted transformation of scores that cover both directions of interaction
+    weighted.one.sided: a series of weighted transformation of scores that assume the direction of interaction coefficient is known
+    main.only: 
+}
 }
 \value{
 A list of class chngpt.test
@@ -94,7 +109,7 @@ A list of class chngpt.test
 \item{V.S.hat}{Estimated variance-covariance matrix of the score statistics}
 }
 \references{
-Fong Y, Di C, and Permar S. (2013) Change-Point Testing in Logistic Regression Models with Interaction Term. Statistics in Medicine, submitted.
+Fong Y, Di C, and Permar S. (2013) Change-Point Testing in Logistic Regression Models with Interaction Term. Submitted.
 }
 \examples{
 

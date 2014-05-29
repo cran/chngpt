@@ -17,6 +17,7 @@ sim.sigmoid = function (label, n, seed, alpha, beta, coef.z=log(1.4), x.distr="n
         x=c(rnorm(n*.6, mu, sd=sd.x), rep(mu-2*sd.x, n*.4))
     } else if(x.distr=="gam") { # gamma
         x=sd.x*scale(rgamma(n=n, 2.5, 1))+mu
+        z=scale(rgamma(n=n, 2.5, 1))
         
     } else if(startsWith(x.distr,"norm")) { # normal
     
@@ -31,7 +32,6 @@ sim.sigmoid = function (label, n, seed, alpha, beta, coef.z=log(1.4), x.distr="n
         }
         
         tmp=rmvnorm(n, mean = c(mu,0), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use mvtnorm
-        #tmp=mvrnorm(n, mu = c(mu,0), Sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use MASS
         x=tmp[,1]
         z=tmp[,2]
     
@@ -50,7 +50,7 @@ sim.sigmoid = function (label, n, seed, alpha, beta, coef.z=log(1.4), x.distr="n
         
         if (label=="sigmoid2") {
             coef.=c(alpha, coef.z,     beta, 0)
-        } else if (label=="sigmoid3") {        
+        } else if (label=="sigmoid3" | label=="sigmoid6") {        
             coef.=c(alpha, coef.z, log(.67),  beta)
         } else if (label=="sigmoid4") {        
             coef.=c(alpha, coef.z, -log(.67), beta)         
@@ -60,7 +60,14 @@ sim.sigmoid = function (label, n, seed, alpha, beta, coef.z=log(1.4), x.distr="n
             stop("label not supported: "%+%label)    
         }
         
-        X=cbind(1, z, x.star, x.star*z)
+        if (label=="sigmoid6") {
+            #X=cbind(1, z, x.star, x.star*(z+3)^3)
+            #X=cbind(1, z, x.star, x.star*z^2)
+            X=cbind(1, z, x.star, x.star*z^3)
+        } else {
+            X=cbind(1, z, x.star, x.star*z)
+        }
+        
         eta = X %*% coef.
     
     }
