@@ -7,11 +7,18 @@ chngpt.test = function(formula.null, formula.chngpt, data,
     chngpts=NULL, lb.quantile=.1, ub.quantile=.9, 
     chngpts.cnt=50, # this is set to 25 if int is weighted.two.sided or weighted.one.sided
     b.=-30, single.weight=1,
-    p.val.method=c("max"), ret.p.val=TRUE, mc.n=5e4, 
+    mc.n=5e4, 
     prob.weights=NULL,
     verbose=FALSE 
 ) {    
-    p.val.method <- match.arg(p.val.method)
+
+    # score.power is no longer a supported interaction.method
+    
+    # p.val.method is removed from argument list in the released version. 
+    # During manuscript development, we also compared to a testing procedure based on a pivotal statistic, the corresponding p.val.method = "chi.squared"
+    # p.val.method <- match.arg(p.val.method)
+    p.val.method="max" 
+    
     interaction.method <- match.arg(interaction.method)
     
     DNAME = deparse(substitute(data))
@@ -50,15 +57,19 @@ chngpt.test = function(formula.null, formula.chngpt, data,
     if (is.null(prob.weights)) prob.weights=rep(1,n) 
     data$prob.weights=prob.weights # try put it in data to be found by glm
         
-
+    
     #####################################################################################
     # null model fit
     #####################################################################################
-    if (verbose) print("fit null model")
+    if (verbose) myprint("fit null model")
     
-    fit.null=keepWarnings(glm(formula=formula.null,  data=data, family="binomial", weights=prob.weights)) # if glm gives a warning, use sandwich estimator to get variance est
+    fit.null=keepWarnings(glm(formula=formula.null, data=data, family="binomial", weights=prob.weights)) # if glm gives a warning, use sandwich estimator to get variance est
     if(length(fit.null$warning)!=0) {
-        return (NA)
+        if (length(fit.null$warning)==1 & startsWith(fit.null$warning[[1]]$message,"non-integer #successes in a binomial glm!")) {
+            fit.null=fit.null$value
+        } else {
+            return (NA)
+        }        
     } else {
         fit.null=fit.null$value
     }
@@ -89,7 +100,7 @@ chngpt.test = function(formula.null, formula.chngpt, data,
     # Compute W and W.null
     # W is used to form test statistics, W.null is used to find reference distribution. W and W.null differ only for lr.mc and score.power/score.power.norm
     #####################################################################################
-    if (verbose) print("compute W and W.null")
+    if (verbose) myprint("compute W and W.null")
     
     # W.M is n x M 
     W.M=sapply(chngpts, function (e.){
@@ -103,11 +114,11 @@ chngpt.test = function(formula.null, formula.chngpt, data,
     })
     
     if (!has.itxn) {
-        if (verbose) print("no interaction term")
+        if (verbose) myprint("no interaction term")
         W<-W.null<-W.M
-
+    
     } else {        
-        if (verbose) print("has interaction term")
+        if (verbose) myprint("has interaction term")
         if (verbose) myprint(interaction.method)
         
         ########################################
@@ -240,7 +251,7 @@ chngpt.test = function(formula.null, formula.chngpt, data,
     #####################################################################################
     # compute test statistics
     #####################################################################################
-    if (verbose) print("compute test statistics")
+    if (verbose) myprint("compute test statistics")
     
     if (interaction.method %in% c("lr.pastor","lr.mc")) {        
     # likelihood ratio statistics
@@ -291,77 +302,74 @@ chngpt.test = function(formula.null, formula.chngpt, data,
     #####################################################################################
     # compute p value
     #####################################################################################
-    if (verbose) print("compute p value")
+    if (verbose) myprint("compute p value")
     
     p.value=NA
-    if (ret.p.val) {                
-        
-        #################################
-        # save rng state before set.seed in order to restore before exiting this function
-        save.seed <- try(get(".Random.seed", .GlobalEnv), silent=TRUE) 
-        if (class(save.seed)=="try-error") {        
-            set.seed(1)
-            save.seed <- get(".Random.seed", .GlobalEnv)
-        }                        
+    
+    #################################
+    # save rng state before set.seed in order to restore before exiting this function
+    save.seed <- try(get(".Random.seed", .GlobalEnv), silent=TRUE) 
+    if (class(save.seed)=="try-error") {        
         set.seed(1)
-        
-        # one can also find the quantile of max of multivariate normal by the following, but it actually takes 3 times as long
-        #qmvnorm(.975, interval = c(-10, 10), tail = c("lower.tail"), mean = 0, corr = cov2cor(Sigma), sigma = NULL, maxpts = 25000, abseps = 0.001, releps = 0)        
-        
-        if (p.val.method=="max") {
-        # maximum over M change points
-
-            if (interaction.method=="lr.pastor") {
-            # use Pastor-Barriuso approximation
-                linear.predictors.delta=linear.predictors.a-linear.predictors.null
-                joint.p=numeric(M-1)
-                for (m in 2:M) {
-                    # correlation coef est
-                    #rho.sq=4*sum(linear.predictors.delta[,m-1] * diag(D.h) * linear.predictors.delta[,m]) / (2*2)
-                    rho.sq=sum(linear.predictors.delta[,m-1] * diag(D.h) * linear.predictors.delta[,m]) / sqrt(sum(linear.predictors.delta[,m-1]^2 * diag(D.h))) / sqrt(sum(linear.predictors.delta[,m]^2 * diag(D.h)))
-                    a.big.n=100
-                    mu.tmp=Q.max/2/(1-rho.sq)
-                    joint.p[m-1] = (1-rho.sq) * sum( rho.sq^(1:a.big.n) * pnorm(((1:a.big.n)+0.5-mu.tmp)/sqrt(mu.tmp))^2 )                    
-                }                
-                p.value = M * pchisq(Q.max, df=2, lower.tail=FALSE) - sum(joint.p)
-                
-            } else { 
-            # based on joint normal
-                sam=mvrnorm (mc.n, rep(0,p), cov2cor(t(W.null) %*% ADA %*% W.null)) # mvtnorm::rmvnorm can fail 
-                if (verbose>=2) myprint(mean(sam))
-                if (interaction.method %in% c("lr.mc","score.power","score")) {
-                # reference distribution, x.max, is max of ss                
-                    x.max = apply(sam, 1, function(aux) {
-                        max(aux[1:M*2-1]**2 + aux[1:M*2]**2)
-                    })
-                    p.value = mean(x.max>Q.max)                
-                } else  {
-                # reference distribution, x.max, is max of abs(norm)
-                    sam=abs(sam)            
-                    # there are several programming methods to get the max
-                    #x.max=rowMaxs(sam) #from matrixStats is slowest
-                    #x.max=pmax(sam[,1], sam[,2], sam[,3], sam[,4], sam[,5], sam[,6], sam[,7], sam[,8], sam[,9], sam[,10]) # faster than apply, but hard coded
-                    # the following is a little slower than doing pmax as above, but acceptable for n=1e5
-                    tmp = apply(sam, 2, function(aux) list(aux))
-                    tmp = do.call(c, tmp)
-                    x.max=do.call(pmax, tmp)            
-                    p.value = mean(x.max>T.max)                    
-                }
-            }
+        save.seed <- get(".Random.seed", .GlobalEnv)
+    }                        
+    set.seed(1)
+    
+    # one can also find the quantile of max of multivariate normal by the following, but it actually takes 3 times as long
+    #qmvnorm(.975, interval = c(-10, 10), tail = c("lower.tail"), mean = 0, corr = cov2cor(Sigma), sigma = NULL, maxpts = 25000, abseps = 0.001, releps = 0)        
+    
+    if (p.val.method=="max") {
+    # maximum over M change points
+    
+        if (interaction.method=="lr.pastor") {
+        # use Pastor-Barriuso approximation
+            linear.predictors.delta=linear.predictors.a-linear.predictors.null
+            joint.p=numeric(M-1)
+            for (m in 2:M) {
+                # correlation coef est
+                #rho.sq=4*sum(linear.predictors.delta[,m-1] * diag(D.h) * linear.predictors.delta[,m]) / (2*2)
+                rho.sq=sum(linear.predictors.delta[,m-1] * diag(D.h) * linear.predictors.delta[,m]) / sqrt(sum(linear.predictors.delta[,m-1]^2 * diag(D.h))) / sqrt(sum(linear.predictors.delta[,m]^2 * diag(D.h)))
+                a.big.n=100
+                mu.tmp=Q.max/2/(1-rho.sq)
+                joint.p[m-1] = (1-rho.sq) * sum( rho.sq^(1:a.big.n) * pnorm(((1:a.big.n)+0.5-mu.tmp)/sqrt(mu.tmp))^2 )                    
+            }                
+            p.value = M * pchisq(Q.max, df=2, lower.tail=FALSE) - sum(joint.p)
             
-        } else if (p.val.method=="chi.squared") {
-        # compute p-value using joint distribution
+        } else { 
+        # based on joint normal
+            sam=mvrnorm (mc.n, rep(0,p), cov2cor(t(W.null) %*% ADA %*% W.null)) # mvtnorm::rmvnorm can fail 
+            if (verbose>=2) myprint(mean(sam))
+            if (interaction.method %in% c("lr.mc","score.power","score")) {
+            # reference distribution, x.max, is max of ss                
+                x.max = apply(sam, 1, function(aux) {
+                    max(aux[1:M*2-1]**2 + aux[1:M*2]**2)
+                })
+                p.value = mean(x.max>Q.max)                
+            } else  {
+            # reference distribution, x.max, is max of abs(norm)
+                sam=abs(sam)            
+                # there are several programming methods to get the max
+                #x.max=rowMaxs(sam) #from matrixStats is slowest
+                #x.max=pmax(sam[,1], sam[,2], sam[,3], sam[,4], sam[,5], sam[,6], sam[,7], sam[,8], sam[,9], sam[,10]) # faster than apply, but hard coded
+                # the following is a little slower than doing pmax as above, but acceptable for n=1e5
+                tmp = apply(sam, 2, function(aux) list(aux))
+                tmp = do.call(c, tmp)
+                x.max=do.call(pmax, tmp)            
+                p.value = mean(x.max>T.max)                    
+            }
+        }
         
-            sqrt.inv = solve(chol(cov2cor(V.S.hat))) # t(sqrt.inv) %*% cov2cor(V.S.hat) %*% sqrt.inv = identity, i.e. t(sqrt.inv) %*% TT has identity covariance matrix
-            TT.std = t(sqrt.inv) %*% TT.0
-            p.value = pchisq(sum(TT.std**2), df=p, lower.tail = FALSE)                
-        
-        } else stop ("p.val.metthod not found")        
-        
-        # restore rng state 
-        assign(".Random.seed", save.seed, .GlobalEnv)     
-        
-    } 
+    } else if (p.val.method=="chi.squared") {
+    # compute p-value using joint distribution
+    
+        sqrt.inv = solve(chol(cov2cor(V.S.hat))) # t(sqrt.inv) %*% cov2cor(V.S.hat) %*% sqrt.inv = identity, i.e. t(sqrt.inv) %*% TT has identity covariance matrix
+        TT.std = t(sqrt.inv) %*% TT.0
+        p.value = pchisq(sum(TT.std**2), df=p, lower.tail = FALSE)                
+    
+    } else stop ("p.val.metthod not found")        
+    
+    # restore rng state 
+    assign(".Random.seed", save.seed, .GlobalEnv)     
         
         
     #################################################################
@@ -392,7 +400,7 @@ chngpt.test = function(formula.null, formula.chngpt, data,
     res$p.value=p.value
     res$p.val.method=p.val.method
     res$interaction.method=interaction.method
-
+    
     
     class(res)=c("chngpt.test","htest",class(res))
     res

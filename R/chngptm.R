@@ -1,5 +1,7 @@
 # tol=1e-4; maxit=1e2; verbose=TRUE; chngpt.init=NULL; search.all.thresholds=TRUE
-chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NULL, tol=1e-4, maxit=1e2, chngpt.init=NULL, verbose=FALSE) {
+chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NULL, tol=1e-4, maxit=1e2, chngpt.init=NULL, 
+    prob.weights=NULL,
+    verbose=FALSE) {
     
     form.all = update(formula.null, formula.chngpt)
     subset. = complete.cases(model.frame(form.all, data, na.action=na.pass))
@@ -19,6 +21,9 @@ chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NUL
     
     b.=-30
     
+    if (is.null(prob.weights)) prob.weights=rep(1,n) 
+    data$prob.weights=prob.weights # try put it in data to be found by glm
+    
     if (is.null(search.all.thresholds)) search.all.thresholds = n<500 
     
     if (search.all.thresholds) {
@@ -31,12 +36,12 @@ chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NUL
         }
         logliks=sapply (sorted.chng.var[-1], function(e) {
             data[[chngpt.var.name%+%"_dich_at_chngpt"]] = ifelse(chngpt.var>=e, 1, 0)
-            fit = glm(formula.new, data, family="binomial")        
+            fit = glm(formula.new, data, family="binomial", weights=prob.weights)        
             as.numeric(logLik(fit))
         } )
         e=sorted.chng.var[-1][which.max(logliks)]
         data[[chngpt.var.name%+%"_dich_at_chngpt"]] = ifelse(chngpt.var>=e, 1, 0)
-        fit = glm(formula.new, data, family="binomial") 
+        fit = glm(formula.new, data, family="binomial", weights=prob.weights) 
         if (verbose==2) print(summary(fit))
         coef.hat=c(coef(fit), e)       
         
@@ -71,7 +76,7 @@ chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NUL
             if(!has.itxn) {
                 # no interaction
                 
-                fit.0 = glm(update (formula.null, as.formula("~.+"%+%chngpt.var.name%+%"_dich_at_chngpt")), data, family="binomial")        
+                fit.0 = glm(update (formula.null, as.formula("~.+"%+%chngpt.var.name%+%"_dich_at_chngpt")), data, family="binomial", weights=prob.weights)        
                 beta.init=coef(fit.0)[p+1]; names(beta.init)="beta"
                 alpha.hat=coef(fit.0)[-(p+1)]
                 alpha.z = c(Z %*% alpha.hat)
@@ -103,7 +108,7 @@ chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NUL
             } else {
                 # has interaction
                 
-                fit.0 = glm(update (formula.null, as.formula("~.+"%+%chngpt.var.name%+%"_dich_at_chngpt*"%+%z.1.name)), data, family="binomial")        
+                fit.0 = glm(update (formula.null, as.formula("~.+"%+%chngpt.var.name%+%"_dich_at_chngpt*"%+%z.1.name)), data, family="binomial", weights=prob.weights)        
                 beta.init=coef(fit.0)[c(p+1,p+2)]; names(beta.init)=c("beta1","beta2")
                 alpha.hat=coef(fit.0)[-c(p+1,p+2)]
                 alpha.z = c(Z %*% alpha.hat)

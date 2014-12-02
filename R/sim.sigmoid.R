@@ -31,7 +31,7 @@ sim.sigmoid = function (label, n, seed, alpha, beta, coef.z=log(1.4), x.distr="n
             stop("x.distr not supported: "%+%x.distr)
         }
         
-        tmp=rmvnorm(n, mean = c(mu,0), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use mvtnorm
+        tmp=mvtnorm::rmvnorm(n, mean = c(mu,0), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use mvtnorm
         x=tmp[,1]
         z=tmp[,2]
     

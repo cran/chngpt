@@ -1,16 +1,16 @@
 Package: chngpt
 LazyLoad: yes
 LazyData: yes
-Version: 2014.5-29
+Version: 2014.12-2
 Title: Change Point Logistic Regression
 Author: Youyi Fong
 Maintainer: Youyi Fong <yfong@fhcrc.org>
 Depends: R (>= 3.0.0), kyotil, MASS
-Suggests: RUnit, xtable, mvtnorm
+Suggests: RUnit, mvtnorm
 Imports:
-Description: chngpt is a package for change point logistic regression
+Description: Hypothesis testing in change point logistic regression with or without interaction terms. Several options are provided for testing in models with interaction, including a maximum of likelihood ratios test that determines p-value through Monte Carlo. Estimation under change point model is also included, but less developed at this point.
 License: GPL (>= 2)
-Packaged: 2014-05-29 18:04:11 UTC; yfong
+Packaged: 2014-12-02 07:11:17 UTC; yfong
 NeedsCompilation: no
 Repository: CRAN
-Date/Publication: 2014-05-30 01:12:35
+Date/Publication: 2014-12-06 00:17:46

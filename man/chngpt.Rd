@@ -2,6 +2,6 @@
 \alias{chngpt}
 \title{chngpt Package}
 \description{
-Please see the Index link below for a list of available functions.
+Please see the Index link below for a list of available functions. The main testing function is chngpt.test().
 }
 \keyword{ distribution }

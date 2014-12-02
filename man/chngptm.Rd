@@ -14,7 +14,7 @@ Estimate change point logistic model
 
 \usage{
 chngptm   (formula.null, formula.chngpt, data, search.all.thresholds=NULL, tol = 1e-04,
-    maxit = 100, chngpt.init=NULL, verbose=FALSE)
+    maxit = 100, chngpt.init=NULL, prob.weights=NULL, verbose=FALSE)
 
 \method{coef}{chngptm} (object, ...)
 \method{vcov}{chngptm} (object, ...)
@@ -45,6 +45,8 @@ integer. Maximum number of iterations in the outer loop of optimization.
   \item{chngpt.init}{
 numeric. Initial value for the change point.
 }
+
+  \item{prob.weights}{numeric vector}
   \item{verbose}{Boolean.}
 
   \item{x}{chngptm fit object.}
