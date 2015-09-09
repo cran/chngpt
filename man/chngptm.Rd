@@ -13,8 +13,14 @@ Estimate change point logistic model
 }
 
 \usage{
-chngptm   (formula.null, formula.chngpt, data, search.all.thresholds=NULL, tol = 1e-04,
-    maxit = 100, chngpt.init=NULL, prob.weights=NULL, verbose=FALSE)
+chngptm (formula.1, formula.2, data, family,
+  type=c("step","hinge","segmented","stegmented"),
+  est.method=NULL, 
+  lb.quantile=.1, ub.quantile=.9, grid.size=500,
+  tol=1e-4, maxit=1e2, chngpt.init=NULL, 
+  weights=NULL,
+  verbose=FALSE,
+  ...) 
 
 \method{coef}{chngptm} (object, ...)
 \method{vcov}{chngptm} (object, ...)
@@ -25,17 +31,18 @@ chngptm   (formula.null, formula.chngpt, data, search.all.thresholds=NULL, tol =
 
 %- maybe also 'usage' for other objects documented here.
 \arguments{
-  \item{formula.null}{
-formula. Null model formula.}
-  \item{formula.chngpt}{
-formula. Change point variable formula.
-}
+  \item{formula.1}{
+The part of formula that is free of terms involving thresholded variables}
+  \item{formula.2}{
+The part of formula that is only composed of thresholded variables}
   \item{data}{
 data frame.
 }
-  \item{search.all.thresholds}{
-Boolean. If NULL, then when sample size is less than 500, it is set to TRUE. If TRUE, search all thresholds. 
-}
+  \item{type}{step: flat before and after change point; hinge: flat before and slope after change point; segmented: slope before and after change point}
+  \item{est.method}{string. Better leave it at NULL.}
+  \item{grid.size}{integer. }
+  \item{lb.quantile}{lower bound of the search range for change point estimate}
+  \item{ub.quantile}{upper bound of the search range for change point estimate}
   \item{tol}{
 numeric. Stopping criterion on the coefficient estimate.
 }
@@ -46,17 +53,20 @@ integer. Maximum number of iterations in the outer loop of optimization.
 numeric. Initial value for the change point.
 }
 
-  \item{prob.weights}{numeric vector}
+  \item{family}{passed to glm}
+  \item{weights}{passed to glm}
   \item{verbose}{Boolean.}
 
   \item{x}{chngptm fit object.}
   \item{object}{chngptm fit object.}
-  \item{\dots}{arguments passed to or from methods}
+  \item{\dots}{arguments passed to glm or coxph}
 
 
 }
 \details{
-Please note that the performance of the estimated variance of the coefficient estimates have not been studied thoroughly.
+Without lb.quantile and ub.quantile, finite sample performance of estimator drops considerably!
+When est.method is sigmoidapprox, Newton-Raphson is done with initial values chosen by change point hypothesis testing. The testing procedure may be less subjective to finite sample volatility. 
+
 }
 \value{
 A an object of type chngptm with the following components
@@ -67,20 +77,31 @@ A an object of type chngptm with the following components
 }
 \examples{
 
-data=sim.sigmoid("sigmoid4", n=250, seed=1, alpha=sim.alphas[["sigmoid4_norm"]]["3.4","0"], 
+dat=sim.chngpt("sigmoid4", type="step", n=200, seed=1, 
     beta=0, x.distr="norm", e.=3.4, b.=-Inf)
 
-fit.1 = chngptm (formula.null=y~z, formula.chngpt=~x, data, tol=1e-4, maxit=1e3) 
+fit.1 = chngptm (formula.1=y~z, formula.2=~x, family="binomial", dat, type="step") 
 print(fit.1)
 summary(fit.1)
 
 \dontrun{
 # not run because otherwise the examples take >5s and that is a problem for R CMD check
 # has interaction
-fit.2 = chngptm (formula.null=y~z, formula.chngpt=~x*z, data, tol=1e-4, maxit=1e3
-    , search.all.thresholds=TRUE) 
+fit.2 = chngptm (formula.1=y~z, formula.2=~x*z, family="binomial", dat, tol=1e-4, maxit=1e3) 
 print(fit.2)
 summary(fit.2)
+
+fit.1 = chngptm (formula.1=y~z, formula.2=~x, family="binomial", dat, type="hinge") 
+print(fit.1)
+summary(fit.1)
+
+library(survival)
+test1 <- data.frame(time=c(4,3,1,1,2,2,3), 
+              status=c(1,1,1,0,1,1,0), 
+              x=c(0,2,1,1,1,0,0), 
+              sex=c(0,0,0,0,1,1,1)) 
+fit=chngptm(formula.1=Surv(time, status)~1, formula.2=~x, data=test1, family="coxph", type="step")
+
 }
 
 }

@@ -1,16 +1,111 @@
-# tol=1e-4; maxit=1e2; verbose=TRUE; chngpt.init=NULL; search.all.thresholds=TRUE
-chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NULL, tol=1e-4, maxit=1e2, chngpt.init=NULL, 
-    prob.weights=NULL,
-    verbose=FALSE) {
+#deviance.3pl <- expression( (1-y) * ( c + (d-c)/(1+exp(b*(t-e))) )  +  log( 1 + exp( -c - (d-c)/(1+exp(b*(t-e))) ) ) )
+#deviance.3pl.deriv=deriv3(deviance.3pl, c("c","d","e"), c("c","d","e","t","y","b"))
+
+# step change point model
+dev.step <- expression( (1-y) * ( alpha.z + beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - beta/(1+exp(b*(x-e))) ) ) )
+dev.step.deriv=deriv3(dev.step, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
+dev.step.itxn <- expression( (1-y) * ( alpha.z + (beta1+beta2*z.1)/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - (beta1+beta2*z.1)/(1+exp(b*(x-e))) ) ) )
+dev.step.itxn.deriv=deriv3(dev.step.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
+# hinge change point model
+dev.hinge <- expression( (1-y) * ( alpha.z + (x-e)*beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - (x-e)*beta/(1+exp(b*(x-e))) ) ) )
+dev.hinge.deriv=deriv3(dev.hinge, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
+dev.hinge.itxn <- expression( (1-y) * ( alpha.z + (x-e)*(beta1+beta2*z.1)/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - (x-e)*(beta1+beta2*z.1)/(1+exp(b*(x-e))) ) ) )
+dev.hinge.itxn.deriv=deriv3(dev.hinge.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
+
+# step change point model
+dev.step.f <- function(theta,x,y,b,alpha.z,z.1)  {
+    beta=theta[1]; e=theta[2]
+    eta=beta/(1+exp(b*(x-e))) 
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+}
+dev.step.itxn.f <- function(theta,x,y,b,alpha.z,z.1)  {
+    beta1=theta[1]; beta2=theta[2]; e=theta[3]
+    eta=(beta1+beta2*z.1)/(1+exp(b*(x-e))) 
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+}
+# hinge change point model
+dev.hinge.f <- function(theta,x,y,b,alpha.z,z.1) {
+    beta=theta[1]; e=theta[2]
+    eta=(x-e)*beta/(1+exp(b*(x-e)))
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+} 
+dev.hinge.itxn.f <- function(theta,x,y,b,alpha.z,z.1)  {
+    beta1=theta[1]; beta2=theta[2]; e=theta[3]
+    eta=(x-e)*(beta1+beta2*z.1)/(1+exp(b*(x-e))) 
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+}
+# segmented change point model
+dev.segmented.f <- function(theta,x,y,b,alpha.z,z.1) {
+    beta1=theta[1]; beta2=theta[2]; e=theta[3]
+    eta=beta1*x + (x-e)*beta2/(1+exp(b*(x-e))) 
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+} 
+dev.segmented.itxn.f <- function(theta,x,y,b,alpha.z,z.1) {
+    beta1=theta[1]; beta2=theta[3]; beta3=theta[2]; beta4=theta[4]; e=theta[5]# note the order change between beta and theta
+    eta=(beta1+beta2*z.1)*x + (beta3+beta4*z.1)*(x-e)/(1+exp(b*(x-e)))
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+} 
+# stegmented change point model
+dev.stegmented.f <- function(theta,x,y,b,alpha.z,z.1) {
+    beta1=theta[1]; beta2=theta[2]; beta3=theta[3]; e=theta[4]
+    eta=beta1*x + ((x-e)*beta3 + beta2)/(1+exp(b*(x-e))) 
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+} 
+# the order of parameters in the following needs to be fixed
+dev.stegmented.itxn.f <- function(theta,x,y,b,alpha.z,z.1) {
+    beta1=theta[1]; beta2=theta[3]; beta3=theta[2]; beta4=theta[4]; beta5=theta[5]; beta6=theta[6]; e=theta[5]# note the order change between beta and theta
+    eta=(beta1+beta2*z.1)*x + ((beta3+beta4*z.1)*(x-e) + beta4+beta5*z.1)/(1+exp(b*(x-e)))
+    linear=alpha.z+eta
+    sum( (1-y)*linear + log(1+exp(-linear)) )
+} 
+
+
+do.regression=function(formula.new, data, weights, family){
+    if (family=="coxph") {
+        fit = keepWarnings(survival::coxph(formula.new, data=data, weights=weights))
+    } else {
+        fit =             keepWarnings(glm(formula.new, data=data, weights=weights, family=family) )
+    }
+    fit
+}
+
+
+# tol=1e-4; maxit=1e2; verbose=TRUE; est.method="grid"; lb.quantile=.1; ub.quantile=.9; grid.size=500
+chngptm = function(formula.1, formula.2, data, family,
+  type=c("step","hinge","segmented","stegmented"),
+  est.method=NULL, 
+  lb.quantile=.1, ub.quantile=.9, grid.size=500,
+  tol=1e-4, maxit=1e2, chngpt.init=NULL, 
+  weights=NULL,
+  verbose=FALSE,
+  ...) 
+{
     
-    form.all = update(formula.null, formula.chngpt)
+    # remove missing observations
+    form.all = update(formula.1, formula.2)
     subset. = complete.cases(model.frame(form.all, data, na.action=na.pass))
     data=data[subset.,,drop=FALSE]
     
-    # create a new column chngpt.var.name%+%"_dich_at_chngpt"
-    y=model.frame(formula.null, data)[,1]
-    Z=model.matrix(formula.null, data)
-    tmp=model.matrix(formula.chngpt, data)[,-1,drop=F]
+    if (missing(type)) stop("type mssing")
+    type<-match.arg(type)    
+    p.2=switch(type, step=1, hinge=1, segmented=2, stegmented=3)
+    
+    if (is.null(est.method)) 
+        est.method = if(family=="binomial" & is.null(weights) & type=="step") "sigmoidapprox" else "grid"
+    
+    b.=-30    
+        
+    # decide whether there is interaction
+    y=model.frame(formula.1, data)[,1]
+    Z=model.matrix(formula.1, data)
+    tmp=model.matrix(formula.2, data)[,-1,drop=F]
     n=nrow(Z)
     p=ncol(Z)
     chngpt.var.name=setdiff(colnames(tmp), colnames(Z))[1]
@@ -18,48 +113,62 @@ chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NUL
     chngpt.var = tmp[,chngpt.var.name]
     z.1 = tmp[,z.1.name] # if the intersection is a null set, z.1 is a matrix of n x 0 dimension
     has.itxn = length(z.1.name)>0
+    p.2.itxn=p.2*ifelse(has.itxn,2,1)
     
-    b.=-30
+    if (is.null(weights)) weights=rep(1,n) 
+    data$weights=weights # try put it in data to be found by glm
     
-    if (is.null(prob.weights)) prob.weights=rep(1,n) 
-    data$prob.weights=prob.weights # try put it in data to be found by glm
+    # make formula
+    if (type %in% c("segmented","stegmented")) formula.new = update(formula.1, as.formula("~.+"%+%chngpt.var.name)) else formula.new=formula.1
+    f.alt=get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)
+    formula.new=update(formula.new, as.formula(f.alt))
     
-    if (is.null(search.all.thresholds)) search.all.thresholds = n<500 
-    
-    if (search.all.thresholds) {
+    if (verbose) myprint(type, est.method, has.itxn)     
+    if (verbose) print(formula.new)
         
-        sorted.chng.var=sort(chngpt.var)
-        if (!has.itxn) {
-            formula.new = update(formula.null, as.formula("~.+"%+%chngpt.var.name%+%"_dich_at_chngpt"))
-        } else {
-            formula.new = update(formula.null, as.formula("~.+"%+%z.1.name%+%"*"%+%chngpt.var.name%+%"_dich_at_chngpt"))
-        }
-        logliks=sapply (sorted.chng.var[-1], function(e) {
-            data[[chngpt.var.name%+%"_dich_at_chngpt"]] = ifelse(chngpt.var>=e, 1, 0)
-            fit = glm(formula.new, data, family="binomial", weights=prob.weights)        
-            as.numeric(logLik(fit))
+    if (est.method=="grid") {
+        
+        # define a list of potential change points
+        chngpts=sort(chngpt.var)
+        chngpts=chngpts[chngpts<quantile(chngpts, ub.quantile) & chngpts>quantile(chngpts, lb.quantile)]
+        if (length(chngpts)>grid.size) chngpts=chngpts[round(seq(1,length(chngpts),length=grid.size))]
+                
+        logliks=sapply (chngpts, function(e) {
+            data=make.chngpt.var(chngpt.var, e, type, data)
+            fit = do.regression (formula.new, data, weights, family)
+            if(length(fit$warning)!=0) {
+                if(verbose) print(fit$warning)
+                NA
+            } else as.numeric(logLik(fit$value))
         } )
-        e=sorted.chng.var[-1][which.max(logliks)]
-        data[[chngpt.var.name%+%"_dich_at_chngpt"]] = ifelse(chngpt.var>=e, 1, 0)
-        fit = glm(formula.new, data, family="binomial", weights=prob.weights) 
-        if (verbose==2) print(summary(fit))
-        coef.hat=c(coef(fit), e)       
+        glm.warn=any(is.na(logliks))
+        e=chngpts[which.max(logliks)]
+        if(verbose==2) {
+            plot(chngpts, logliks, type="b", xlab="change points")
+            abline(v=e)
+        }
+        data = make.chngpt.var(chngpt.var, e, type, data)
+        fit = do.regression (formula.new, data, weights, family)$value
+        coef.hat=c(coef(fit), "chngpt"=e)       
         
-    } else {
+    } else if (est.method=="sigmoidapprox") {
+    
+        # Newton-Raphson
         
         # do a test to get init value for change point to be used in estimation
         if (is.null(chngpt.init)) {
-            test = chngpt.test (formula.null, formula.chngpt, data)
-            if (verbose) print(test)
+            test = chngpt.test (formula.1, formula.2, data, type=type) # there is no test for segmented or itxn, yet
+            if (verbose==2) print(test)
+            if (verbose==2) plot(test)
             e.init=test$chngpt
         } else {
             test=NULL # test is returned either way
             e.init=chngpt.init
         }
         names(e.init)="e"
+        glm.warn=test$glm.warn
         
-        #
-        coef.hat=rep(0, ncol(Z)+ifelse(has.itxn,3,2))
+        coef.hat=rep(0, 1+ncol(Z)+p.2.itxn)
         n.iter=0
         converged=TRUE        
         while(TRUE){    
@@ -69,119 +178,107 @@ chngptm = function(formula.null, formula.chngpt, data, search.all.thresholds=NUL
             if (n.iter>maxit) {converged=FALSE; break}
             
             # remake the binary change point variable in every iteration based on the change point estimate from last iteration
-            data[[chngpt.var.name%+%"_dich_at_chngpt"]] = ifelse(chngpt.var>e.init, 1, 0)
+            data = make.chngpt.var(chngpt.var, e.init, type, data)            
+            fit.0 = do.regression(formula.new, data, weights, family)$value
+            if (verbose==2) print(coef(fit.0))
             
-            # the following is dividied into has interaction and has not
-            # in both, we iterate between estimating effect given change point and estimating change point and associated effect given other effects
-            if(!has.itxn) {
-                # no interaction
-                
-                fit.0 = glm(update (formula.null, as.formula("~.+"%+%chngpt.var.name%+%"_dich_at_chngpt")), data, family="binomial", weights=prob.weights)        
-                beta.init=coef(fit.0)[p+1]; names(beta.init)="beta"
-                alpha.hat=coef(fit.0)[-(p+1)]
-                alpha.z = c(Z %*% alpha.hat)
-                
-                if (verbose) {
-                    myprint(beta.init, e.init, b.)
-                }
-                optim.out = optim(par=c(beta.init, e.init), 
-                      fn = function(theta,...) sum(deviance.chng.deriv(theta[1],theta[2],...)), 
-                      # if we use analytical gradient function by deriv3, we can get situations like exp(100), which will be Inf, and Inf/Inf will be NaN
-                      #gr = function(theta,...) colSums(attr(deviance.chng.deriv(theta[1],theta[2],...), "gradient")), 
-                      gr = NULL,
-                      chngpt.var, y, b., alpha.z, 
-                      lower = c(-10, quantile(chngpt.var, .1)), 
-                      upper = c(10, quantile(chngpt.var, .9)), 
-                      method="L-BFGS-B", control = list(), hessian = F)
-                #sum(deviance.chng.deriv(beta.init, e.init, chngpt.var, y, b., alpha.z))
-                
-                e.init=optim.out$par["e"]; names(e.init)="e"
-                coef.tmp=c(alpha.hat, optim.out$par)
-                if (verbose) print(coef.tmp)
-                if (max(abs(coef.tmp-coef.hat))<tol) {
-                    coef.hat=coef.tmp
-                    break
-                } else {
-                    coef.hat=coef.tmp
-                }
-        
+            # update threshold and associated coefficients
+            beta.init=coef(fit.0)[p+1:p.2.itxn]; #names(beta.init)=c("beta1","beta2")# we may need this for variance calculation to work
+            alpha.hat=coef(fit.0)[1:p]
+            alpha.z = c(Z %*% alpha.hat)
+            if (verbose) myprint(beta.init, e.init, b.)
+    
+            optim.out = optim(par=c(beta.init, e.init), 
+                  fn = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"f"), 
+                  # if we use analytical gradient function by deriv3 in optim, we can get situations like exp(100), which will be Inf, and Inf/Inf will be NaN
+                  gr = NULL,
+                  #fn = function(theta,...) sum(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...)), 
+                  #gr = function(theta,...) colSums(attr(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...), "gradient")), 
+                  chngpt.var, y, b., alpha.z, z.1,
+                  lower = c(rep(-10,length(beta.init)), quantile(chngpt.var, lb.quantile)), 
+                  upper = c(rep( 10,length(beta.init)), quantile(chngpt.var, ub.quantile)), 
+                  method="L-BFGS-B", control = list(), hessian = TRUE)
+            
+            e.init=optim.out$par["e"]; names(e.init)="e"
+            coef.tmp=c(alpha.hat, optim.out$par)
+            if (verbose) print(coef.tmp)
+            if (max(abs(coef.tmp-coef.hat))<tol) {
+                coef.hat=coef.tmp
+                break
             } else {
-                # has interaction
-                
-                fit.0 = glm(update (formula.null, as.formula("~.+"%+%chngpt.var.name%+%"_dich_at_chngpt*"%+%z.1.name)), data, family="binomial", weights=prob.weights)        
-                beta.init=coef(fit.0)[c(p+1,p+2)]; names(beta.init)=c("beta1","beta2")
-                alpha.hat=coef(fit.0)[-c(p+1,p+2)]
-                alpha.z = c(Z %*% alpha.hat)
-                
-                optim.out = optim(par=c(beta.init, e.init), 
-                      fn = function(theta,...) sum(deviance.chng.itxn.deriv(theta[1],theta[2],theta[3],...)), 
-                      gr = function(theta,...) colSums(attr(deviance.chng.itxn.deriv(theta[1],theta[2],theta[3],...), "gradient")), 
-                      chngpt.var, y, b., alpha.z, z.1,
-                      lower = c(-10, -10, quantile(chngpt.var, .1)), 
-                      upper = c(10, 10, quantile(chngpt.var, .9)), 
-                      method="L-BFGS-B", control = list(), hessian = TRUE)
-                
-                e.init=optim.out$par["e"]; names(e.init)="e"
-                coef.tmp=c(alpha.hat, optim.out$par)
-                if (verbose) myprint(coef.hat)
-                if (verbose) myprint(coef.tmp)
-                if (max(abs(coef.tmp-coef.hat))<tol) {
-                    coef.hat=coef.tmp
-                    break
-                } else {
-                    coef.hat=coef.tmp
-                }
-                
+                coef.hat=coef.tmp
             }
             
         } # end while 
     
-    } # end if search.all.thresholds else
+    } # end if est.method 
     
+    if (verbose) print(coef.hat)
     names(coef.hat)[length((coef.hat))]="chngpt"
-    names(coef.hat)[p+1]="("%+%chngpt.var.name%+%">chngpt)"
-    if (has.itxn) names(coef.hat)[p+2]="("%+%chngpt.var.name%+%">chngpt):"%+%z.1.name
-    
-    # variance-covariance matrix
-    # expressions for use with optim with deriv3
-    alpha.z.s="("%+% concatList("alpha"%+%1:p%+%"*z"%+%1:p%+%"","+") %+%")"
-    if (!has.itxn) {
-        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - beta/(1+exp(b*(x-e))) ) ) "
-        params=c("alpha"%+%1:p, "beta", "e")
+    if (type=="stegmented") {
+        replacement="I("%+%chngpt.var.name%+%">chngpt)"
+        replacement.2="I("%+%chngpt.var.name%+%">chngpt)*("%+%chngpt.var.name%+%"-chngpt)"
+        new.names=sub("x.gt.e.2", replacement.2, names(coef.hat))    
+        new.names=sub("x.gt.e", replacement, new.names)    
     } else {
-        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + (beta1+beta2*z.1)/(1+exp(b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - (beta1+beta2*z.1)/(1+exp(b*(x-e))) ) ) "
-        params=c("alpha"%+%1:p, "beta1", "beta2", "e")
+        if(type=="step") {
+            replacement="I("%+%chngpt.var.name%+%">chngpt)"
+        } else if (type=="hinge" | type=="segmented") {
+            replacement="I("%+%chngpt.var.name%+%">chngpt)*("%+%chngpt.var.name%+%"-chngpt)"
+        } 
+        new.names=sub("x.gt.e", replacement, names(coef.hat))    
     }
-    params.long=c(params,"x","y","b","z"%+%1:p,"z.1")
-    if (verbose) print(deviance.s)
-    if (verbose) myprint(params)
-    loss.f=deriv3(parse(text=deviance.s), params, params.long)    
-    param.list = c(as.list(coef.hat), list(chngpt.var), list(y), list(b.), lapply(1:ncol(Z), function (i) Z[,i]), list(z.1))
-    names(param.list)=params.long    
-    tmp=do.call(loss.f, param.list)
-    hess=apply(attr(tmp,"h"), 2:3, sum, na.rm=T)                
-    var.est = try(solve(hess)) # should keep change point in, and not do hess[-ncol(hess), -ncol(hess)], otherwise lead to over estimation of sd
-    rownames(var.est) <- colnames(var.est) <- names(coef.hat)
+    if (verbose) print(new.names)
+    names(coef.hat)=new.names
     
-    fit=list(
+#    # variance-covariance matrix
+#    if (type=="step" & family=="binomial") {
+#        # expressions for use with optim with deriv3
+#        alpha.z.s="("%+% concatList("alpha"%+%1:p%+%"*z"%+%1:p%+%"","+") %+%")"
+#        if (!has.itxn) {
+#            deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - beta/(1+exp(b*(x-e))) ) ) "
+#            params=c("alpha"%+%1:p, "beta", "e")
+#        } else {
+#            deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + (beta1+beta2*z.1)/(1+exp(b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - (beta1+beta2*z.1)/(1+exp(b*(x-e))) ) ) "
+#            params=c("alpha"%+%1:p, "beta1", "beta2", "e")
+#        }
+#        params.long=c(params,"x","y","b","z"%+%1:p,"z.1")
+#        if (verbose) print(deviance.s)
+#        if (verbose) myprint(params)
+#        loss.f=deriv3(parse(text=deviance.s), params, params.long)    
+#        param.list = c(as.list(coef.hat), list(chngpt.var), list(y), list(b.), lapply(1:ncol(Z), function (i) Z[,i]), list(z.1))
+#        names(param.list)=params.long    
+#        tmp=do.call(loss.f, param.list)
+#        hess=apply(attr(tmp,"h"), 2:3, sum, na.rm=T)                
+#        var.est = try(solve(hess)) # should keep change point in, and not do hess[-ncol(hess), -ncol(hess)], otherwise lead to over estimation of sd
+#        rownames(var.est) <- colnames(var.est) <- names(coef.hat)
+#    } else {
+#        var.est=NULL
+#    }
+    
+    res=list(
           coefficients=coef.hat
-        , vcov=var.est
-        , data=data
-        , formula.null=formula.null
-        , formula.chngpt=formula.chngpt
+#        , vcov=var.est
+        , formula.1=formula.1
+        , formula.2=formula.2
         , chngpt.var=chngpt.var.name
         , chngpt=coef.hat["chngpt"]
-        , search.all.thresholds = search.all.thresholds     
+        , est.method = est.method
+        , glm.warn = glm.warn    
     )
-    if (!search.all.thresholds) fit=c(fit, list(converged=converged, iter=n.iter, test=test))
-    names(fit$chngpt) = round(100*mean(chngpt.var<fit$chngpt),1) %+% "%"
-    class(fit)=c("chngptm", class(fit))
+    if (est.method=="sigmoidapprox") {
+        res=c(res, list(converged=converged, iter=n.iter, test=test, best.fit=fit.0))
+    } else if (est.method=="grid") {
+        res=c(res, list(best.fit=fit))
+    }
+    names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %+% "%"
+    class(res)=c("chngptm", class(res))
     
-    fit    
+    res    
 }
 
 print.chngptm=function(x, ...) {
-    if (!x$search.all.thresholds) {
+    if (x$est.method=="sigmoidapprox") {
         if (!x$converged) cat("Warning: not converged\n")
     }
     print(x$coefficients)
@@ -202,6 +299,12 @@ summary.chngptm=function(object, ...) {
     fit=object
     p=length(fit$coefficients)
     n=nrow(fit$data)
+    
+    if (is.null(fit$vcov)) {
+        cat("No variance estimate available.\n\n")
+        print(fit)
+        return (invisible())
+    }
     
     # assuming the last of coefficients is always the change point
     res=list()
@@ -229,16 +332,6 @@ summary.chngptm=function(object, ...) {
     
     res
 }
-
-
-#deviance.3pl <- expression( (1-y) * ( c + (d-c)/(1+exp(b*(t-e))) )  +  log( 1 + exp( -c - (d-c)/(1+exp(b*(t-e))) ) ) )
-#deviance.3pl.deriv=deriv3(deviance.3pl, c("c","d","e"), c("c","d","e","t","y","b"))
-
-deviance.chng <- expression( (1-y) * ( alpha.z + beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - beta/(1+exp(b*(x-e))) ) ) )
-deviance.chng.deriv=deriv3(deviance.chng, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
-
-deviance.chng.itxn <- expression( (1-y) * ( alpha.z + (beta1+beta2*z.1)/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - (beta1+beta2*z.1)/(1+exp(b*(x-e))) ) ) )
-deviance.chng.itxn.deriv=deriv3(deviance.chng.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
 
 
 #    c.init=ifelse(beta<0, (alpha+beta), (alpha)); names(c.init)="c"

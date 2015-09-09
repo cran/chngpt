@@ -1,5 +1,21 @@
 export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm, coef.chngptm, vcov.chngptm, summary.chngptm, antoch.test)
-export(sim.pastor, sim.my, sim.sigmoid) 
+export(sim.pastor, sim.my, sim.chngpt) 
 
 importFrom(kyotil, '%+%', startsWith, rbern, expit, keepWarnings, myprint, concatList, endsWith, mysapply)
 importFrom(MASS, mvrnorm)
+import(survival)
+
+importFrom("graphics", "abline", "plot")
+importFrom("stats", "as.formula", "coef", "complete.cases", "cov2cor",
+             "deriv3", "glm", "logLik", "median", "model.frame",
+             "model.matrix", "na.pass", "optim", "pchisq", "pnorm",
+             "predict", "pt", "qt", "quantile", "rbeta", "rgamma",
+             "rnorm", "runif", "update")
+importFrom("utils", "str")
+
+S3method(coef,chngptm)
+S3method(vcov,chngptm)
+S3method(summary,chngptm)
+S3method(print,chngptm)
+S3method(plot,chngpt.test)
+
