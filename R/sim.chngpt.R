@@ -1,22 +1,28 @@
 expit.2pl=function(t,e,b) sapply(t, function(t) 1/(1+exp(b*(t-e))))
 
-sim.chngpt = function (label, 
-    type=c("step","hinge","segmented","stegmented"),
+sim.chngpt = function (
+    label=c("sigmoid2","sigmoid3","sigmoid4","sigmoid5","sigmoid6","quadratic","exp","flatHyperbolic"), 
     n, seed, 
-    beta, coef.z=log(1.4), 
-    x.distr="norm", 
-    e., b.=-Inf,
+    type=c("NA","step","hinge","segmented","stegmented"),
+    family=c("binomial","gaussian"),
+    beta=NULL, coef.z=log(1.4), alpha=NULL,
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary"),     
+    e.=NULL, b.=-Inf,
+    sd=0.3,
     alpha.candidate=NULL, verbose=FALSE) 
 {
     
     set.seed(seed)
     if (!requireNamespace("mvtnorm")) {print("mvtnorm does not load successfully"); return (NULL) }
     
-    if (missing(type)) stop("type mssing")
+    if (missing(type) & startsWith(label,"sigmoid")) stop("type mssing")
     type<-match.arg(type)    
+    label<-match.arg(label)    
+    family<-match.arg(family)    
+    x.distr<-match.arg(x.distr)    
     
     mu=4.7 
-    sd.x=1.6
+    sd.x=if (label=="quadratic") sd.x=1.4 else 1.6
     
     # generate covariates
     if(x.distr=="imb") { # imbalance
@@ -29,8 +35,13 @@ sim.chngpt = function (label,
         x=c(rnorm(n*.6, mu, sd=sd.x), rep(mu-2*sd.x, n*.4))
         z=rep(1,n)
     } else if(x.distr=="gam") { # gamma
-        x=sd.x*scale(rgamma(n=n, 2.5, 1))+mu
-        z=scale(rgamma(n=n, 2.5, 1))        
+        x=1.4*scale(rgamma(n=n, 2.5, 1))+mu/2
+        z=rnorm(n, mean=0, sd = 1)
+        e.=2.2; # for sigmoid2, override input
+        if (label=="sigmoid2") {
+            alpha= if (type=="hinge") -0.5 else if(type=="segmented") -1.3 else stop("wrong type") # to have similar number of cases
+        }            
+        
     } else if(startsWith(x.distr,"norm")) { # normal
         if (x.distr=="norm") {
              rho=0
@@ -44,16 +55,23 @@ sim.chngpt = function (label,
         tmp=mvtnorm::rmvnorm(n, mean = c(mu,0), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use mvtnorm
         x=tmp[,1]
         z=tmp[,2]    
+    } else if(startsWith(x.distr,"zbinary")) { 
+        x=rnorm(n, mu, sd = sd.x)
+        z=rbern(n, 1/2)-0.5
     } else stop("x.distr not supported: "%+%x.distr)    
     
+    if (is.null(e.) | !startsWith(label,"sigmoid")) e.=4.7 # hard code e. for labels other than sigmoid*
     x.star = expit.2pl(x, e=e., b=b.)  
-    # get alpha
-    alpha=chngpt::sim.alphas[[ifelse(label=="sigmoid5","sigmoid2",label)%+%"_"%+%x.distr]][e.%+%"", beta%+%""]
-    if(is.null(alpha)) stop("alpha not found")
+    
+    # get alpha, when label is quadratic, alpha remains a null, and do not throw an error
+    if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[ifelse(label=="sigmoid5","sigmoid2",label)%+%"_"%+%x.distr]][e.%+%"", beta%+%""], silent=TRUE)
+    if(inherits(alpha, "try-error")) stop("alpha not found, please check beta or provide a null") 
     
     # make design matrix and coefficients
     X=cbind(1,     z,        x,   x.star,   x.star*(x-e.), z*x,   z*x.star,   z*x.star*(x-e.))
     coef.=c(alpha, z=coef.z, x=0, x.star=0, x.hinge=0,     z.x=0, z.x.star=0, z.x.hinge=0)
+
+
 
     if (label=="sigmoid1") { 
     # intercept only
@@ -80,28 +98,57 @@ sim.chngpt = function (label,
         coef.["z."%+%beta.var.name]=beta
         if (type=="segmented") {coef.["x"]=tmp; coef.["z.x"]=log(.67) } 
         
-    } else if (label=="sigmoid6") { # special treatment, model misspecification
+    } else if (label=="sigmoid6") { 
+    # special treatment, model misspecification
         coef.=c(alpha, coef.z, log(.67),  beta)
         X=cbind(1, z, x.star, x.star*z^3)
+    
+    } else if (label=="quadratic") { 
+    # x+x^2 
+        X=cbind(1,     z,        x,   x*x)
+        coef.=c(alpha=-1, z=coef.z, x=-1 , x.quad=0.3)
+    
+    } else if (label=="exp") { 
+        if(x.distr=="norm") {
+            X=cbind(1,     z,        exp((x-5)/2.5))
+            coef.=c(alpha=-5, z=coef.z, expx=4)
+        } else if(x.distr=="gam") {
+            X=cbind(1,     z,        exp((x-5)/2.5))
+            coef.=c(alpha=-3, z=coef.z, expx=4)
+        } else stop("wrong x.distr")
+    
+    } else if (label=="flatHyperbolic") { 
+    # beta*(x-e)+beta*sqrt((x-e)^2+g^2)
+        if(x.distr=="norm") {
+            g=1
+            X=cbind(1,     z,        (x-e.)+sqrt((x-e.)^2+g^2) )
+            coef.=c(alpha=-5, z=coef.z, 2)
+        } else if(x.distr=="gam") {
+            g=1
+            X=cbind(1,     z,        (x-4)+sqrt((x-4)^2+g^2) )
+            coef.=c(alpha=-2, z=coef.z, 2)
+        }
     
     } else stop("label not supported: "%+%label) 
     
        
     if (verbose) {
-        myprint(coef.)
+        myprint(coef., digits=10)
         if (verbose==2) {
             str(X)
             print(colnames(X))
         }
     }
-            
-    y=rbern(n, expit(X %*% coef.))
+    
+    linear.predictors=drop(X %*% coef.)
+    y=if(family=="binomial") rbern(n, expit(linear.predictors)) else if(family=="gaussian") rnorm(n, linear.predictors, sd)
 
     data.frame (
         y=y,
         z=z,         
         
         x=x,
+        x.sq=x*x,
         x.star=x.star,
         x.hinge=x.star*(x-e.),
         x.bin.med=ifelse(x>median(x), 1, 0),
@@ -117,6 +164,8 @@ sim.chngpt = function (label,
         
         x.bin.35=ifelse(x>3.5, 1, 0), 
         x.bin.6=ifelse(x>6, 1, 0) ,
-        x.bin.log100=ifelse(x>log(100), 1, 0)        
+        x.bin.log100=ifelse(x>log(100), 1, 0),
+        
+        eta=linear.predictors
     )        
 }

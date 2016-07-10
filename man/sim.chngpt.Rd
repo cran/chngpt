@@ -9,13 +9,18 @@ Generate simulation datasets for change point Monte Carlo studies.
 }
 \usage{
 
-sim.chngpt  (label, 
-    type=c("step","hinge","segmented","stegmented"),
+sim.chngpt(
+    label=c("sigmoid2","sigmoid3","sigmoid4","sigmoid5","sigmoid6",
+        "quadratic","exp","flatHyperbolic"), 
     n, seed, 
-    beta, coef.z=log(1.4), 
-    x.distr="norm", 
-    e., b.=-Inf,
+    type=c("NA","step","hinge","segmented","stegmented"),
+    family=c("binomial","gaussian"),
+    beta=NULL, coef.z=log(1.4), alpha=NULL,
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary"),     
+    e.=NULL, b.=-Inf,
+    sd=0.3,
     alpha.candidate=NULL, verbose=FALSE) 
+
 
 }
 %- maybe also 'usage' for other objects documented here.
@@ -24,7 +29,10 @@ sim.chngpt  (label,
 string. Simulate scenario, see details.
 }
   \item{type}{
-string. Types of threshold effect.
+string. Types of threshold effect to simulate, only applicable when label does not start with sigmoid.
+}
+  \item{family}{
+string. Glm family.
 }
   \item{n}{
 %%     ~~Describe \code{n} here~~
@@ -38,6 +46,9 @@ string. Types of threshold effect.
   \item{coef.z}{
 numeric. Coefficient for z.
 }
+  \item{alpha}{
+numeric, intercept.
+}
   \item{x.distr}{
 string. Possible values: norm (normal distribution), gam (gamma distribution)
 }
@@ -46,6 +57,9 @@ string. Possible values: norm (normal distribution), gam (gamma distribution)
 }
   \item{verbose}{Boolean}
   \item{b.}{
+%%     ~~Describe \code{b.} here~~
+}
+  \item{sd}{
 %%     ~~Describe \code{b.} here~~
 }
   \item{alpha.candidate}{candidate values of alpha, used in code to determine alpha values}

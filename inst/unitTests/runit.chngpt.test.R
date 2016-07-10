@@ -7,23 +7,36 @@ test.chngpt.test <- function() {
     RNGkind("Mersenne-Twister", "Inversion")    
     data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=-Inf)
     tolerance=1e-1
-    if(file.exists("D:/gDrive/3software/_checkReproducibility")) tolerance=1e-6
-
-    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, data, type="hinge", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
-    checkEqualsNumeric(test$p.value, c(.3475), tolerance=tolerance) 
-    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, data, type="step", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
-    checkEqualsNumeric(test$p.value, c(.6229), tolerance=tolerance) 
-    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, data, type="segmented", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
-    checkEqualsNumeric(test$p.value, c(0.7709), tolerance=tolerance) 
-    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, data, type="stegmented", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
-    checkEqualsNumeric(test$p.value, c(0.7077), tolerance=tolerance) 
+    if(file.exists("D:/gDrive/3software/_checkReproducibility") & R.Version()$system %in% c("x86_64, mingw32")) tolerance=1e-6 # 32 bit system gives different results from 64 bit system
+    verbose=0
     
-    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, data, type="hinge", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="score"); test
+    
+    # linear regression
+    
+    # if cnt is 10, there is only one peak, if cnt is 100, a second, higher peak appears
+    test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, type="segmented", mc.n=1e4, verbose=0, chngpts.cnt=100, main.method="lr"); # test; plot(test)
+    checkEqualsNumeric(test$p.value, c(1e-4), tolerance=tolerance) 
+    test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, type="segmented", mc.n=1e4, verbose=0, chngpts.cnt=100, main.method="score"); # test; plot(test)
+    checkEqualsNumeric(test$p.value, c(0.0012), tolerance=tolerance) 
+    
+    
+    # logistic regression
+
+    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="hinge", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
+    checkEqualsNumeric(test$p.value, c(.3475), tolerance=tolerance) 
+    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="step", mc.n=1e4, verbose=verbose, chngpts.cnt=10, main.method="lr"); test
+    checkEqualsNumeric(test$p.value, c(.6236), tolerance=tolerance) 
+    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="segmented", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
+    checkEqualsNumeric(test$p.value, c(0.7709), tolerance=tolerance) 
+    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="stegmented", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
+    checkEqualsNumeric(test$p.value, c(0.7106), tolerance=tolerance) 
+    
+    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="hinge", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="score"); test
     checkEqualsNumeric(test$p.value, c(.3334), tolerance=tolerance) 
-    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, data, type="step", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="score"); test
-    checkEqualsNumeric(test$p.value, c(.625), tolerance=tolerance) 
-    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, data, type="segmented", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="score"); test
-    checkEqualsNumeric(test$p.value, c(0.777), tolerance=tolerance) 
+    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="step", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="score"); test
+    checkEqualsNumeric(test$p.value, c(.6269), tolerance=tolerance) 
+    test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="segmented", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="score"); test
+    checkEqualsNumeric(test$p.value, c(0.7764), tolerance=tolerance) 
 
 
 #    test = chngpt.test.2 (formula.null=y~z, formula.chngpt=~x, data, type="step", mc.n=1e3, interaction.method="lr.mc", verbose=0, chngpts.cnt=10); test

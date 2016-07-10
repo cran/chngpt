@@ -7,14 +7,32 @@
     * add set.seed(1) to chngpt.score.test so that the results are
     reproducible
     * rename chngpt.score.test to chngpt.test
-	* MASS is used for generating reference distribution samples while mvrnorm
-	is used in sim.sigmoid. In principle, should be able to use a single
-	package, but since the simulation studies for the paper has already been
-	run, just leave it as it is
-	* let search.all.thresholds be true if n < 500
+    * MASS is used for generating reference distribution samples while mvrnorm
+    is used in sim.sigmoid. In principle, should be able to use a single
+    package, but since the simulation studies for the paper has already been
+    run, just leave it as it is
+    * let search.all.thresholds be true if n < 500
 
 2015-09-01  Youyi Fong
 
     * when glm warns, set the log likelihood to NA
 
-	
+2015-09-29  Youyi Fong
+
+    * implement more vcov
+    * add e.effective.maxit to deal with non-convergence
+    
+2015-10-18  Youyi Fong
+
+    * when est.method==smoothapprox, effective chgnpt needs to be determined
+	to stop infinite loops. It used to be defined in between two observed data
+	values, but is not set to one observed data value
+
+2015-11-19  Youyi Fong
+
+    * make.chngpt.var now takes b. as an argument, the results of smoothapprox
+	estimation will change!
+
+2016-01-24  Youyi Fong
+
+    * add testing for linear model

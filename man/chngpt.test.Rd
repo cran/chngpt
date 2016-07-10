@@ -6,10 +6,10 @@
 Change Point Tests
 }
 \description{
-Hypothesis testing for change point covariate in logistic regression.
+Hypothesis testing for change point covariate in logistic regression and linear regression.
 }
 \usage{
-chngpt.test (formula.null, formula.chngpt, data, 
+chngpt.test (formula.null, formula.chngpt, family=c("binomial","gaussian"), data, 
     type=c("step","hinge","segmented","stegmented"),
     main.method=c("lr","score"),
     chngpts=NULL, lb.quantile=.1, ub.quantile=.9, 
@@ -17,12 +17,14 @@ chngpt.test (formula.null, formula.chngpt, data,
     single.weight=1,
     mc.n=5e4, 
     prob.weights=NULL,
+    compute.p.value=TRUE,
     verbose=FALSE 
-) 
+)
+
 
 antoch.test (formula, data, chngpt.var, plot.=FALSE)
 
-\S3method{plot}{chngpt.test}(x, \dots)
+\method{plot}{chngpt.test}(x, by.percentile=TRUE, both=FALSE, main=NULL, ...) 
 
 }
 \arguments{
@@ -34,9 +36,8 @@ formula for the change point model.
 For example, suppose formula.null=y~z and we want to test whether I(x>cutff) is a significant predictor, formula.chngpt=~x
 If instead we are interested in testing the null that neither I(x>cutff) nor z*I(x>cutff) is a significant predictor, formula.chngpt=~x*z
 }
-  \item{data}{
-data frame.
-}
+  \item{data}{data frame.}
+  \item{family}{Currently only linear and logistic regression are supported.}
   \item{type}{step: flat before and after change point; hinge: flat before and slope after change point; segmented: slope before and after change point}
   \item{main.method}{method for testing main effects of some threshold model.}
   \item{chngpts}{
@@ -61,6 +62,10 @@ numeric. Only used when interaction.method="weighted.single.arg".
   \item{prob.weights}{
 numeric. Not yet fully supported.
 }
+  \item{compute.p.value}{
+Boolean. Computing p values takes a lot of time. Sometimes we just want the maximal statistic and change point associated with it.
+}
+
   \item{verbose}{
 Boolean. 
 }
@@ -78,6 +83,15 @@ formula.
 An object of type chngpt.test. 
 }
   \item{\dots}{arguments passed to or from methods}
+  \item{by.percentile}{
+%%     ~~Describe \code{expr} here~~
+}
+  \item{both}{
+%%     ~~Describe \code{expr} here~~
+}
+  \item{main}{
+%%     ~~Describe \code{expr} here~~
+}
 
 }
 \details{
@@ -97,6 +111,8 @@ A list of class htest and chngpt.test
 }
 \references{
 
+Fong, Y., Huang, Y., Gilbert, P. (2015) Estimation and hypothesis testing under four types of change point models using chngpt, submitted.
+
 Fong Y, Di C, and Permar S. (2014) Change-Point Testing in Logistic Regression Models with Interaction Term. Statistics in Medicine.
 
 Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for change-point estimation in logistic regression. Statistics in Medicine. 22:13141
@@ -106,11 +122,9 @@ Antoch, J. and Gregoire, G. and Jaruskova, D. (2004) Detection of structural cha
 }
 \examples{
 
-seed=2
-beta=log(.6)
-data=sim.chngpt("sigmoid2", type="step", n=200, seed=seed, beta, x.distr="norm", e.=4.5, b.=-Inf)
+dat=sim.chngpt("sigmoid4", type="step", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4)
 
-test = chngpt.test(formula.null=y~z, formula.chngpt=~x, data, type="step")
+test=chngpt.test(formula.null=y~z, formula.chngpt=~x, dat, type="step", family="binomial")
 test
 plot(test)
 
@@ -118,7 +132,7 @@ plot(test)
 \dontrun{
 # not run because otherwise the examples take >5s and that is a problem for R CMD check
 # has interaction
-test = chngpt.test(formula.null=y~z, formula.chngpt=~x*z, data)
+test = chngpt.test(formula.null=y~z, formula.chngpt=~x*z, dat, type="step")
 test
 plot(test)
 }

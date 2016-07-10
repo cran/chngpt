@@ -1,21 +1,26 @@
-export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm, coef.chngptm, vcov.chngptm, summary.chngptm, antoch.test)
+export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm,  antoch.test)
 export(sim.pastor, sim.my, sim.chngpt) 
 
-importFrom(kyotil, '%+%', startsWith, rbern, expit, keepWarnings, myprint, concatList, endsWith, mysapply)
+importFrom(kyotil, '%+%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf)
 importFrom(MASS, mvrnorm)
 import(survival)
-
-importFrom("graphics", "abline", "plot")
+importFrom("graphics", "abline", "plot", "axis", "lines", "par")
+importFrom("utils", "str", "capture.output")
+importFrom("boot", "boot.ci", "boot")
+importFrom("splines", "ns")
 importFrom("stats", "as.formula", "coef", "complete.cases", "cov2cor",
              "deriv3", "glm", "logLik", "median", "model.frame",
              "model.matrix", "na.pass", "optim", "pchisq", "pnorm",
              "predict", "pt", "qt", "quantile", "rbeta", "rgamma",
-             "rnorm", "runif", "update")
-importFrom("utils", "str")
+             "rnorm", "runif", "update", "density", "dnorm", "qchisq", "qnorm",
+             "smooth.spline", "vcov")
 
 S3method(coef,chngptm)
 S3method(vcov,chngptm)
 S3method(summary,chngptm)
 S3method(print,chngptm)
-S3method(plot,chngpt.test)
+S3method(print,summary.chngptm)
+S3method(predict,chngptm)
+S3method(getFixedEf,chngptm)
 
+S3method(plot,chngpt.test)
