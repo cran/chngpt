@@ -1,16 +1,16 @@
 Package: chngpt
 LazyLoad: yes
 LazyData: yes
-Version: 2016.7-9
+Version: 2016.7-31
 Title: Change Point Regression
 Author: Youyi Fong
 Maintainer: Youyi Fong <yfong@fhcrc.org>
-Depends: R (>= 3.0.0), kyotil, MASS, boot, splines
+Depends: R (>= 3.3.0), kyotil, MASS, boot, splines
 Suggests: RUnit, mvtnorm
 Imports: survival
 Description: Change point regression models are also called two-phase regression, break-point regression, split-point regression, structural change models and threshold regression models. Hypothesis testing in change point logistic regression with or without interaction terms. Several options are provided for testing in models with interaction, including a maximum of likelihood ratios test that determines p-value through Monte Carlo. Estimation under change point model is also included, but less developed at this point.
 License: GPL (>= 2)
 NeedsCompilation: no
-Packaged: 2016-07-09 16:55:58 UTC; Youyi
+Packaged: 2016-07-31 16:33:47 UTC; Youyi
 Repository: CRAN
-Date/Publication: 2016-07-10 11:55:51
+Date/Publication: 2016-07-31 19:22:46
