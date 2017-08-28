@@ -13,56 +13,49 @@ Estimate change point logistic model
 }
 
 \usage{
+
 chngptm (formula.1, formula.2, family, data,
-  type=c("step","hinge","segmented","stegmented"), 
-  est.method=c("default","smoothapprox","grid"), 
+  type=c("step","hinge","segmented","segmented2","stegmented"), 
+  est.method=c("default","smoothapprox","grid"), est.method.boot=c("grid","smoothapprox"),
   var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"),
-  aux.fit=NULL, test.inv.ci=TRUE, lb.quantile=.1, ub.quantile=.9, grid.size=500, 
-  ci.bootstrap.size=500, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE,
-  b.=-30, tol=1e-4, maxit=1e2, chngpt.init=NULL, 
+  aux.fit=NULL,
+  test.inv.ci=TRUE, boot.test.inv.ci=TRUE,
+  lb.quantile=.1, ub.quantile=.9, grid.search.max=500, ci.bootstrap.size=500, alpha=0.05, 
+  save.boot=FALSE, m.out.of.n=FALSE,
+  b.transition=Inf,
+  tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
   weights=NULL, verbose=FALSE,
   ...) 
+
 
 \method{coef}{chngptm} (object, ...)
 \method{vcov}{chngptm} (object, ...)
 \method{print}{chngptm} (x, ...)
-\method{summary}{chngptm} (object, ...)
+\method{summary}{chngptm} (object, var.type=NULL, verbose=FALSE, ...)
 
 }
 
 %- maybe also 'usage' for other objects documented here.
 \arguments{
-  \item{formula.1}{
-The part of formula that is free of terms involving thresholded variables}
-  \item{formula.2}{
-The part of formula that is only composed of thresholded variables}
-  \item{data}{
-data frame.
-}
-  \item{type}{step: flat before and after change point; hinge: flat before and slope after change point; segmented: slope before and after change point}
+  \item{formula.1}{The part of formula that is free of terms involving thresholded variables}
+  \item{formula.2}{The part of formula that is only composed of thresholded variables}
+  \item{family}{string. coxph or any valid argument that can be passed to glm. But variance estimate is only available for binomial and gaussian (only model-based for latter)}
+  \item{data}{data frame.}
+  \item{type}{types of threshold effects. segmented2 differs from segmented in parameterization. }
+  \item{b.transition}{Numeric. Controls whether threshold model or smooth transition model. Default to Inf, which correponds to threshold model}
   \item{est.method}{string. Better leave it at NULL. grid: grid search; smoothapprox: smooth approximation}
   \item{var.type}{string. Different methods for estimating covariance matrix and constructing confidence intervals}
   \item{aux.fit}{a model fit object that is needed for model-robust estimation of covariance matrix}
-  \item{grid.size}{integer. }
+  \item{grid.search.max}{integer. }
   \item{test.inv.ci}{Boolean, whether or not to find test-inversion confidence interval for threshold }
   \item{ci.bootstrap.size}{integer, number of bootstrap }
   \item{alpha}{double, norminal type I error rate}
   \item{save.boot}{Boolean, whether to save bootstrap samples}
-  \item{b.}{a parameter controlling approximation of step function by logistic function in optimization }
-  
   \item{lb.quantile}{lower bound of the search range for change point estimate}
   \item{ub.quantile}{upper bound of the search range for change point estimate}
-  \item{tol}{
-numeric. Stopping criterion on the coefficient estimate.
-}
-  \item{maxit}{
-integer. Maximum number of iterations in the outer loop of optimization.
-}
-  \item{chngpt.init}{
-numeric. Initial value for the change point.
-}
-
-  \item{family}{passed to glm}
+  \item{tol}{Numeric. Stopping criterion on the coefficient estimate.}
+  \item{maxit}{integer. Maximum number of iterations in the outer loop of optimization.}
+  \item{chngpt.init}{numeric. Initial value for the change point.}
   \item{weights}{passed to glm}
   \item{verbose}{Boolean.}
 
@@ -71,6 +64,9 @@ numeric. Initial value for the change point.
   \item{\dots}{arguments passed to glm or coxph}
   \item{m.out.of.n}{whether to perform m out of n bootstrap}
 
+  \item{est.method.boot}{estimation search method for bootstrap}
+  \item{boot.test.inv.ci}{whether to get test inversion CI under bootstrap}
+  \item{search.bound}{bounds for search for sloping parameters}
 
 }
 \details{
@@ -87,7 +83,9 @@ A an object of type chngptm with the following components
 }
 \references{
 
-Fong, Y., Huang, Y., Gilbert, P. (2015) Estimation and hypothesis testing under four types of change point models using chngpt, submitted.
+Fong, Y., Huang, Y., Gilbert, P., Permar S. (2017) Estimation and hypothesis testing under four types of change point models using chngpt, BMC Bioinformatics, under review.
+
+Fong, Y., Di, C., Huang, Y., Gilbert, P. (2017) Model-robust inference for continuous threshold regression models, Biometrics, 73(2):452-462.
 
 Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for change-point estimation in logistic regression. Statistics in Medicine. 22:13141
 

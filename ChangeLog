@@ -36,3 +36,10 @@
 2016-01-24  Youyi Fong
 
     * add testing for linear model
+
+2017-05-13  Youyi Fong
+
+    * modify make.chngpt.var to fit smooth transition model
+	* add sandwich variance estimator
+	* add segmented2
+	* change b to -b

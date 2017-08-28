@@ -5,9 +5,10 @@ test.chngpt.test <- function() {
 
 
     RNGkind("Mersenne-Twister", "Inversion")    
-    data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=-Inf)
+    data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=Inf)
     tolerance=1e-1
-    if(file.exists("D:/gDrive/3software/_checkReproducibility") & R.Version()$system %in% c("x86_64, mingw32")) tolerance=1e-6 # 32 bit system gives different results from 64 bit system
+    # R.Version()$system is needed b/c 32 bit system gives different results from 64 bit system
+    if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_checkReproducibility")) & R.Version()$system %in% c("x86_64, mingw32","x86_64, linux-gnu")) tolerance=1e-6 
     verbose=0
     
     
@@ -19,9 +20,9 @@ test.chngpt.test <- function() {
     test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, type="segmented", mc.n=1e4, verbose=0, chngpts.cnt=100, main.method="score"); # test; plot(test)
     checkEqualsNumeric(test$p.value, c(0.0012), tolerance=tolerance) 
     
-    
-    # logistic regression
 
+    # logistic regression
+    
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="hinge", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
     checkEqualsNumeric(test$p.value, c(.3475), tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="step", mc.n=1e4, verbose=verbose, chngpts.cnt=10, main.method="lr"); test

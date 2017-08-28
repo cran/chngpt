@@ -1,11 +1,12 @@
-# tol=1e-4; maxit=1e2; verbose=TRUE; est.method="smoothapprox"; lb.quantile=.1; ub.quantile=.9; grid.size=500; weights=NULL; chngpt.init=NULL; alpha=0.05
-chngptm = function(formula.1, formula.2, family, data,
-  type=c("step","hinge","segmented","stegmented"), 
-  est.method=c("default","smoothapprox","grid"), 
-  var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), aux.fit=NULL, test.inv.ci=TRUE,
-  lb.quantile=.1, ub.quantile=.9, grid.size=500, ci.bootstrap.size=500, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE,
-  b.=-30,
-  tol=1e-4, maxit=1e2, chngpt.init=NULL, 
+#tol=1e-4; maxit=1e2; verbose=TRUE; est.method="grid"; est.method.boot="grid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fift=NULL
+chngptm = function(formula.1, formula.2, family, data, #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
+  type=c("step","hinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
+  est.method=c("default","smoothapprox","grid"), est.method.boot=c("grid","smoothapprox"),
+  var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), aux.fit=NULL, 
+  test.inv.ci=TRUE, boot.test.inv.ci=TRUE,
+  lb.quantile=.1, ub.quantile=.9, grid.search.max=500, ci.bootstrap.size=500, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, # grid.search.max is the maximum number of grid points used in grid search
+  b.transition=Inf,# controls whether threshold model or smooth transition model
+  tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
   weights=NULL, verbose=FALSE,
   ...) 
 {
@@ -14,6 +15,21 @@ chngptm = function(formula.1, formula.2, family, data,
     type<-match.arg(type)    
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
+    est.method.boot<-match.arg(est.method.boot)    
+    
+    stopifnot(b.transition>0)
+    b.search=if(b.transition==Inf) 30 else b.transition
+    if(type=="segmented2" & b.transition==Inf) stop("for segmented2, b.transition should not be Inf") # limited implementation for segmented2
+    
+    # not all variance estimation methods are implemented for all families    
+    if(!family %in% c("gaussian","binomial")) {
+        if(!var.type %in% c("bootstrap")) stop("no analytical variance estimates are provided for this family: "%+%family)
+    }     
+    
+    # grid search is implemented for all families, but smoothapprox is only implemented for gaussian and binomial
+    if (est.method=="default") {
+        est.method = if(family%in%c("binomial","gaussian") & is.null(weights)) "smoothapprox" else "grid"
+    } else if (est.method=="smoothapprox" & !family%in%c("binomial","gaussian")) stop ("smoothapprox not implemented for this family")
     
     if (var.type %in% c("robust","robusttruth","all") & is.null(aux.fit)) stop("need an aux.fit for robust variance estimate")
     
@@ -22,15 +38,13 @@ chngptm = function(formula.1, formula.2, family, data,
     subset. = complete.cases(model.frame(form.all, data, na.action=na.pass))
     data=data[subset.,,drop=FALSE]
     
-    if (est.method=="default") {
-        est.method = if(family=="binomial" & is.null(weights)) "smoothapprox" else est.method = "grid"
-    }
-    
     # decide whether there is interaction
     y=model.frame(formula.1, data)[,1]
     Z=model.matrix(formula.1, data)
     tmp=model.matrix(formula.2, data)[,-1,drop=F]
     chngpt.var.name=setdiff(colnames(tmp), colnames(Z))[1]
+    if(is.na(chngpt.var.name)) stop("Something is wrong. Check the formulal. ")
+    if(verbose>=2) myprint(chngpt.var.name)
     z.1.name=intersect(colnames(tmp), colnames(Z))
     chngpt.var = tmp[,chngpt.var.name]
     chngpt.var.sorted=sort(chngpt.var)
@@ -39,7 +53,7 @@ chngptm = function(formula.1, formula.2, family, data,
     
     n=nrow(Z)
     p.z=ncol(Z)
-    p.2=switch(type, step=1, hinge=1, segmented=2, stegmented=3)
+    p.2=switch(type, step=1, hinge=1, segmented=2, segmented2=2, stegmented=3)
     p.2.itxn=p.2*ifelse(has.itxn,2,1)
     p=p.z+p.2.itxn+1 #total number of paramters, including threshold
     
@@ -47,7 +61,7 @@ chngptm = function(formula.1, formula.2, family, data,
     data$weights=weights # try put it in data to be found by glm
     
     # make formula that includes all parameters but threshold
-    formula.new = if (type %in% c("segmented","stegmented")) update(formula.1, as.formula("~.+"%+%chngpt.var.name)) else formula.1
+    formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%+%chngpt.var.name)) else formula.1
     f.alt=get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)
     formula.new=update(formula.new, as.formula(f.alt))
     
@@ -57,107 +71,132 @@ chngptm = function(formula.1, formula.2, family, data,
         myprint(p.z, p.2.itxn, p)
     }
     
-    search.bound=10
-    if (est.method=="grid") {
-    #### grid search
-
-        # change point candidates
-        chngpts=chngpt.var.sorted[chngpt.var.sorted<quantile(chngpt.var.sorted, ub.quantile) & chngpt.var.sorted>quantile(chngpt.var.sorted, lb.quantile)]
-        if (length(chngpts)>grid.size) chngpts=chngpts[round(seq(1,length(chngpts),length=grid.size))]
-                
+    # change point candidates
+    chngpts=chngpt.var.sorted[chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile) & chngpt.var.sorted>=quantile(chngpt.var.sorted, lb.quantile)]
+#    # take the mid points between data points as change point candidates. For step models, use any point in between does not change likelihood, but it does change likelihood for segmented model
+#    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
+    if (length(chngpts)>grid.search.max) chngpts=chngpts[round(seq(1,length(chngpts),length=grid.search.max))]
+    
+    # 
+    grid.search=function(){
+        if(verbose) cat("perform grid search\n")
         logliks=sapply (chngpts, function(e) {
-            data=make.chngpt.var(chngpt.var, e, type, data)
+            data=make.chngpt.var(chngpt.var, e, type, data, b.transition)
             fit = do.regression (formula.new, data, weights, family)
             if(length(fit$warning)!=0) {
-                if(verbose) print(fit$warning)
-                NA
+                if(verbose>=3) print(fit$warning)
+                #print(summary(fit$value))
+                as.numeric(logLik(fit$value))
             } else as.numeric(logLik(fit$value))
         } )
-        glm.warn=any(is.na(logliks))
         e=chngpts[which.max(logliks)]
-        if(verbose==2) {
+        attr(e, "glm.warn")=any(is.na(logliks))
+        attr(e, "logliks")=logliks
+        if(verbose>=2) {
             plot(chngpts, logliks, type="b", xlab="change point")
             abline(v=e)
         }
-        data = make.chngpt.var(chngpt.var, e, type, data)
-        fit = do.regression (formula.new, data, weights, family)$value
-        coef.hat=c(coef(fit), "chngpt"=e)  
-        best.fit=fit
-             
+        e        
+    }
+    
+    # find e.final
+    if (est.method=="grid") {
+    #### grid search
+        e.final=grid.search()           
+        glm.warn=attr(e.final,"glm.warn")  
         
     } else if (est.method=="smoothapprox") {
     #### Newton-Raphson
         
+        if(verbose) cat("smoothapprox search\n")
         # do a test to get init value for change point to be used in estimation 
-        if (is.null(chngpt.init)) {
-            chngpt.test.0 = chngpt.test (formula.1, formula.2, family=family, data, type=type, compute.p.value=FALSE)# note main.method is lr by default, which is faster
+        e.init=chngpt.init
+        if (is.null(e.init)) {
+            if(verbose) cat("looking for init\n")
+            chngpt.test.0 = chngpt.test (formula.1, formula.2, family=family, data, type=ifelse(type=="segmented2","segmented",type), compute.p.value=FALSE)# note main.method is lr by default, which is faster
+            if (verbose==2) plot(chngpt.test.0, by.percentile=FALSE)
             e.init=chngpt.test.0$chngpt
-            if (verbose==2) plot(chngpt.test.0, xlim=range(chngpt.var))
+        } 
+        
+        if(length(e.init)==0) {
+            e.final=grid.search()
+            glm.warn=attr(e.final,"glm.warn")
         } else {
-            e.init=chngpt.init
-        }
-        names(e.init)="e"
-        glm.warn=FALSE
-        
-        coef.hat=rep(0, 1+ncol(Z)+p.2.itxn)
-        n.iter=0
-        converged=TRUE   
-        e.effective.maxit=numeric(maxit)     
-        while(TRUE){    
-        
-            n.iter=n.iter+1
-            if (n.iter>maxit) {converged=FALSE; break}
-            if (verbose) cat("iter ", n.iter, "\t")
+            names(e.init)="e"
+            if (verbose) cat("init e: ", e.init, "\n")
+            glm.warn=FALSE
             
-            # remake the binary change point variable in every iteration based on the change point estimate from last iteration
-            data = make.chngpt.var(chngpt.var, e.init, type, data, b.)
-            fit.0 = do.regression(formula.new, data, weights, family)$value
-            #if (verbose==2) print(coef(fit.0))
+            coef.hat=rep(0, 1+ncol(Z)+p.2.itxn)
+            n.iter=0
+            converged=TRUE   
+            e.effective.maxit=numeric(maxit)     
+            while(TRUE){    
             
-            # update threshold and associated coefficients
-            beta.init=coef(fit.0)[p.z+1:p.2.itxn]; #names(beta.init)=c("beta1","beta2")# we may need this for variance calculation to work
-            alpha.hat=coef(fit.0)[1:p.z]
-            alpha.z = c(Z %*% alpha.hat)
-            #if (verbose) myprint(beta.init, e.init, b., digits=6)
-            
-            optim.out = optim(par=c(beta.init, e.init), 
-                  fn = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"f"), 
-                  gr = NULL,
-                  #gr = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"deriv.f"), 
-#                  # if we use analytical gradient function by deriv3 in optim, we can get situations like exp(100), which will be Inf, and Inf/Inf will be NaN
-#                  fn = function(theta,...) sum(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...)), 
-#                  gr = function(theta,...) colSums(attr(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...), "gradient")), 
-                  chngpt.var, y, b., alpha.z, z.1,
-                  lower = c(rep(-search.bound,length(beta.init)), quantile(chngpt.var, lb.quantile)), 
-                  upper = c(rep( search.bound,length(beta.init)), quantile(chngpt.var, ub.quantile)), 
-                  method="L-BFGS-B", control = list(), hessian = TRUE)
-            
-            e.init=optim.out$par["e"]
-            # to avoid algorithm ocillation due to artifact
-            e.effective.maxit[n.iter]=which(chngpt.var.sorted>=e.init)[1]
-#            # set the "effective" change point to the data point that is just to the right of the optim output. This leads to more clear indications when perfect separate happens
-            e.init=mean(chngpt.var.sorted[e.effective.maxit[n.iter]])
-            # set the "effective" change point to the mid point between the two data points that sandwich the optim output. 
-#            e.init=mean(chngpt.var.sorted[e.effective.maxit[n.iter]+(-1):0])
-            names(e.init)="e" # this is needed for optim to work
-            
-            coef.tmp=c(alpha.hat, optim.out$par)
-            coef.tmp[length(coef.tmp)]=e.init # set to effective change point
-            if (verbose) cat(coef.tmp, "\n")
-            if (max(abs(coef.tmp-coef.hat))<tol) {
-                coef.hat=coef.tmp
-                break
-            } else {
-                coef.hat=coef.tmp
-            }
-            
-        } # end while 
-        data = make.chngpt.var(chngpt.var, last(coef.hat), type, data, b.)
-        fit = do.regression (formula.new, data, weights, family)$value
-        coef.hat=c(coef(fit), "chngpt"=last(coef.hat))  
-        best.fit=fit     
+                n.iter=n.iter+1
+                if (n.iter>maxit) {converged=FALSE; break}
+                if (verbose) cat("iter ", n.iter, "\t")
+                
+                # remake the binary change point variable in every iteration based on the change point estimate from last iteration
+                data = make.chngpt.var(chngpt.var, e.init, type, data, b.search) # b.search is used here to be consistent with optim which uses b.search as well
+                fit.0 = do.regression(formula.new, data, weights, family)$value
+                
+                # update threshold and associated coefficients
+                beta.init=coef(fit.0)[p.z+1:p.2.itxn]; #names(beta.init)=c("beta1","beta2")# we may need this for variance calculation to work
+                alpha.hat=coef(fit.0)[1:p.z]
+                stopifnot(all(!is.na(alpha.hat)))
+                alpha.z = c(Z %*% alpha.hat)
+                
+                # search for better e and slopes associated with x and thresholded x
+                optim.out = try(optim(par=c(beta.init, e.init), 
+                      fn = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"f"), 
+                      gr = NULL,
+                      #gr = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"deriv.f"), 
+    #                  # if we use analytical gradient function by deriv3 in optim, we can get situations like exp(100), which will be Inf, and Inf/Inf will be NaN
+    #                  fn = function(theta,...) sum(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...)), 
+    #                  gr = function(theta,...) colSums(attr(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...), "gradient")), 
+                      chngpt.var, y, b.search, alpha.z, z.1, family,
+                      lower = c(rep(-search.bound,length(beta.init)), quantile(chngpt.var, lb.quantile)), 
+                      upper = c(rep( search.bound,length(beta.init)), quantile(chngpt.var, ub.quantile)), 
+                      method="L-BFGS-B", control = list(), hessian = TRUE))
+                if(class(optim.out)=="try-error") {
+                    if (verbose) cat("error doing smoothapprox search, switch to grid search\n")
+                    e.final=grid.search()
+                    glm.warn=attr(e.final,"glm.warn")
+                    break;
+                }
+                            
+                e.init=optim.out$par["e"]
+                # to avoid algorithm ocillation due to artifact
+                e.effective.maxit[n.iter]=which(chngpt.var.sorted>=e.init)[1]
+    #            # set the "effective" change point to the data point that is just to the right of the optim output. This leads to more clear indications when perfect separate happens
+                e.init=mean(chngpt.var.sorted[e.effective.maxit[n.iter]])
+                # set the "effective" change point to the mid point between the two data points that sandwich the optim output. 
+    #            e.init=mean(chngpt.var.sorted[e.effective.maxit[n.iter]+(-1):0])
+                names(e.init)="e" # this is needed for optim to work
+                
+                coef.tmp=c(alpha.hat, optim.out$par)
+                coef.tmp[length(coef.tmp)]=e.init # set to effective change point
+                if (verbose) cat(coef.tmp, "\n")
+                if (max(abs(coef.tmp - coef.hat)) < tol) {
+                    coef.hat = coef.tmp
+                    e.final=last(coef.hat)
+                    break
+                }
+                else {
+                    coef.hat = coef.tmp
+                    e.final=last(coef.hat)
+                }
+                
+            } # end while 
+        } # end if else
     
-    } # end if est.method    
+    } # end if grid/smoothapprox
+    # fit glm using e.final
+    data = make.chngpt.var(chngpt.var, e.final, type, data, b.transition) # note that b.transition is used here instead of b.search
+    fit = do.regression (formula.new, data, weights, family)$value
+    coef.hat=c(coef(fit), "chngpt"=e.final)
+    best.fit=fit
+    
     names(coef.hat)[length((coef.hat))]="chngpt"
     if (type=="stegmented") {
         replacement="I("%+%chngpt.var.name%+%">chngpt)"
@@ -167,66 +206,83 @@ chngptm = function(formula.1, formula.2, family, data,
     } else {
         if(type=="step") {
             replacement="I("%+%chngpt.var.name%+%">chngpt)"
-        } else if (type=="hinge" | type=="segmented") {
+        } else if (type %in% c("hinge","segmented","segmented2")) {
             replacement="("%+%chngpt.var.name%+%"-chngpt)+"
         } 
         new.names=sub("x.gt.e", replacement, names(coef.hat))    
     }
-    if (verbose) print(new.names)
+    if (verbose) cat(new.names,"\n")
     names(coef.hat)=new.names
     
+
+    # keep an empty line here between estimation and var estimate
     
-    
+                
     ###############################################################################################
     # variance-covariance 
     
-    if (!has.itxn & family=="binomial") {
-    
-        if (type %in% c("hinge","segmented")) { # continuous change point models
+    # only implemented when there is no interaction and for linear and logistic regression
+    if (has.itxn | !family %in% c("binomial","gaussian")) {
+        var.est=NULL
+    } else {
+        if (type %in% c("step","stegmented")) {
+            # discontinous models
+            var.est=vcov(best.fit)
+            
+        } else if (type %in% c("hinge","segmented","segmented2")) { # continuous change point models
             
             var.est.smooth=function(){
-                # if perfect segregation happens, cann't compute variance estimate
-                if (glm.warn | any(abs(coef.hat[-1])>=search.bound) ) {
-                    var.est=matrix(NA, nrow=length(coef.hat), ncol=length(coef.hat))
-                    rownames(var.est) <- colnames(var.est) <- names(coef.hat)
-                    warning("cannot estimate covariance")
-                    return (var.est)
-                }
+                if(verbose) cat("in var.est.smooth\n")
     
                 # expressions for use with optim with deriv3, they are different from the set of expressions, dev.step etc, b/c each alpha has to be separate
                 alpha.z.s="("%+% concatList("alpha"%+%1:p.z%+%"*z"%+%1:p.z%+%"","+") %+%")"
-                if (type=="hinge") {
-                    deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + (x-e)*beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - (x-e)*beta/(1+exp(b*(x-e))) ) ) "
-                    params=c("alpha"%+%1:p.z, "beta", "e")
-                } else if (type=="segmented") {
-                    deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + beta1*x + (x-e)*beta2/(1+exp(b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - beta1*x - (x-e)*beta2/(1+exp(b*(x-e))) ) ) "
-                    params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                if (family=="binomial") {
+                    if (type=="hinge") {
+                        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + (x-e)*beta/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - (x-e)*beta/(1+exp(-b*(x-e))) ) ) "
+                        params=c("alpha"%+%1:p.z, "beta", "e")
+                    } else if (type=="segmented") {
+                        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - beta1*x - (x-e)*beta2/(1+exp(-b*(x-e))) ) ) "
+                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                    } else if (type=="segmented2") {
+                        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - beta1*x - x*beta2/(1+exp(-b*(x-e))) ) ) "
+                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                    }
+                } else if (family=="gaussian") {
+                    if (type=="hinge") {
+                        deviance.s <- " (y- ( "%+% alpha.z.s %+%" + (x-e)*beta/(1+exp(-b*(x-e))) ))**2"
+                        params=c("alpha"%+%1:p.z, "beta", "e")
+                    } else if (type=="segmented") {
+                        deviance.s <- " (y- ( "%+% alpha.z.s %+%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) ))**2"
+                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                    } else if (type=="segmented2") {
+                        deviance.s <- " (y- ( "%+% alpha.z.s %+%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) ))**2"
+                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                    }
                 }
                 params.long=c(params,"x","y","b","z"%+%1:p.z,"z.1")
                 if (verbose) print(deviance.s)
                 if (verbose) myprint(params)
                 loss.f=deriv3(parse(text=deviance.s), params, params.long)    
-                param.list = c(as.list(coef.hat), list(chngpt.var), list(y), list(b.), lapply(1:ncol(Z), function (i) Z[,i]), list(z.1))
+                # b.search instead of b.transition needs to be used below, otherwise hess is singular
+                param.list = c(as.list(coef.hat), list(chngpt.var), list(y), list(b.search), lapply(1:ncol(Z), function (i) Z[,i]), list(z.1))
                 names(param.list)=params.long    
                 tmp=do.call(loss.f, param.list)
                 hess=apply(attr(tmp,"h"), 2:3, sum, na.rm=T)       
-                #print("smooth"); print(eigen(hess))         
+                print(hess)
+                print(eigen(hess))         
                 var.est = try(solve(hess)) # should keep change point in, and not do hess[-ncol(hess), -ncol(hess)], otherwise lead to over estimation of sd
+                
+                if (family=="gaussian") {
+                    var.est=var.est*2*sigma(best.fit)^2
+                }
                 
                 rownames(var.est) <- colnames(var.est) <- names(coef.hat)
                 var.est
             }
             
             # model-based
-            var.est.model=function(test.inv.ci){
-                if(verbose>=2) print("in var.est.model")
-                # if perfect segregation happens, cann't compute variance estimate
-                if (glm.warn | any(abs(coef.hat[-1])>=search.bound) ) {
-                    var.est=matrix(NA, nrow=length(coef.hat), ncol=length(coef.hat))
-                    rownames(var.est) <- colnames(var.est) <- names(coef.hat)
-                    attr(var.est,"chngpt.ci")=c(NA,NA)
-                    return (var.est)
-                }
+            var.est.model=function(test.inv.ci, robust=FALSE){
+                if(verbose) cat("in var.est.model\n")
                                 
                 # set up some variables
                 e=coef.hat["chngpt"]
@@ -234,43 +290,61 @@ chngptm = function(formula.1, formula.2, family, data,
                 beta.4=coef.hat["("%+%chngpt.var.name%+%"-chngpt)+"]
                 
                 # x.tilda
-                x.tilda=cbind(Z, if (type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
-                p.est=drop(expit(x.tilda[,-p] %*% coef.hat[-p]))
-                                              
-                V.1=-tXDX(x.tilda, p.est*(1-p.est))/n    
-                V=V.1
-                #myprint(e)
-                #print(eigen(V.1)$values)
-                #print(x.tilda[order(chngpt.var),])
-                var.est=solve(-V)/n                        
+                if(type %in% c("hinge","segmented")) {
+                    if (b.transition==Inf) {
+                        x.tilda=cbind(Z, if(type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
+                    } else {
+                        x.tilda=cbind(Z, if(type=="segmented") chngpt.var, (chngpt.var-e)*expit(b.transition*(chngpt.var-e)), -beta.4*expit(b.transition*(chngpt.var-e))*(1+b.transition*(chngpt.var-e)*(1-expit(b.transition*(chngpt.var-e)))))
+                    }               
+                } else if (type=="segmented2") {
+                    # earlier we checked that b.transition should not be Inf
+                    x.tilda=cbind(Z, chngpt.var, chngpt.var*expit(b.transition*(chngpt.var-e)),                               -beta.4*expit(b.transition*(chngpt.var-e))        *b.transition*chngpt.var*(1-expit(b.transition*(chngpt.var-e))) )
+                }
+                
+                if (family=="binomial") {
+                    p.est=drop(expit(x.tilda[,-p] %*% coef.hat[-p]))                                                  
+                    if(!robust) {
+                        V=-tXDX(x.tilda, p.est*(1-p.est))/n    
+                        var.est=solve(-V)/n                        
+                    } else {
+                        # sandwich estimation
+                        B.inv=solve(tXDX(x.tilda, p.est*(1-p.est))/n)
+                        M=tXDX(x.tilda, resid(best.fit,type="response")**2)/n    
+                        var.est=B.inv %*% M %*% B.inv/n                        
+                    }
+                } else if (family=="gaussian") {
+                    if(!robust) {
+                        V=-t(x.tilda) %*% (x.tilda)/n/sigma(best.fit)^2
+                        var.est=solve(-V)/n                        
+                    } else {
+                        # sandwich estimation
+                        B.inv=solve(t(x.tilda) %*% (x.tilda)/n)
+                        M=tXDX(x.tilda, resid(best.fit,type="response")**2)/n    
+                        var.est=B.inv %*% M %*% B.inv/n                        
+                    }
+                }
+                #myprint(e); print(eigen(V)$values); print(x.tilda[order(chngpt.var),])
+                
                 rownames(var.est) <- colnames(var.est) <- names(coef.hat)                
                 
                 # profile likelihood ratio test inversion CI
                 if(test.inv.ci) {
-                    chngpt.ci=ci.test.inv(1)
+                    chngpt.ci=ci.test.inv(qchisq(1-alpha, df=1) * 1)
                     attr(var.est,"chngpt.ci")=chngpt.ci
                 }
                 
                 var.est
             }
-
+    
             var.est.robust=function(aux.fit, test.inv.ci, true.param=FALSE){
-                if(verbose>=2) print("in var.est.robust")
-                # if perfect segregation happens, cann't compute variance estimate
-                if (glm.warn | any(abs(coef.hat[-1])>=search.bound) ) {
-                    var.est=matrix(NA, nrow=length(coef.hat), ncol=length(coef.hat))
-                    rownames(var.est) <- colnames(var.est) <- names(coef.hat)
-                    attr(var.est,"chngpt.ci")=c(NA,NA)
-                    if(verbose>=2) print("return NA")
-                    return (var.est)
-                }
+                if(verbose) cat("in var.est.robust\n")
                                 
                 # compute density of X at change point. have to use coef.hat["chngpt"] for change point here b/c e is defined later
                 den=density(chngpt.var)
                 pt1=which(den$x>=coef.hat["chngpt"])[1]
                 f.x.e = interpolate(c(den$x[pt1],den$y[pt1]), c(den$x[pt1-1],den$y[pt1-1]), coef.hat["chngpt"])   # interploate to find the density at change point
                 
-                # use population parameter values to calculate variance for debugging
+                # debugging only: use population parameter values to calculate variance
                 if (true.param) {
                     # quadratic model                    
                     coef.hat=c("(Intercept)"=-2.8297600157,   "z"=0.3378716621,   "x"=0.5526491719,   "(x-chngpt)+"=1.3409043525,   "chngpt"=3.7541306365) 
@@ -287,22 +361,30 @@ chngptm = function(formula.1, formula.2, family, data,
                 
                 # x.tilda
                 x.tilda=cbind(Z, if (type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
-                p.est=drop(expit(x.tilda[,-p] %*% coef.hat[-p]))
-    
-                V.1=-tXDX(x.tilda, p.est*(1-p.est))/n    
-                # V.2
+                
+                antilink=get(family)()$linkinv
+                mu.est=drop(antilink(x.tilda[,-p] %*% coef.hat[-p]))        
+                M=tXDX(x.tilda, resid(best.fit,"response")^2)/n # has to use the robust, sandwich estimation version. Note the type needs to be response for glm
+                # non-robust version is not justified because it depends on the assumption that mean model is correct
+                #M=t(x.tilda)%*%x.tilda *sigma(best.fit)^2 /n 
+                if (family=="binomial") {
+                    V.1=-tXDX(x.tilda, mu.est*(1-mu.est))/n    
+                } else if (family=="gaussian") {
+                    V.1=-t(x.tilda) %*% (x.tilda)/n                    
+                }
+                # V.2 is the same between binomial and gaussian families
                 V.2=matrix(0,nrow=p,ncol=p)
                 # there are two ways to compute the off-diagonal element. when use true coefficients, it works better to use predicted response by true model; when use estimated, using y works better
-                #V.2[p,p-1]<-V.2[p-1,p]<- if(is.null(attr(aux.fit,"truemodel"))) -mean((y-p.est)*x.gt.e) else -mean((predict(aux.fit, data, "response")-p.est)*x.gt.e)
-                V.2[p,p-1]<-V.2[p-1,p]<- -mean((y-p.est)*x.gt.e) 
-    
+                #V.2[p,p-1]<-V.2[p-1,p]<- if(is.null(attr(aux.fit,"truemodel"))) -mean((y-mu.est)*x.gt.e) else -mean((predict(aux.fit, data, "response")-mu.est)*x.gt.e)
+                V.2[p,p-1]<-V.2[p-1,p]<- -mean((y-mu.est)*x.gt.e) 
+                # compute V.2[p, p]
                 newdata=data; newdata[[chngpt.var.name]]=e
                 m.0=mean(predict(aux.fit, newdata, "response"))
-                p.e.z.0=mean(expit(cbind(Z, if (type=="segmented") e) %*% coef.hat[1:(p-2)]))                
+                p.e.z.0=mean(antilink(cbind(Z, if (type=="segmented") e) %*% coef.hat[1:(p-2)]))                
                 V.2[p, p]= beta.4 * f.x.e * (m.0-p.e.z.0)
                 V=V.1+V.2    
                 V.inv=solve(V) 
-                M= tXDX((y-p.est)*x.tilda, rep(1,n))/n 
+                
                 var.est=V.inv%*%M%*%V.inv/n       
                 rownames(var.est) <- colnames(var.est) <- names(coef.hat)                
                 
@@ -323,37 +405,38 @@ chngptm = function(formula.1, formula.2, family, data,
                 # profile likelihood ratio test inversion CI
                 if(test.inv.ci) {
                     scale.chisq= last(diag(var.est))/(-last(diag(V.inv))/n) 
-                    if (verbose==2) {
+                    if (verbose>=2) {
                         myprint(last(diag(var.est)), -last(diag(V.inv))/n, scale.chisq)
                     }
                     if (scale.chisq<0) {
                         warning("scale.chisq is negative")
                         scale.chisq=abs(scale.chisq)
-                    } 
-                    chngpt.ci=ci.test.inv(scale.chisq)
+                    }                     
+                    if (family=="binomial") {
+                        # no need to do anything
+                    } else if (family=="gaussian") {
+                        scale.chisq=scale.chisq/sigma(best.fit)^2
+                    }
+                    chngpt.ci=ci.test.inv(qchisq(1-alpha, df=1) * scale.chisq)
                     attr(var.est,"chngpt.ci")=chngpt.ci
                 }
     
                 var.est
             }
-
-            ci.test.inv=function(scale.chisq=1){
-                # if perfect segregation happens, cann't compute variance estimate
-                if (glm.warn | any(abs(coef.hat[-1])>=search.bound) ) {# -1 gets rid of intercept
-                    warning("cannot estimate covariance")
-                    return (c(NA,NA))
-                }
+            
+            # c.alpha is the critical value for diff in deviance
+            ci.test.inv=function(c.alpha){
+                if (verbose) cat("in ci.test.inv\n")
                 
                 if (est.method=="grid") {
-                    
+                    c(NA,NA)# todo
                 } else if (est.method=="smoothapprox") {
                     
                     idx.chngpt=which(chngpt.var.sorted>=coef.hat["chngpt"])[1]
-                    data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], type, data, b.)
+                    data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], type, data, b.transition)
                     fit=do.regression (formula.new, data, weights, family)
                     lik.max = as.numeric(logLik(fit$value))
                     
-                    c.alpha= qchisq(1-alpha, df=1) * scale.chisq
                     profile.liks=rep(NA, length(chngpt.var.sorted))
                     
                     # go left
@@ -367,7 +450,7 @@ chngptm = function(formula.1, formula.2, family, data,
                             #if (verbose) warning("no more data on the left")
                             lik=NA; break
                         }
-                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.)
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
                         fit = do.regression (formula.new, data, weights, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
@@ -387,7 +470,7 @@ chngptm = function(formula.1, formula.2, family, data,
                             #if (verbose) warning("no more data on the right")
                             lik=NA; break
                         }
-                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.)
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
                         fit = do.regression (formula.new, data, weights, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
@@ -405,75 +488,173 @@ chngptm = function(formula.1, formula.2, family, data,
                 }
                 
             }
-
-            # the index are hardcoded in this function
-            ci.bootstrap=function(){
-                if(verbose>=2) print("in ci.bootstrap")
-                # if perfect segregation happens, cann't compute variance estimate
-                if (glm.warn | any(abs(coef.hat[-1])>=search.bound) ) {
-                    warning("cannot estimate covariance")
-                    return (NULL)
+    
+            # use F statistics to find test-inversion CI
+            ci.test.inv.F=function(c.alpha){
+                if (verbose) cat("in ci.test.inv.F\n")
+                
+                if (est.method=="grid") {
+                    c(NA,NA)# todo
+                } else if (est.method=="smoothapprox") {
+                    
+                    idx.chngpt=which(chngpt.var.sorted>=coef.hat["chngpt"])[1]
+                    data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], type, data, b.transition)# it is ok that data is assigned to b/c the function adds columns
+                    fit=do.regression (formula.new, data, weights, family)
+                    sigsq.max = (sigma(fit$value))**2; #myprint(sigsq.max)
+                    #sigsq.max = (sigma(best.fit))**2; myprint(sigsq.max)
+                    
+                    profile.sigsqs=rep(NA, length(chngpt.var.sorted))
+                    
+                    # go left
+                    sigsq=sigsq.max
+                    idx=idx.chngpt
+                    #myprint(idx, sigsq, c.alpha)
+                    while (n*(sigsq/sigsq.max-1)<c.alpha) {
+                        profile.sigsqs[idx]=sigsq
+                        idx=idx-1
+                        if(idx==0) {
+                            if (verbose) warning("no more data on the left")
+                            sigsq=NA; break
+                        }
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
+                        fit = do.regression (formula.new, data, weights, family)
+                        if(length(fit$warning)!=0) {
+                            #if(verbose) print(fit$warning)
+                            sigsq = NA; break
+                        } else sigsq = (sigma(fit$value))**2
+                        if(verbose) print(sigsq)
+                    } 
+                    #lb=if(is.na(sigsq)) NA else chngpt.var.sorted[idx+1] 
+                    lb=chngpt.var.sorted[idx+1] 
+                    
+                    # go right
+                    sigsq=sigsq.max
+                    idx=idx.chngpt
+                    while (n*(sigsq/sigsq.max-1)<c.alpha) {
+                        profile.sigsqs[idx]=sigsq
+                        idx=idx+1
+                        if(idx>n) {
+                            if (verbose) warning("no more data on the right")
+                            sigsq=NA; break
+                        }
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
+                        fit = do.regression (formula.new, data, weights, family)
+                        if(length(fit$warning)!=0) {
+                            #if(verbose) print(fit$warning)
+                            sigsq = NA; break
+                        } else sigsq = (sigma(fit$value))**2
+                    } 
+                    #ub=if(is.na(sigsq)) NA else chngpt.var.sorted[idx-1]
+                    ub=chngpt.var.sorted[idx-1]
+                    
+                    if (verbose==2) {
+                        plot(chngpt.var.sorted, chngpt.test.0$fit.null.dev + 2*profile.sigsqs, xlab="change points", ylab="F-statistic", main="Test Inversion")
+                    }
+                    
+                    c(lb,ub)
                 }
                 
+            }
+                
+            # the index may be hardcoded in this function
+            ci.bootstrap=function(){
+                if(verbose) cat("in ci.bootstrap\n")
+                
+                # bootstrapping
                 # save rng state before set.seed in order to restore before exiting this function
                 save.seed <- try(get(".Random.seed", .GlobalEnv), silent=TRUE) 
-                if (class(save.seed)=="try-error") {        
-                    set.seed(1)
-                    save.seed <- get(".Random.seed", .GlobalEnv)
-                }                        
+                if (class(save.seed)=="try-error") {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
+                set.seed(1)     # this is only added on 7/30/2017, well after biometrics paper is published. should not change the results qualitatively
                 boot.out=boot(data, 
                     statistic=function(dat, ii){
                         if (m.out.of.n) ii=ii[1:(4*sqrt(n))] # m out of n bootstrap
-                        fit.b=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method="smoothapprox", var.type="none"))
-                        #fit.b=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method="smoothapprox", var.type="robust", aux.fit=aux.fit, test.inv.ci=FALSE))# stud performs pretty badly
-                        # note that we cannot use | in the following line
-                        out = if(inherits(fit.b,"try-error")) {
-                            rep(NA,length(coef.hat)*1) # need to adjust depending on below
+                        # use chngpt.init so that the mle will be less likely to be inferior to the model conditional on e.hat, but it does not always work
+                        fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method=est.method.boot, var.type="none", b.transition=b.transition, chngpt.init=coef.hat["chngpt"], verbose=verbose>=3))
+                        #fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method="smoothapprox", var.type="robust", aux.fit=aux.fit, test.inv.ci=FALSE))# stud performs pretty badly
+                        tmp=length(coef.hat)*1+ifelse(family=="gaussian",2,1) # need to adjust depending on the last else clause
+                        out = if(inherits(fit.ii,"try-error")) {
+                            rep(NA,tmp) 
+                        } else if (any(is.na(fit.ii$coefficients))) {
+                            rep(NA,tmp) 
+#                        # the next if is controversial, but at least has no impact on qudratic/250/gaussian
+#                        } else if (any(abs(fit.ii$coefficients[1:(length(fit.ii$coefficients)-1)])>search.bound)) {
+#                            rep(NA,tmp)
+                        } else {
+                            # compute profile likelihood ratio
+                            # pl can be negative even when grid search is used in both point estimate and bootstrap
+                            # this is because the estimated chngpt may not be in the {x} of the bootstrapped dataset, and a value in between can be better than {x}
+                            dat.tmp=make.chngpt.var(chngpt.var[ii], coef.hat["chngpt"], type, data[ii,], b.transition) # don't forget to do chngpt.var[ii]!
+                            fit.ii.ehat=do.regression (formula.new, data=dat.tmp, weights, family); if(length(fit.ii.ehat$warning)!=0 & verbose) print(fit.ii.ehat$warning)
+                            pl= 2*(as.numeric(logLik(fit.ii$best.fit)) - as.numeric(logLik(fit.ii.ehat$value)))
+                            Fs=n*(sigma(fit.ii.ehat$value)^2/sigma(fit.ii$best.fit)^2-1) # F statistic, an approximation of pl, but may work better for linear regression
+                            if(pl<0 & verbose) {
+                                print(summary(fit.ii$best.fit))
+                                print("------------------------------------------------------------")
+                                print(summary(fit.ii.ehat$value))
+                                print("------------------------------------------------------------")
+                                print(summary(fit.ii))
+                                print(sort(dat[ii,"x"]))
+                                stop("debugging")
+                            }
+                            c(fit.ii$coefficients, pl, if(family=="gaussian") Fs) # for Gaussian, return both pl and Fs
                         }
-                        else if (any(abs(fit.b$coefficients[1:(length(fit.b$coefficients)-1)])>search.bound)) 
-                            rep(NA,length(coef.hat)*1) # need to adjust depending on below
-                        else {
-                            c(fit.b$coefficients)#, diag(fit.b$vcov))
-                        }
-                        out
-                        
+                        out                        
                     }, 
                     R=ci.bootstrap.size, sim = "ordinary", stype = "i"
                 )
                 # restore rng state 
-                assign(".Random.seed", save.seed, .GlobalEnv)                 
+                assign(".Random.seed", save.seed, .GlobalEnv)     
+                boot.samples=boot.out$t
                 
-                # go through parameter list and get different types of confidence intervals
-                outs=list(perc=NULL, basic=NULL, bc=NULL)
+                # use boot.ci to extract basic, percentile and abc confidence intervals
+                outs=list(perc=NULL, basic=NULL, bc=NULL) # this fixes the order of the list components
                 for (i in 1:length(coef.hat)){
-                    ci.out=try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca"), index=c(i, i+length(coef.hat))))
+                    # for stud, index needs to be of length 2 and the second element needs to be var. If the second element is not present, will have warnings: index out of bounds; minimum index only used
                     #ci.out=try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca","stud"), index=c(i, i+length(coef.hat))))
+                    ci.out=suppressWarnings({
+                        try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca"), index=i))  
+                    })
                     outs$perc= cbind(outs$perc,  if(inherits(ci.out,"try-error")) c(NA,NA) else ci.out$percent[1,4:5])
                     outs$basic=cbind(outs$basic, if(inherits(ci.out,"try-error")) c(NA,NA) else ci.out$basic[1,4:5])
-                    #outs$stud= cbind(outs$stud,  if(inherits(ci.out,"try-error")) c(NA,NA) else ci.out$student[1,4:5])
                     # for bca to work, the number of bootstrap replicates needs to be greater than sample size
                     outs$abc=  cbind(outs$abc,   if(inherits(ci.out,"try-error")) c(NA,NA) else if(ci.bootstrap.size>n) ci.out$bca[1,4:5] else c(NA,NA) )
+                    #outs$stud= cbind(outs$stud,  if(inherits(ci.out,"try-error")) c(NA,NA) else ci.out$student[1,4:5])
                 }
                 # find bc CI from boot.out$t as ci.out does not provide bc
-                boot.samples=boot.out$t
                 outs$bc=sapply (1:length(coef.hat), function(i) {
                     z.0=qnorm(mean(boot.samples[,i]<coef.hat[i], na.rm=TRUE))                    
                     quantile(boot.samples[,i], c(pnorm(2*z.0+qnorm(alpha/2)), pnorm(2*z.0+qnorm(1-alpha/2))), na.rm=TRUE)
                 })
-    
+                # compute symmetric percentile CI as defined in Hansen (2017)
+                outs$symm=sapply (1:length(coef.hat), function(i) {
+                    q.1=quantile(abs(boot.samples[,i]-coef.hat[i]), 1-alpha, na.rm=TRUE)
+                    coef.hat[i]+c(-q.1, q.1)
+                })                
+                # compute test inversion CI for threshold based on bootstrap critical value
+                outs$testinv=matrix(NA,nrow=2,ncol=length(coef.hat))
+                if(verbose>=2) print(summary(boot.samples[,1+length(coef.hat)]))
+                if (family=="gaussian") {
+                    # print both c.alpha for comparison, but use Fs-based, because it seems to work better
+                    c.alpha=quantile(boot.samples[,1+length(coef.hat)], 1-alpha, na.rm=TRUE); if(verbose) myprint(c.alpha)
+                    c.alpha=quantile(boot.samples[,2+length(coef.hat)], 1-alpha, na.rm=TRUE); if(verbose) myprint(c.alpha)
+                    if (!is.na(c.alpha) & boot.test.inv.ci) outs$testinv[,length(coef.hat)]= ci.test.inv.F(c.alpha) 
+                } else {
+                    c.alpha=quantile(boot.samples[,1+length(coef.hat)], 1-alpha, na.rm=TRUE); myprint(c.alpha)
+                    if (!is.na(c.alpha) & boot.test.inv.ci) outs$testinv[,length(coef.hat)]= ci.test.inv(c.alpha)                     
+                }
          
                 # the following percentile CI is numerically different from boot.ci results because the latter use norm.inter to do interpolation on the normal quantile scale
                 #ci.perc=apply(boot.out$t, 2, function (x) quantile(x, c(alpha/2, 1-alpha/2), na.rm=TRUE))   
                                 
 #                # this takes a long time and returns non-sensible result
 #                ci.abc=abc.ci(data, statistic=function(dat, ww){
-#                        fit.b=try(chngptm (formula.1, formula.2, family, dat, type, est.method="smoothapprox", var.type="none"))
+#                        fit.ii=try(chngptm (formula.1, formula.2, family, dat, type, est.method="smoothapprox", var.type="none"))
 #                        # note that we cannot use | in the following line
-#                        if(inherits(fit.b,"try-error")) 
+#                        if(inherits(fit.ii,"try-error")) 
 #                            rep(NA,length(coef.hat)) 
-#                        else if (any(abs(fit.b$coefficients[1:(length(fit.b$coefficients)-1)])>search.bound)) 
+#                        else if (any(abs(fit.ii$coefficients[1:(length(fit.ii$coefficients)-1)])>search.bound)) 
 #                            rep(NA,length(coef.hat)) 
-#                        else fit.b$coefficients
+#                        else fit.ii$coefficients
 #                    }, 
 #                    index=4, conf=1-alpha
 #                )
@@ -483,46 +664,56 @@ chngptm = function(formula.1, formula.2, family, data,
                 
                 outs                
             }
-
-            var.est=switch(var.type, 
-                none=NA,
-                smooth=var.est.smooth(), 
-                model=var.est.model(test.inv.ci), 
-                robust=var.est.robust(aux.fit, test.inv.ci), 
-                robusttruth=var.est.robust(aux.fit, test.inv.ci, true.param=TRUE), 
-                bootstrap=ci.bootstrap(), 
-                all=list("smooth"=var.est.smooth(), "model"=var.est.model(test.inv.ci), "robust"=var.est.robust(aux.fit, test.inv.ci) )
-            )
             
-        } else if (type %in% c("step","stegmented")) {
-            # discontinous models
-            var.est=vcov(best.fit)
-            
+            # if perfect segregation happens, cann't compute variance estimate
+            # what to do with glm.warn?
+            if (var.type=="none") {
+                var.est=NULL
+            } else if (var.type=="bootstrap") {
+                var.est=ci.bootstrap()
+            } else {                
+                if (any(abs(coef.hat[-c(1,length(coef.hat))])>=search.bound)) {
+                    cat("point estimate over search bound. No analytical variance estimate produced\n")
+                    var.est=NULL
+                } else {
+                    var.est=switch(var.type, 
+                        smooth=var.est.smooth(), 
+                        model=var.est.model(test.inv.ci), 
+                        robust=     var.est.robust(aux.fit, test.inv.ci), 
+                        robusttruth=var.est.robust(aux.fit, test.inv.ci, true.param=TRUE), 
+                        all=list("smooth"=var.est.smooth(), 
+                                  "model"=var.est.model(test.inv.ci), 
+                                 "robust"=var.est.robust(aux.fit, test.inv.ci), 
+                               "sandwich"=var.est.model(test.inv.ci=FALSE,robust=TRUE) )
+                    ) 
+                }
+            }
         } else stop("type incorrect")
         
-    } else {
-        var.est=NULL
-    }
+    } # end if (has.itxn | !family %in% c("binomial","gaussian"))  else 
     
+        
     res=list(
-          coefficients=coef.hat
+          best.fit=best.fit # this is placed first b/c it is too long
+        , coefficients=coef.hat
         , vcov=var.est
         , formula.1=formula.1
         , formula.2=formula.2
         , chngpt.var=chngpt.var.name
         , chngpt=coef.hat["chngpt"]
         , est.method = est.method
-        , b.=if(est.method=="grid") NULL else b.
+        , b.transition=b.transition
         , type = type
         , glm.warn = glm.warn
-        , best.fit=best.fit    
+        , family=family    
+        , var.type=var.type
     )
     names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %+% "%"
     
     if (est.method=="smoothapprox") {
         res=c(res, list(converged=converged, iter=n.iter))
     } else if (est.method=="grid") {
-        res=c(res, list(chngpts=chngpts, logliks=logliks))
+        res=c(res, list(chngpts=chngpts, logliks=attr(e.final,"logliks")))
 #        # good.soln needs to take as input a chngptm object that has chngpts etc
 #        class(res)=c("chngptm", class(res)) 
 #        tmp=good.soln(res, plot=verbose==3)
@@ -534,8 +725,81 @@ chngptm = function(formula.1, formula.2, family, data,
 }
 
 
+## make.chngpt.var is needed in both testing and estimation
+## in estimation by grid search, b.transition is set to null when this function is called
+## in estimation by smooth approx, b.transition value is saved to object
+#
+# The difference between the next two versions is that when b.transition is not infinity, if x<e, x is 0 in the older version but only close to 0 in the newer version
+## before May 13, 2017
+#make.chngpt.var=function(x, e, type, data=NULL, b.transition=NULL) {    
+#    if(type=="step") {
+#        out=ifelse(x>=e, 1, 0)
+#    } else if (type=="hinge") {
+#        out=ifelse(x>=e, x-e, 0)
+#    } else if (type=="segmented") {
+#        out=ifelse(x>=e, x-e, 0) # x also becomes part of the null model
+#    } else if (type=="stegmented") {
+#        out=cbind(ifelse(x>=e, 1, 0), ifelse(x>=e, x-e, 0))  # x also becomes part of the null model
+#    }    
+#    if (!is.null(b.transition)) out=out * 1/(1+exp(b.transition*(x-e))) 
+#
+## New on May 13, 2017 this function is modified to fit smooth transition model
+make.chngpt.var=function(x, e, type, data=NULL, b.transition=Inf) {    
+    transition=expit(b.transition*(x-e))
+    if(b.transition==Inf) transition[is.nan(transition)]=1 # if this is not here, there will be NaN and that messes up things
+    if(type=="step") {
+        out=transition
+    } else if (type=="hinge") {
+        out=transition*(x-e)
+    } else if (type=="segmented") {
+        out=transition*(x-e) # x also becomes part of the null model
+    } else if (type=="segmented2") {
+        out=transition*x # x by itself also becomes part of the null model
+    } else if (type=="stegmented") {
+        out=cbind(transition, transition*(x-e))  # x also becomes part of the null model
+    }    
+    
+    #str(out)    
+    # unchanged on May 13, 2017
+    if (is.null(data)) {
+        out    
+    } else {
+        if (type=="stegmented") {
+            data$x.gt.e = out[,1]
+            data$x.gt.e.2 = out[,2]
+        } else {
+            data$x.gt.e = out
+        }
+        data
+    }
+}
+    
+do.regression=function(formula.new, data, weights, family){
+    if (family=="coxph") {
+        fit = keepWarnings(survival::coxph(formula.new, data=data, weights=weights))
+    } else {
+#    str(formula.new); str(data); str(weights); str(family)
+        fit =             keepWarnings(glm(formula.new, data=data, weights=weights, family=family) )
+    }
+    fit
+}
+get.f.alt=function(type, has.itxn, z.1.name, chngpt.var.name) {
+    if (type=="stegmented") {
+        f.alt=if(has.itxn) "~.+(x.gt.e+x.gt.e.2)*"%+%z.1.name%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name else "~.+x.gt.e+x.gt.e.2"
+    } else if (type %in% c("segmented","segmented2")) {
+        f.alt=if(has.itxn) "~."%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name%+%"+x.gt.e*"%+%z.1.name else "~.+x.gt.e"
+    } else if (type %in% c("step","hinge")) {
+        f.alt=if(has.itxn) "~.+x.gt.e*"%+%z.1.name else "~.+x.gt.e"
+    }
+    f.alt
+}
+        
+#deviance.3pl <- expression( (1-y) * ( c + (d-c)/(1+exp(b*(t-e))) )  +  log( 1 + exp( -c - (d-c)/(1+exp(b*(t-e))) ) ) )
+#deviance.3pl.deriv=deriv3(deviance.3pl, c("c","d","e"), c("c","d","e","t","y","b"))
+
+
 predict.chngptm=function (object, newdata = NULL, type = c("link", "response", "terms"), ...){    
-    newdata = make.chngpt.var(newdata[[object$chngpt.var]], object$chngpt, object$type, newdata, object$b.)            
+    newdata = make.chngpt.var(newdata[[object$chngpt.var]], object$chngpt, object$type, newdata, object$b.transition)            
     predict(object$best.fit, newdata, type, ...)
 }
 print.chngptm=function(x, ...) {
@@ -560,7 +824,7 @@ getFixedEf.chngptm=function(object, ...) {
     })
     rbind(res$coefficients, chngpt=c(res$chngpt[1], NA, res$chngpt[2:3]))
 }
-summary.chngptm=function(object, ...) {    
+summary.chngptm=function(object, var.type=NULL, verbose=FALSE, ...) {    
     # "Estimate" "Std. Error" "t value" "Pr(>|t|)"        
     fit=object
     p.z=length(fit$coefficients)
@@ -568,29 +832,43 @@ summary.chngptm=function(object, ...) {
     type=fit$type
     
     boot.conf=FALSE
+    if (!is.null(var.type)) if (var.type %in% c("perc","basic","bc","bcabc","symm")) boot.conf=TRUE
     
     if (is.null(fit$vcov)) {
         cat("No variance estimate available.\n\n")
         print(fit)
         return (invisible())
     } else {
-        if(is.list(fit$vcov)){
-            if (!is.null(fit$vcov$robust)) {
-                vcov=fit$vcov$robust
-            } else if (!is.null(fit$vcov$abc)){
-                boot.conf=TRUE
-                vcov=fit$vcov$abc
-                #if (all(is.na(vcov))) vcov=fit$vcov$bc # if the bootstrap samples have too many NA, only bc quantiles can be estimated. However, bc quantiles may be misleading
+        if(is.null(var.type)) {
+            if(is.list(fit$vcov)){
+                if (!is.null(fit$vcov$robust)) {
+                    vcov=fit$vcov$robust
+                } else if (!is.null(fit$vcov$abc)){
+                    boot.conf=TRUE
+                    vcov=fit$vcov$abc
+                    #if (all(is.na(vcov))) vcov=fit$vcov$bc # if the bootstrap samples have too many NA, only bc quantiles can be estimated. However, bc quantiles may be misleading
+                }
+                
+            } else {
+                vcov=fit$vcov
             }
-            
         } else {
-            vcov=fit$vcov
+            vcov=fit$vcov[[var.type]]
         }
+        if(is.null(vcov)) {
+            cat("No variance estimate available.\n\n")
+            print(fit)
+            return (invisible())
+        }         
+    
     }
     
     if(object$type %in% c("hinge","segmented") & !boot.conf) {
         vcov.t=vcov[p.z,p.z]
-        vcov=vcov[-p.z,-p.z] # not return the chngpoint estimate
+        tmp=vcov[-p.z,-p.z] # not return the chngpoint estimate
+        # the last line lost the attr chngpt.ci, need to make a copy
+        if(!is.null(attr(vcov,"chngpt.ci"))) attr(tmp,"chngpt.ci")=attr(vcov,"chngpt.ci")
+        vcov=tmp
     } else  {
         vcov
     }
@@ -602,18 +880,19 @@ summary.chngptm=function(object, ...) {
     res=list()
     
     # coefficients
+    transf=if(fit$family=="binomial") exp else if (fit$family=="gaussian") identity
     if (boot.conf){
-        lb=exp(vcov[1,])
-        ub=exp(vcov[2,])
+        lb=transf(vcov[1,])
+        ub=transf(vcov[2,])
         pval=rep(NA,p.z)        
     } else  {
-        lb=exp(unname(fit$coefficients[1:(p.z-1)] - sqrt(diag(vcov)) * qt(0.975, df=n-p.z, lower.tail=TRUE)))
-        ub=exp(unname(fit$coefficients[1:(p.z-1)] + sqrt(diag(vcov)) * qt(0.975, df=n-p.z, lower.tail=TRUE)))
-        pval=unname(pt(abs(fit$coefficients[1:(p.z-1)] / sqrt(diag(vcov))), df=n-p.z, lower.tail=FALSE))
+        lb=transf(unname(fit$coefficients[1:(p.z-1)] - sqrt(diag(vcov)) * qt(0.975, df=n-p.z, lower.tail=TRUE)))
+        ub=transf(unname(fit$coefficients[1:(p.z-1)] + sqrt(diag(vcov)) * qt(0.975, df=n-p.z, lower.tail=TRUE)))
+        pval=unname(pt(abs(fit$coefficients[1:(p.z-1)] / sqrt(diag(vcov))), df=n-p.z, lower.tail=FALSE)) *2 # *2 is added on 8/2/2016
     }
     res$coefficients=mysapply(1:(p.z-1), function (i) {
         c(
-              "OR"=exp(unname(fit$coefficients[i]))
+              transf(unname(fit$coefficients[i]))
             , "p.value" = pval[i]
             , "(lower" = lb[i]
             , "upper)" = ub[i]
@@ -624,6 +903,7 @@ summary.chngptm=function(object, ...) {
         )
     })
     rownames(res$coefficients)=names(fit$coefficients)[-p.z]
+    colnames(res$coefficients)[1]=if(fit$family=="binomial") "OR" else if (fit$family=="gaussian") "Est"
     
     # change point
     i=p.z
@@ -632,6 +912,7 @@ summary.chngptm=function(object, ...) {
             lb=vcov[1,p.z]
             ub=vcov[2,p.z]
         } else if(!is.null(attr(vcov,"chngpt.ci"))) {
+            if(verbose) print("get test inversion CI for threshold")
             lb=unname(attr(vcov,"chngpt.ci")[1])
             ub=unname(attr(vcov,"chngpt.ci")[2])
         } else {
@@ -662,137 +943,93 @@ print.summary.chngptm=function(x,...) {
 }
 
 
-# make.chngpt.var is needed in both testing and estimation
-# in estimation by grid search, b. is set to null when this function is called
-# in estimation by smooth approx, b. value is saved to object
-make.chngpt.var=function(x, e, type, data=NULL, b.=NULL) {    
-    if(type=="step") {
-        out=ifelse(x>=e, 1, 0)
-    } else if (type=="hinge") {
-        out=ifelse(x>=e, x-e, 0)
-    } else if (type=="segmented") {
-        out=ifelse(x>=e, x-e, 0) # x also becomes part of the null model
-    } else if (type=="stegmented") {
-        out=cbind(ifelse(x>=e, 1, 0), ifelse(x>=e, x-e, 0))  # x also becomes part of the null model
-    }
-    
-#    print(1/(1+exp(b.*(x-e))))
-#    print(out)
-    if (!is.null(b.)) out=out * 1/(1+exp(b.*(x-e))) 
-#    print(out)
-    
-    if (is.null(data)) {
-        out    
-    } else {
-        if (type=="stegmented") {
-            data$x.gt.e = out[,1]
-            data$x.gt.e.2 = out[,2]
-        } else {
-            data$x.gt.e = out
-        }
-        data
-    }
-}
-    
-get.f.alt=function(type, has.itxn, z.1.name, chngpt.var.name) {
-    if (type=="stegmented") {
-        f.alt=if(has.itxn) "~.+(x.gt.e+x.gt.e.2)*"%+%z.1.name%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name else "~.+x.gt.e+x.gt.e.2"
-    } else if (type=="segmented") {
-        #f.alt=if(has.itxn) "~.+x.gt.e*"%+%z.1.name%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name else "~.+x.gt.e"
-        f.alt=if(has.itxn) "~."%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name%+%"+x.gt.e*"%+%z.1.name else "~.+x.gt.e"
-    } else if (type %in% c("step","hinge")) {
-        f.alt=if(has.itxn) "~.+x.gt.e*"%+%z.1.name else "~.+x.gt.e"
-    }
-    f.alt
-}
-        
-#deviance.3pl <- expression( (1-y) * ( c + (d-c)/(1+exp(b*(t-e))) )  +  log( 1 + exp( -c - (d-c)/(1+exp(b*(t-e))) ) ) )
-#deviance.3pl.deriv=deriv3(deviance.3pl, c("c","d","e"), c("c","d","e","t","y","b"))
-    
-# 
-# step change point model
-dev.step <- expression( (1-y) * ( alpha.z + beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - beta/(1+exp(b*(x-e))) ) ) )
-dev.step.deriv=deriv3(dev.step, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
-dev.step.itxn <- expression( (1-y) * ( alpha.z + (beta1+beta2*z.1)/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - (beta1+beta2*z.1)/(1+exp(b*(x-e))) ) ) )
-dev.step.itxn.deriv=deriv3(dev.step.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
-# hinge change point model
-dev.hinge <- expression( (1-y) * ( alpha.z + (x-e)*beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - (x-e)*beta/(1+exp(b*(x-e))) ) ) )
-dev.hinge.deriv=deriv3(dev.hinge, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
-dev.hinge.itxn <- expression( (1-y) * ( alpha.z + (x-e)*(beta1+beta2*z.1)/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - (x-e)*(beta1+beta2*z.1)/(1+exp(b*(x-e))) ) ) )
-dev.hinge.itxn.deriv=deriv3(dev.hinge.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
 # the following functions are used as objective functions in smoothapprox, b/c we don't supply derivative to optim anymore. 
+.lik.f=function(linear, y, family) {tmp=if(family=="binomial") (1-y)*linear + log(1+exp(-linear)) else if(family=="gaussian") (linear-y)**2; sum(tmp)}
 # step change point model
-dev.step.f <- function(theta,x,y,b,alpha.z,z.1)  {
+dev.step.f <- function(theta,x,y,b,alpha.z,z.1,family)  {
     beta=theta[1]; e=theta[2]
-    eta=beta/(1+exp(b*(x-e))) 
+    eta=beta/(1+exp(-b*(x-e)))
     linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
+    .lik.f(linear,y,family)
 }
-# dev.step.deriv.f is experimental, not really used, does not seem to bring improvement when compared to gr=NULL
-dev.step.deriv.f <- function(theta,x,y,b,alpha.z,z.1)  {
+dev.step.itxn.f <- function(theta,x,y,b,alpha.z,z.1,family)  {
+    beta1=theta[1]; beta2=theta[2]; e=theta[3]
+    eta=(beta1+beta2*z.1)/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+}
+# hinge change point model
+dev.hinge.f <- function(theta,x,y,b,alpha.z,z.1,family) {
     beta=theta[1]; e=theta[2]
-    approxi=1/(1+exp(b*(x-e)))
+    eta=(x-e)*beta/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+} 
+dev.hinge.itxn.f <- function(theta,x,y,b,alpha.z,z.1,family)  {
+    beta1=theta[1]; beta2=theta[2]; e=theta[3]
+    eta=(x-e)*(beta1+beta2*z.1)/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+}
+# segmented change point model
+dev.segmented.f <- function(theta,x,y,b,alpha.z,z.1,family) {
+    beta1=theta[1]; beta2=theta[2]; e=theta[3]
+    eta=beta1*x + (x-e)*beta2/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+} 
+dev.segmented2.f <- function(theta,x,y,b,alpha.z,z.1,family) {
+    beta1=theta[1]; beta2=theta[2]; e=theta[3]
+    eta=beta1*x + x*beta2/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+} 
+dev.segmented.itxn.f <- function(theta,x,y,b,alpha.z,z.1,family) {
+    beta1=theta[1]; beta2=theta[3]; beta3=theta[2]; beta4=theta[4]; e=theta[5]# note the order change between beta and theta
+    eta=(beta1+beta2*z.1)*x + (beta3+beta4*z.1)*(x-e)/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+} 
+dev.segmented2.itxn.f <- function(theta,x,y,b,alpha.z,z.1,family) {
+    beta1=theta[1]; beta2=theta[3]; beta3=theta[2]; beta4=theta[4]; e=theta[5]# note the order change between beta and theta
+    eta=(beta1+beta2*z.1)*x + (beta3+beta4*z.1)*x/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+} 
+# stegmented change point model
+dev.stegmented.f <- function(theta,x,y,b,alpha.z,z.1,family) {
+    beta1=theta[1]; beta2=theta[2]; beta3=theta[3]; e=theta[4]
+    eta=beta1*x + ((x-e)*beta3 + beta2)/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+} 
+# the order of parameters in the following needs to be fixed
+dev.stegmented.itxn.f <- function(theta,x,y,b,alpha.z,z.1,family) {
+    beta1=theta[1]; beta2=theta[3]; beta3=theta[2]; beta4=theta[4]; beta5=theta[5]; beta6=theta[6]; e=theta[5]# note the order change between beta and theta
+    eta=(beta1+beta2*z.1)*x + ((beta3+beta4*z.1)*(x-e) + beta4+beta5*z.1)/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family)
+} 
+# dev.step.deriv.f is experimental, not really used, does not seem to bring improvement when compared to gr=NULL
+dev.step.deriv.f <- function(theta,x,y,b,alpha.z,z.1,family)  {
+    if(family!="binomial") stop("only binomial supported")
+    beta=theta[1]; e=theta[2]
+    approxi=expit(b*(x-e))
     dBde=b*approxi*(1-approxi)
     pi=expit(alpha.z+beta*approxi)
     colSums((y-pi)*cbind(x>e, beta*dBde))
 }
-dev.step.itxn.f <- function(theta,x,y,b,alpha.z,z.1)  {
-    beta1=theta[1]; beta2=theta[2]; e=theta[3]
-    eta=(beta1+beta2*z.1)/(1+exp(b*(x-e))) 
-    linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
-}
+# expressions, binomial only
+# step change point model
+dev.step <- expression( (1-y) * ( alpha.z + beta/(1+exp(b*(x-e))) )  +  log( 1 + exp( -alpha.z - beta/(1+exp(-b*(x-e))) ) ) )
+dev.step.deriv=deriv3(dev.step, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
+dev.step.itxn <- expression( (1-y) * ( alpha.z + (beta1+beta2*z.1)/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -alpha.z - (beta1+beta2*z.1)/(1+exp(-b*(x-e))) ) ) )
+dev.step.itxn.deriv=deriv3(dev.step.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
 # hinge change point model
-dev.hinge.f <- function(theta,x,y,b,alpha.z,z.1) {
-    beta=theta[1]; e=theta[2]
-    eta=(x-e)*beta/(1+exp(b*(x-e)))
-    linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
-} 
-dev.hinge.itxn.f <- function(theta,x,y,b,alpha.z,z.1)  {
-    beta1=theta[1]; beta2=theta[2]; e=theta[3]
-    eta=(x-e)*(beta1+beta2*z.1)/(1+exp(b*(x-e))) 
-    linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
-}
-# segmented change point model
-dev.segmented.f <- function(theta,x,y,b,alpha.z,z.1) {
-    beta1=theta[1]; beta2=theta[2]; e=theta[3]
-    eta=beta1*x + (x-e)*beta2/(1+exp(b*(x-e))) 
-    linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
-} 
-dev.segmented.itxn.f <- function(theta,x,y,b,alpha.z,z.1) {
-    beta1=theta[1]; beta2=theta[3]; beta3=theta[2]; beta4=theta[4]; e=theta[5]# note the order change between beta and theta
-    eta=(beta1+beta2*z.1)*x + (beta3+beta4*z.1)*(x-e)/(1+exp(b*(x-e)))
-    linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
-} 
-# stegmented change point model
-dev.stegmented.f <- function(theta,x,y,b,alpha.z,z.1) {
-    beta1=theta[1]; beta2=theta[2]; beta3=theta[3]; e=theta[4]
-    eta=beta1*x + ((x-e)*beta3 + beta2)/(1+exp(b*(x-e))) 
-    linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
-} 
-# the order of parameters in the following needs to be fixed
-dev.stegmented.itxn.f <- function(theta,x,y,b,alpha.z,z.1) {
-    beta1=theta[1]; beta2=theta[3]; beta3=theta[2]; beta4=theta[4]; beta5=theta[5]; beta6=theta[6]; e=theta[5]# note the order change between beta and theta
-    eta=(beta1+beta2*z.1)*x + ((beta3+beta4*z.1)*(x-e) + beta4+beta5*z.1)/(1+exp(b*(x-e)))
-    linear=alpha.z+eta
-    sum( (1-y)*linear + log(1+exp(-linear)) )
-} 
-
-do.regression=function(formula.new, data, weights, family){
-    if (family=="coxph") {
-        fit = keepWarnings(survival::coxph(formula.new, data=data, weights=weights))
-    } else {
-#    str(formula.new); str(data); str(weights); str(family)
-        fit =             keepWarnings(glm(formula.new, data=data, weights=weights, family=family) )
-    }
-    fit
-}
-
+dev.hinge <- expression( (1-y) * ( alpha.z + (x-e)*beta/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -alpha.z - (x-e)*beta/(1+exp(-b*(x-e))) ) ) )
+dev.hinge.deriv=deriv3(dev.hinge, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
+dev.hinge.itxn <- expression( (1-y) * ( alpha.z + (x-e)*(beta1+beta2*z.1)/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -alpha.z - (x-e)*(beta1+beta2*z.1)/(1+exp(-b*(x-e))) ) ) )
+dev.hinge.itxn.deriv=deriv3(dev.hinge.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
 
 # check whether the MLE is considered good, return Boolean
 good.soln=function(fit, df=7, plot=FALSE) {
@@ -838,10 +1075,10 @@ good.soln=function(fit, df=7, plot=FALSE) {
 #        optim(par=c(c.init,d.init,e.init), 
 #              fn = function(theta,...) sum(deviance.3pl.deriv(theta[1],theta[2],theta[3],...)), 
 #              gr = function(theta,...) colSums(attr(deviance.3pl.deriv(theta[1],theta[2],theta[3],...), "gradient")), 
-#              dat$x, dat$y, b., method="L-BFGS-B", lower = lb, upper = ub, control = list(), hessian = F)
+#              dat$x, dat$y, b.transition, method="L-BFGS-B", lower = lb, upper = ub, control = list(), hessian = F)
 #    })            
 #    fit=fits[[which.min(sapply(fits, function(x) x$value))]]
-#    res=c(res, "fit"=chngpt.score.stat(e.=fit$par["e"], y~x, dat, b.=b.)["Z.stat"]) # similar performance to max.Z
+#    res=c(res, "fit"=chngpt.score.stat(e.=fit$par["e"], y~x, dat, b.transition=b.transition)["Z.stat"]) # similar performance to max.Z
 #    
 #    
 #    plot(y~x, dat, log=""); abline(v=exp(e.))
@@ -894,8 +1131,8 @@ good.soln=function(fit, df=7, plot=FALSE) {
 #        res=c(res, sigm.cover = d.minus.c - 1.96*sqrt(d.minus.c.var) < beta & beta < d.minus.c + 1.96*sqrt(d.minus.c.var) ) # coverage
 #        res=c(res, fit$par["e"]) # e
 #    }
-
-
+#
+#
 #                # an alternative parameterization
 #                # x.tilda
 #                beta.3=coef.hat["x"]

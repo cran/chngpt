@@ -1,86 +1,104 @@
-library("RUnit")
-library("chngpt")
-
-
 test.chngptm <- function() {
 
+    library("RUnit")
+    library("chngpt")
     RNGkind("Mersenne-Twister", "Inversion")    
     tolerance=1e-1
-    if(file.exists("D:/gDrive/3software/_checkReproducibility") & R.Version()$system %in% c("x86_64, mingw32")) tolerance=1e-6 # 32 bit system gives different results from 64 bit system
+    # R.Version()$system is needed b/c 32 bit system gives different results from 64 bit system
+    if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_checkReproducibility")) & R.Version()$system %in% c("x86_64, mingw32","x86_64, linux-gnu")) tolerance=1e-6 
     print(tolerance)
 
     
     #######################################
     # linear model
     
-    fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="segmented", est.method="grid", var.type="none", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+    fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="segmented", est.method="grid", var.type="all", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, aux.fit=glm(Volume~ns(Girth,df=2),trees,family="gaussian"))
+    checkEqualsNumeric(fit$coefficients, c(-24.614440,3.993966,4.266618,16.000000), tolerance=tolerance)    
+    checkEqualsNumeric(diag(fit$vcov$model), c(18.2158018,0.1258957,1.1668183,0.4427713), tolerance=tolerance)    
+    checkEqualsNumeric(diag(fit$vcov$sandwich), c(6.94919944,0.06118311,0.22564000,0.33254293), tolerance=tolerance)    
+    checkEqualsNumeric(diag(fit$vcov$robust), c(779.922082,6.380663,8.091818,48.945107), tolerance=tolerance)    
     
-
+    fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="segmented", est.method="smoothapprox", var.type="model", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, aux.fit=1)
+    checkEqualsNumeric(diag(fit$vcov), c(18.2158018,0.1258957,1.1668183,0.4427713), tolerance=tolerance)    
+    checkEqualsNumeric(fit$coefficients, c(-24.614440,3.993966,4.266618,16.000000), tolerance=tolerance)    
+    checkEqualsNumeric(attr(fit$vcov,"chngpt.ci"), c(13.3,16.3), tolerance=tolerance)        
+    
+    fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="segmented", est.method="smoothapprox", var.type="model", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, b.transition=1)
+    checkEqualsNumeric(diag(fit$vcov), c(18.7190518,0.1254883,1.1123345,0.5228118), tolerance=tolerance)    
+    checkEqualsNumeric(fit$coefficients, c(-26.192998,4.158016,3.950498,16.000000), tolerance=tolerance)    
+    fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="segmented2", est.method="smoothapprox", var.type="model", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, b.transition=1)
+    checkEqualsNumeric(diag(fit$vcov), c(22.1371998,0.1588287,0.0604084,0.3344677), tolerance=tolerance)    
+    checkEqualsNumeric(fit$coefficients, c(-22.722485,3.816606,1.075842,17.900000), tolerance=tolerance)    
+    
+    data=sim.chngpt("quadratic", n=50, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
+    fit = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="smoothapprox", var.type="bootstrap", ci.bootstrap.size=5)
+    checkEqualsNumeric(fit$vcov$symm[1,], c(-2.4315356,-0.02428918,-0.1584321,-1.1010350,4.000677), tolerance=tolerance)    
+    checkEqualsNumeric(fit$vcov$testinv[,5], c(4.804078,6.706233), tolerance=tolerance)    
+    
 
     ########################################
     # hinge model
     
-    data=sim.chngpt("sigmoid2", type="hinge", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.=-Inf)  
+    data=sim.chngpt("sigmoid2", type="hinge", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)  
     data$xx=data$x
     data$zz=data$z
     data$yy=data$y
     fit.0=glm(yy~zz+ns(xx,df=3), data, family="binomial")
     fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", est.method="smoothapprox", var.type="all", verbose=2, aux.fit=fit.0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
-    checkEqualsNumeric(sum(diag(fit$vcov[["smooth"]])), 0.3995812, tolerance=tolerance)    
-    checkEqualsNumeric(sum(diag(fit$vcov[["model"]])), 0.6152094, tolerance=tolerance)    
-    checkEqualsNumeric(sum(diag(fit$vcov[["robust"]])), 2.329935, tolerance=tolerance)        
+    checkEqualsNumeric(sum(diag(fit$vcov[["smooth"]])), 0.399209, tolerance=tolerance)    
+    checkEqualsNumeric(sum(diag(fit$vcov[["model"]])), 0.614832, tolerance=tolerance)    
+    checkEqualsNumeric(sum(diag(fit$vcov[["robust"]])), 2.311749, tolerance=tolerance)        
     #bootstrap
-    fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data[1:100,], type="hinge", est.method="smoothapprox", var.type="bootstrap", verbose=2, aux.fit=fit.0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=10)
-    checkEqualsNumeric(sum(diag(fit$vcov[["perc"]])), 1.22741, tolerance=tolerance)    
-    checkEqualsNumeric(sum(diag(fit$vcov[["basic"]])), 0.9132618, tolerance=tolerance)    
-    checkEqualsNumeric(sum(diag(fit$vcov[["bc"]])), 1.353463, tolerance=tolerance)    
-
-
+    fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data[1:100,], type="hinge", est.method="smoothapprox", var.type="bootstrap", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=10)
+    checkEqualsNumeric(fit$vcov$symm[1,], c(-0.9980155,0.6832314,-222.687217,4.561271), tolerance=tolerance)
+    checkEqualsNumeric(fit$vcov$testinv[,4], c(4.291957,6.170364), tolerance=tolerance)
+    
+    
     ########################################
     # segmented model
     
-    data=sim.chngpt("sigmoid2", type="segmented", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.=-Inf)  
+    data=sim.chngpt("sigmoid2", type="segmented", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)  
     data$xx=data$x
     data$zz=data$z
     data$yy=data$y
     fit.0=glm(yy~zz+xx+I(xx^2), data, family="binomial")
     fit.0$coefficients=c(alpha=-1, z=log(1.4), x=-1 , x.quad=0.3)
     fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="segmented", est.method="smoothapprox", var.type="all", verbose=2, aux.fit=fit.0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
-    checkEqualsNumeric(sum(diag(fit$vcov[["smooth"]])), 0.9398962, tolerance=tolerance)    
-    checkEqualsNumeric(sum(diag(fit$vcov[["model"]])), 1.479077, tolerance=tolerance)    
-    checkEqualsNumeric(sum(diag(fit$vcov[["robust"]])), 0.8593664, tolerance=tolerance)    
+    checkEqualsNumeric(sum(diag(fit$vcov[["smooth"]])), 0.9401789, tolerance=tolerance)    
+    checkEqualsNumeric(sum(diag(fit$vcov[["model"]])), 1.479249, tolerance=tolerance)    
+    checkEqualsNumeric(sum(diag(fit$vcov[["robust"]])), 0.8593607, tolerance=tolerance)    
 
 
     ########################################
     # step model, main effect
     
-    data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=-Inf)
+    data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.transition=Inf)
 
     fit = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0.1, ub.quantile=0.9, est.method="smoothapprox", var.type="smooth")
-    checkEqualsNumeric(mean(fit$coefficients), 0.9373754, tolerance=tolerance)
-    checkEqualsNumeric(mean(vcov(fit)), 0.004481922, tolerance=tolerance)
+    checkEqualsNumeric(mean(fit$coefficients), 0.9414254, tolerance=tolerance)
+    checkEqualsNumeric(mean(vcov(fit)), 0.004475924, tolerance=tolerance)
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0.1, ub.quantile=0.9, est.method="grid", var.type="smooth")
     checkEqualsNumeric(fit$coefficients, c( -0.8522692,0.3352071,0.5475595,3.7352043), tolerance=tolerance)
     checkEqualsNumeric(mean(vcov(fit)), 0.004475924, tolerance=tolerance)
     
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="hinge",     lb.quantile=0.1, ub.quantile=0.9, est.method="smoothapprox", var.type="smooth")    
-    checkEqualsNumeric(mean(fit$coefficients), 1.450928, tolerance=tolerance)    
-    checkEqualsNumeric(mean(vcov(fit)), 0.007047492, tolerance=tolerance)
+    checkEqualsNumeric(mean(fit$coefficients), 1.450894, tolerance=tolerance)    
+    checkEqualsNumeric(mean(vcov(fit)), 0.007046526, tolerance=tolerance)
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="hinge",     lb.quantile=0.1, ub.quantile=0.9, est.method="grid", var.type="smooth")    
     checkEqualsNumeric(fit$coefficients, c(-0.5198031,0.3037050,0.2920897,5.7275861), tolerance=tolerance)    
     checkEqualsNumeric(mean(vcov(fit)), 0.007046526, tolerance=tolerance)
     
     # this is an example that test leads to less noise
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="segmented", lb.quantile=0.1, ub.quantile=0.9, est.method="smoothapprox", verbose=FALSE, var.type="smooth")
-    checkEqualsNumeric(mean(fit$coefficients), 1.365648, tolerance=tolerance)    
-    checkEqualsNumeric(mean(vcov(fit)), 0.02452156, tolerance=tolerance)
+    checkEqualsNumeric(mean(fit$coefficients), 1.365853, tolerance=tolerance)    
+    checkEqualsNumeric(mean(vcov(fit)), 0.02452924, tolerance=tolerance)
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="segmented", lb.quantile=0.1, ub.quantile=0.9, est.method="grid", verbose=FALSE, var.type="smooth")
     checkEqualsNumeric(fit$coefficients, c(-0.76090367,0.31253713,0.06159024,0.39690474,6.81840691), tolerance=tolerance)    
     checkEqualsNumeric(mean(vcov(fit)), 0.02455961, tolerance=tolerance)
     
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="stegmented", lb.quantile=0.1, ub.quantile=0.9, est.method="smoothapprox", verbose=FALSE, var.type="smooth")
-    checkEqualsNumeric(mean(fit$coefficients), 1.035061, tolerance=tolerance)    
-    checkEqualsNumeric(mean(vcov(fit)), 0.0301887, tolerance=tolerance)
+    checkEqualsNumeric(mean(fit$coefficients), 1.034438, tolerance=tolerance)    
+    checkEqualsNumeric(mean(vcov(fit)), 0.02996687, tolerance=tolerance)
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="stegmented", lb.quantile=0.1, ub.quantile=0.9, est.method="grid", verbose=FALSE, var.type="smooth")
     checkEqualsNumeric(fit$coefficients, c(-0.06705628,0.32633105,-0.28688468,0.76675233,0.32650919,3.73520431), tolerance=tolerance)    
     checkEqualsNumeric(mean(vcov(fit)), 0.05447952, tolerance=tolerance)
@@ -90,10 +108,10 @@ test.chngptm <- function() {
     ########################################
     # step model, interaction effect
     
-    data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=-Inf)
+    data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.transition=Inf)
 
     fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0.1, ub.quantile=0.9, est.method="smoothapprox")
-    checkEqualsNumeric(mean(fit$coefficients), 1.355475, tolerance=tolerance)
+    checkEqualsNumeric(mean(fit$coefficients), 1.356519, tolerance=tolerance)
     fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0, ub.quantile=1, est.method="grid", verbose=FALSE)
     checkEqualsNumeric(fit$coefficients, c( -0.4815401,0.3042468,16.0476083,-0.3042468,8.3927654), tolerance=tolerance)
     
@@ -116,7 +134,7 @@ test.chngptm <- function() {
     ########################################
     # stegmented model
     
-    data=sim.chngpt("sigmoid2", type="stegmented", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=-Inf)
+    data=sim.chngpt("sigmoid2", type="stegmented", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.transition=Inf)
     fit = chngptm (y~z, ~x, family="binomial", data, tol=1e-4, maxit=1e3, type="stegmented",      lb.quantile=0.1, ub.quantile=0.9, est.method="grid", var.type="smooth")
     checkEqualsNumeric(fit$coefficients, c(2.5067137,0.4783413,-0.5892674,1.3710912,-1.6098422,5.8467320), tolerance=tolerance)
         

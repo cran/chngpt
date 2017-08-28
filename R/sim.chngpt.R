@@ -1,14 +1,14 @@
-expit.2pl=function(t,e,b) sapply(t, function(t) 1/(1+exp(b*(t-e))))
+expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 
 sim.chngpt = function (
-    label=c("sigmoid2","sigmoid3","sigmoid4","sigmoid5","sigmoid6","quadratic","exp","flatHyperbolic"), 
+    label=c("sigmoid2","sigmoid3","sigmoid4","sigmoid5","sigmoid6","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic"), 
     n, seed, 
-    type=c("NA","step","hinge","segmented","stegmented"),
+    type=c("NA","step","hinge","segmented","segmented2","stegmented"),# segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
     family=c("binomial","gaussian"),
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2"), # gam1 is a hack to allow e. be different     
+    e.=NULL, b.transition=Inf,
     beta=NULL, coef.z=log(1.4), alpha=NULL,
-    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary"),     
-    e.=NULL, b.=-Inf,
-    sd=0.3,
+    sd=0.3, mu=4.7, sd.x=NULL,
     alpha.candidate=NULL, verbose=FALSE) 
 {
     
@@ -21,26 +21,33 @@ sim.chngpt = function (
     family<-match.arg(family)    
     x.distr<-match.arg(x.distr)    
     
-    mu=4.7 
-    sd.x=if (label=="quadratic") sd.x=1.4 else 1.6
+    if(is.null(sd.x)) sd.x=if (label=="quadratic") sd.x=1.4 else 1.6
     
     # generate covariates
     if(x.distr=="imb") { # imbalance
-        x=c(rnorm(n-round(n/3), mu, sd=sd.x), mu-abs(rnorm(round(n/3), 0, sd=sd.x)))
+        x=c(rnorm(n-round(n/3), mu, sd.x), mu-abs(rnorm(round(n/3), 0, sd.x)))
         z=rep(1,n)
     } else if(x.distr=="lin") { # unif
         x=runif(n)*4*sd.x + mu-2*sd.x
-        z=rep(1,n)
+        z=rnorm(n, mean=0, 1)
     } else if(x.distr=="mix") { # mixture
-        x=c(rnorm(n*.6, mu, sd=sd.x), rep(mu-2*sd.x, n*.4))
+        x=c(rnorm(n*.6, mu, sd.x), rep(mu-2*sd.x, n*.4))
         z=rep(1,n)
-    } else if(x.distr=="gam") { # gamma
+    } else if(x.distr %in% c("gam","gam1","gam2")) { # gamma
         x=1.4*scale(rgamma(n=n, 2.5, 1))+mu/2
-        z=rnorm(n, mean=0, sd = 1)
-        e.=2.2; # for sigmoid2, override input
+        z=rnorm(n, mean=0, 1)
+        if(x.distr=="gam") e.=2.2 else if(x.distr=="gam1") e.=1.5 else if(x.distr=="gam2") e.=1 
+        # for sigmoid2, override input
         if (label=="sigmoid2") {
-            alpha= if (type=="hinge") -0.5 else if(type=="segmented") -1.3 else stop("wrong type") # to have similar number of cases
+            if(x.distr=="gam") {
+                alpha= if (type=="hinge") -0.5 else if(type=="segmented") -1.3 else stop("wrong type") # to have similar number of cases
+            } else if (x.distr=="gam1") {
+                alpha= if (type=="hinge") -0.2 else if(type=="segmented") -1 else stop("wrong type") # to have similar number of cases
+            } else if (x.distr=="gam2") {
+                alpha= if (type=="hinge") 0.2 else if(type=="segmented") -0.6 else stop("wrong type") # to have similar number of cases
+            }            
         }            
+        x.distr="gam" # the number trailing gam is only used to change e.
         
     } else if(startsWith(x.distr,"norm")) { # normal
         if (x.distr=="norm") {
@@ -56,23 +63,23 @@ sim.chngpt = function (
         x=tmp[,1]
         z=tmp[,2]    
     } else if(startsWith(x.distr,"zbinary")) { 
-        x=rnorm(n, mu, sd = sd.x)
+        x=rnorm(n, mu, sd.x)
         z=rbern(n, 1/2)-0.5
     } else stop("x.distr not supported: "%+%x.distr)    
     
     if (is.null(e.) | !startsWith(label,"sigmoid")) e.=4.7 # hard code e. for labels other than sigmoid*
-    x.star = expit.2pl(x, e=e., b=b.)  
+    if (verbose) myprint(e., mean(x<e.))
     
-    # get alpha, when label is quadratic, alpha remains a null, and do not throw an error
+    # when label is not found, alpha remains a null, and do not throw an error
+    # but if label is NULL, an error is thrown
     if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[ifelse(label=="sigmoid5","sigmoid2",label)%+%"_"%+%x.distr]][e.%+%"", beta%+%""], silent=TRUE)
     if(inherits(alpha, "try-error")) stop("alpha not found, please check beta or provide a null") 
     
     # make design matrix and coefficients
-    X=cbind(1,     z,        x,   x.star,   x.star*(x-e.), z*x,   z*x.star,   z*x.star*(x-e.))
-    coef.=c(alpha, z=coef.z, x=0, x.star=0, x.hinge=0,     z.x=0, z.x.star=0, z.x.hinge=0)
-
-
-
+    x.star = expit.2pl(x, e=e., b=b.transition)  
+    X=cbind(1,     z,        x,   x.star,   if(type=="segmented2") x.star*x else x.star*(x-e.),     z*x,   z*x.star,   z*x.star*(x-e.))
+    coef.=c(alpha, z=coef.z, x=0, x.star=0, x.hinge=0,                                              z.x=0, z.x.star=0, z.x.hinge=0)
+    
     if (label=="sigmoid1") { 
     # intercept only
         coef.["x.star"]=beta
@@ -85,6 +92,8 @@ sim.chngpt = function (
         } else if (type=="hinge") {
             coef.[1:5]=c(alpha, coef.z,          0,       0,  beta) 
         } else if (type=="segmented") {
+            coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) 
+        } else if (type=="segmented2") {
             coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) 
         } else if (type=="stegmented") {
             coef.[1:5]=c(2,     coef.z,   log(.67), log(.67), beta) # all effects of x in the same direction, subject to perfect separation, though that does not seem to be the main problem
@@ -107,6 +116,15 @@ sim.chngpt = function (
     # x+x^2 
         X=cbind(1,     z,        x,   x*x)
         coef.=c(alpha=-1, z=coef.z, x=-1 , x.quad=0.3)
+    
+    } else if (label=="quadratic2b") { 
+        X=cbind(1,     z,        x,   x*x)
+        coef.=c(alpha=-1, z=coef.z, x=-2*mu , x.quad=1)
+    
+    } else if (label=="cubic2b") { 
+    # x+x^2+x^3
+        X=cbind(1,     z,        x,   x*x,   x*x*x)
+        coef.=c(alpha=-1, z=coef.z, x=-1 , x.quad=beta, x.cube=1)
     
     } else if (label=="exp") { 
         if(x.distr=="norm") {
@@ -136,7 +154,7 @@ sim.chngpt = function (
         myprint(coef., digits=10)
         if (verbose==2) {
             str(X)
-            print(colnames(X))
+            #print(colnames(X))
         }
     }
     
@@ -168,4 +186,26 @@ sim.chngpt = function (
         
         eta=linear.predictors
     )        
+}
+
+# now part of base package, but we keep it here so that older version of R can run, and when we source this file, mytex can run
+# return TRUE if s1 starts with s2? 
+startsWith=function(s1, s2){
+    sapply (s1, function (s) {
+        if ( substring (s, 1, nchar(s2)) == s2 ) {
+            return (TRUE);
+        } else {
+            return (FALSE);
+        }
+    })
+}
+# return TRUE if s1 ends with s2, s1 can be a vector
+endsWith=function(s1, s2){
+    sapply (s1, function (s) {
+        if ( substring (s, nchar(s)-nchar(s2)+1, nchar(s)) == s2 ) {
+            return (TRUE);
+        } else {
+            return (FALSE);
+        }
+    })
 }

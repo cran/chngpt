@@ -61,9 +61,9 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     }    
         
     if(p.alt.2==1 & main.method=="score") {
-        method="Maximal Score Test"
+        method="Maximum of Score Statistics"
     } else {
-        method="Maximal Likelihood Ratio Test"
+        method="Maximum of Likelihood Ratio Statistics"
     }
     
     
@@ -91,10 +91,14 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
             fit.alt=keepWarnings(glm(f.alt, data=data, family=family, weights=prob.weights)) 
             if(length(fit.alt$warning)!=0) {
                 # how warning is handled greatly affects finite sample performance!
-                if(verbose) { cat("At the ",m,"out of ",M," change point:"); print(fit.alt$warning) } #often simpleWarning: glm.fit: fitted probabilities numerically 0 or 1 occurred>
+                # there are two main types of warnings: 
+                #    glm.fit: fitted probabilities numerically 0 or 1 occurred
+                #    glm.fit: algorithm did not converge
+                if(verbose) { cat("At the ",m,"out of ",M," change point:"); print(fit.alt$warning) } 
                 glm.warn=TRUE
+                #print(summary(fit.alt$value))
                 #return (list(chngpt=NA, p.value=NA, glm.warn=glm.warn))# need these fields for sim_test_batch
-                QQ[m] = NA 
+                QQ[m] = fit.null$aic - fit.alt$value$aic + 2*p.alt.2
             } else {
                 QQ[m] = fit.null$aic - fit.alt$value$aic + 2*p.alt.2
                 #QQ[m] = fit.null$deviance - fit.alt$value$deviance # this may not give the actual deviance, but up to a constant, and is family-dependent
@@ -205,7 +209,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
         QQ=TT; Q.max=T.max # for consistent return
         glm.warn=NA
         fit.alt=NULL# if NA, then difficult to test is.na(fit.alt) because it is a test in LR test
-        method="Maximal Score Test"
+        method="Maximum of Score Statistics"
                 
     } else {
         
@@ -214,7 +218,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
         x.max = apply(sam, 1, function(aux) max( colSums(matrix(aux,nrow=p.alt.2)) )  )
         p.value = mean(x.max>Q.max)      
             
-        method="Maximal Likelihood Ratio Test"
+        method="Maximum of Likelihood Ratio Statistics"
         
         if(verbose==2) {
             myprint(p, dim(V.S.hat))
@@ -256,13 +260,18 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
 
 # note that when there is both main and interaction, there are two sets of statistics. the code cannot handle that for now, but remnant of it is in fold
 plot.chngpt.test <- function(x, by.percentile=TRUE, both=FALSE, main=NULL, ...) {
+
+    if(all(is.na(x$QQ))) {
+        warning("all Q are NA, quit plotting")
+        return()
+    }
     fold=1
     perc=as.numeric(strtrim(names(x$chngpts),nchar(names(x$chngpts))-1))  
     idx=seq(1, length(x$chngpts), length.out=5)
     if(by.percentile) {
         # the primary x axis is percentile
         plot(perc, x$QQ, xlab=ifelse(both,"","change point (%)"), ylab="statistic", type="b", main=ifelse(is.null(main), x$method, main), xaxt="n", ...)
-        axis(side=1, at=perc[idx], labels=round(perc[idx])%+%"%")
+        axis(side=1, at=perc[idx], labels=round(perc[idx]))
         abline(v=(0:(fold-1))*100+as.numeric(strtrim(names(x$chngpt),nchar(names(x$chngpt))-1))  , lty=2)
         if (both) {
             axis(side=1, at=perc[idx], labels=round(x$chngpts[idx]), line=1.5, tick=FALSE, lwd=0)
@@ -270,10 +279,10 @@ plot.chngpt.test <- function(x, by.percentile=TRUE, both=FALSE, main=NULL, ...) 
     } else {
         # the primary x axis is change point
         plot(x$chngpts, x$QQ, xlab=ifelse(both,"","change point"), ylab="statistic", type="b", main=ifelse(is.null(main), x$method, main), xaxt="n", ...)
-        axis(side=1, at=x$chngpts[idx], labels=round(x$chngpts[idx]))
+        axis(side=1, at=x$chngpts[idx], labels=signif(x$chngpts[idx],2))
         abline(v=x$parameter, lty=2)
         if (both) {
-            axis(side=1, at=x$chngpts[idx], labels=round(perc[idx])%+%"%", line=1.5, tick=FALSE, lwd=0)
+            axis(side=1, at=x$chngpts[idx], labels=round(perc[idx]), line=1.5, tick=FALSE, lwd=0)
         }
     }
 }

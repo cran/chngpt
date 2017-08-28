@@ -13,7 +13,7 @@ importFrom("stats", "as.formula", "coef", "complete.cases", "cov2cor",
              "model.matrix", "na.pass", "optim", "pchisq", "pnorm",
              "predict", "pt", "qt", "quantile", "rbeta", "rgamma",
              "rnorm", "runif", "update", "density", "dnorm", "qchisq", "qnorm",
-             "smooth.spline", "vcov")
+             "smooth.spline", "vcov", "sigma", "resid")
 
 S3method(coef,chngptm)
 S3method(vcov,chngptm)

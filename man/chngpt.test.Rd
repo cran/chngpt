@@ -111,7 +111,7 @@ A list of class htest and chngpt.test
 }
 \references{
 
-Fong, Y., Huang, Y., Gilbert, P. (2015) Estimation and hypothesis testing under four types of change point models using chngpt, submitted.
+Fong, Y., Huang, Y., Gilbert, P. (2017) Estimation and hypothesis testing under four types of change point models using chngpt, BMC Bioinformatics, under review.
 
 Fong Y, Di C, and Permar S. (2014) Change-Point Testing in Logistic Regression Models with Interaction Term. Statistics in Medicine.
 

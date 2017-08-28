@@ -9,18 +9,17 @@ Generate simulation datasets for change point Monte Carlo studies.
 }
 \usage{
 
-sim.chngpt(
-    label=c("sigmoid2","sigmoid3","sigmoid4","sigmoid5","sigmoid6",
-        "quadratic","exp","flatHyperbolic"), 
+sim.chngpt (
+    label=c("sigmoid2","sigmoid3","sigmoid4","sigmoid5","sigmoid6","quadratic",
+            "quadratic2b","cubic2b","exp","flatHyperbolic"), 
     n, seed, 
-    type=c("NA","step","hinge","segmented","stegmented"),
+    type=c("NA","step","hinge","segmented","segmented2","stegmented"),
     family=c("binomial","gaussian"),
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2"),
+    e.=NULL, b.transition=Inf,
     beta=NULL, coef.z=log(1.4), alpha=NULL,
-    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary"),     
-    e.=NULL, b.=-Inf,
-    sd=0.3,
+    sd=0.3, mu=4.7, sd.x=NULL,
     alpha.candidate=NULL, verbose=FALSE) 
-
 
 }
 %- maybe also 'usage' for other objects documented here.
@@ -49,14 +48,20 @@ numeric. Coefficient for z.
   \item{alpha}{
 numeric, intercept.
 }
+  \item{mu}{
+numeric
+}
+  \item{sd.x}{
+numeric
+}
   \item{x.distr}{
-string. Possible values: norm (normal distribution), gam (gamma distribution)
+string. Possible values: norm (normal distribution), gam (gamma distribution). gam1 is a hack to allow e. be different
 }
   \item{e.}{
 %%     ~~Describe \code{e.} here~~
 }
   \item{verbose}{Boolean}
-  \item{b.}{
+  \item{b.transition}{
 %%     ~~Describe \code{b.} here~~
 }
   \item{sd}{

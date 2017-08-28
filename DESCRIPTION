@@ -1,16 +1,17 @@
 Package: chngpt
 LazyLoad: yes
 LazyData: yes
-Version: 2016.7-31
+Version: 2017.08-28
 Title: Change Point Regression
 Author: Youyi Fong
-Maintainer: Youyi Fong <yfong@fhcrc.org>
-Depends: R (>= 3.3.0), kyotil, MASS, boot, splines
-Suggests: RUnit, mvtnorm
+Maintainer: Youyi Fong <youyifong@gmail.com>
+Depends: R (>= 3.2.0), kyotil, MASS, boot, splines
+Suggests: R.rsp, RUnit, mvtnorm
 Imports: survival
-Description: Change point regression models are also called two-phase regression, break-point regression, split-point regression, structural change models and threshold regression models. Hypothesis testing in change point logistic regression with or without interaction terms. Several options are provided for testing in models with interaction, including a maximum of likelihood ratios test that determines p-value through Monte Carlo. Estimation under change point model is also included, but less developed at this point.
+VignetteBuilder: R.rsp
+Description: Change point regression models are also called two-phase regression, break-point regression, split-point regression, structural change models and threshold regression models. Hypothesis testing in change point logistic regression with or without interaction terms (Fong, Y., Di, C., Perma, S. (2014) <doi:10.1002/sim.6419>). Several options are provided for testing in models with interaction, including a maximum of likelihood ratios test that determines p-value through Monte Carlo. Estimation under change point model is also included with model-robust confidence intervals for continuous threshold regression models (Fong, Y., Di, C., Huang, Y., Gilbert, P. (2017) <doi:10.1111/biom.12623>). 
 License: GPL (>= 2)
 NeedsCompilation: no
-Packaged: 2016-07-31 16:33:47 UTC; Youyi
+Packaged: 2017-08-28 18:18:32 UTC; Youyi
 Repository: CRAN
-Date/Publication: 2016-07-31 19:22:46
+Date/Publication: 2017-08-28 18:43:12 UTC
