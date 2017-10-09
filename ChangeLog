@@ -43,3 +43,9 @@
 	* add sandwich variance estimator
 	* add segmented2
 	* change b to -b
+
+2017-09-16  Youyi Fong
+
+    * this version contains some commented out code related to indices, which
+	was used to compare with R implemention
+	

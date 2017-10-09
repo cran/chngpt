@@ -1,21 +1,19 @@
-#tol=1e-4; maxit=1e2; verbose=TRUE; est.method="grid"; est.method.boot="grid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fift=NULL
+# useC=T; tol=1e-4; maxit=1e2; verbose=TRUE; est.method="grid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fift=NULL
 chngptm = function(formula.1, formula.2, family, data, #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
   type=c("step","hinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
-  est.method=c("default","smoothapprox","grid"), est.method.boot=c("grid","smoothapprox"),
+  est.method=c("default","smoothapprox","grid"), 
   var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), aux.fit=NULL, 
-  test.inv.ci=TRUE, boot.test.inv.ci=TRUE,
-  lb.quantile=.1, ub.quantile=.9, grid.search.max=500, ci.bootstrap.size=500, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, # grid.search.max is the maximum number of grid points used in grid search
+  test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
+  lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, ci.bootstrap.size=500, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, # grid.search.max is the maximum number of grid points used in grid search
   b.transition=Inf,# controls whether threshold model or smooth transition model
   tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
-  weights=NULL, verbose=FALSE,
-  ...) 
+  weights=NULL, verbose=FALSE, useC=TRUE, fast=TRUE, ...) 
 {
     
     if (missing(type)) stop("type mssing")
     type<-match.arg(type)    
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
-    est.method.boot<-match.arg(est.method.boot)    
     
     stopifnot(b.transition>0)
     b.search=if(b.transition==Inf) 30 else b.transition
@@ -48,6 +46,10 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     z.1.name=intersect(colnames(tmp), colnames(Z))
     chngpt.var = tmp[,chngpt.var.name]
     chngpt.var.sorted=sort(chngpt.var)
+    #print(chngpt.var.sorted); chngpt.var.sorted=chngpt.var[order(chngpt.var)]; print(chngpt.var.sorted)
+    Z.sorted=Z[order(chngpt.var),,drop=FALSE]
+    y.sorted=y[order(chngpt.var)]
+    data.sorted=data[order(chngpt.var),]
     z.1 = tmp[,z.1.name] # if the intersection is a null set, z.1 is a matrix of n x 0 dimension
     has.itxn = length(z.1.name)>0
     
@@ -70,26 +72,46 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
         print(formula.new)
         myprint(p.z, p.2.itxn, p)
     }
-    
+        
     # change point candidates
-    chngpts=chngpt.var.sorted[chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile) & chngpt.var.sorted>=quantile(chngpt.var.sorted, lb.quantile)]
+    nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile); #myprint(nLower, nUpper)    
+    chngpts=chngpt.var.sorted[nLower:nUpper]
 #    # take the mid points between data points as change point candidates. For step models, use any point in between does not change likelihood, but it does change likelihood for segmented model
 #    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
-    if (length(chngpts)>grid.search.max) chngpts=chngpts[round(seq(1,length(chngpts),length=grid.search.max))]
+    if (length(chngpts)>grid.search.max) {
+        chngpts=chngpts[round(seq(1,length(chngpts),length=grid.search.max))]
+        if(est.method=="grid") stop("some work needs to be done to resolve this issue")
+    }
+    # another way to define nLower/nUpper is as follows. It is equivalent
+    #nLower=sum(chngpt.var.sorted<quantile(chngpt.var.sorted, lb.quantile))+1; nUpper=sum(chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile));myprint(nLower, nUpper)
+    
     
     # 
     grid.search=function(){
         if(verbose) cat("perform grid search\n")
-        logliks=sapply (chngpts, function(e) {
-            data=make.chngpt.var(chngpt.var, e, type, data, b.transition)
-            fit = do.regression (formula.new, data, weights, family)
-            if(length(fit$warning)!=0) {
-                if(verbose>=3) print(fit$warning)
-                #print(summary(fit$value))
-                as.numeric(logLik(fit$value))
-            } else as.numeric(logLik(fit$value))
-        } )
+        if(useC & family=="gaussian") {
+            # putting as.double around a matrix changes the matrix into a vector, which affects 
+            # as.double is needed around y.sorted b/c if y.sort is integer, this throws an error b/c the cpp function expects real
+            # logliks is actually -rss here
+            logliks=-.Call("grid_search", cbind(Z.sorted,chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), as.double(y.sorted), nLower, nUpper) # this is a problem, Z may not have chngptvar as the last 
+        } else {
+            logliks=sapply (chngpts, function(e) {
+                data=make.chngpt.var(chngpt.var, e, type, data, b.transition)
+                fit = do.regression (formula.new, data, weights, family)            
+                if(length(fit$warning)!=0) {
+                    if(verbose>=3) print(fit$warning)
+                    #print(summary(fit$value))
+                    as.numeric(logLik(fit$value))
+                } else as.numeric(logLik(fit$value))            
+                # debug use
+                #sum(resid(fit$value)**2)
+            } )
+        }
+        #print(logliks)
+    
         e=chngpts[which.max(logliks)]
+        #myprint(which.max(logliks))
+        #myprint(e)
         attr(e, "glm.warn")=any(is.na(logliks))
         attr(e, "logliks")=logliks
         if(verbose>=2) {
@@ -158,6 +180,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                       lower = c(rep(-search.bound,length(beta.init)), quantile(chngpt.var, lb.quantile)), 
                       upper = c(rep( search.bound,length(beta.init)), quantile(chngpt.var, ub.quantile)), 
                       method="L-BFGS-B", control = list(), hessian = TRUE))
+                      
                 if(class(optim.out)=="try-error") {
                     if (verbose) cat("error doing smoothapprox search, switch to grid search\n")
                     e.final=grid.search()
@@ -222,7 +245,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     # variance-covariance 
     
     # only implemented when there is no interaction and for linear and logistic regression
-    if (has.itxn | !family %in% c("binomial","gaussian")) {
+    if (var.type!="bootstrap" & (has.itxn | !family %in% c("binomial","gaussian"))) {
         var.est=NULL
     } else {
         if (type %in% c("step","stegmented")) {
@@ -522,7 +545,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                             #if(verbose) print(fit$warning)
                             sigsq = NA; break
                         } else sigsq = (sigma(fit$value))**2
-                        if(verbose) print(sigsq)
+                        if(verbose>=2) print(sigsq)
                     } 
                     #lb=if(is.na(sigsq)) NA else chngpt.var.sorted[idx+1] 
                     lb=chngpt.var.sorted[idx+1] 
@@ -565,13 +588,30 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                 save.seed <- try(get(".Random.seed", .GlobalEnv), silent=TRUE) 
                 if (class(save.seed)=="try-error") {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
                 set.seed(1)     # this is only added on 7/30/2017, well after biometrics paper is published. should not change the results qualitatively
-                boot.out=boot(data, 
-                    statistic=function(dat, ii){
+                
+                if (est.method=="grid" & useC & family=="gaussian") {                    
+                    boot.out=list()
+                    class(boot.out)="boot"
+                    boot.out$t0=coef.hat
+                    boot.out$R=ci.bootstrap.size
+                    boot.out$call=c("boot")
+                    boot.out$sim="ordinary"
+                    boot.out$stype="i"
+                    boot.out$fake=TRUE
+                    
+                    # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+                    f.name=ifelse(fast,"boot_grid_search_fast", "boot_grid_search")
+                    boot.out$t=.Call(f.name, cbind(Z.sorted,chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), as.double(y.sorted), nLower, nUpper, ci.bootstrap.size) # this is a problem, Z may not have chngptvar as the last 
+                    boot.out$t=t(matrix(boot.out$t, ncol=ci.bootstrap.size))
+                    
+                } else {
+                    boot.out=boot(data.sorted, R=ci.bootstrap.size, sim = "ordinary", stype = "i", statistic=function(dat, ii){
+                        #print(ii)
                         if (m.out.of.n) ii=ii[1:(4*sqrt(n))] # m out of n bootstrap
                         # use chngpt.init so that the mle will be less likely to be inferior to the model conditional on e.hat, but it does not always work
-                        fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method=est.method.boot, var.type="none", b.transition=b.transition, chngpt.init=coef.hat["chngpt"], verbose=verbose>=3))
-                        #fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method="smoothapprox", var.type="robust", aux.fit=aux.fit, test.inv.ci=FALSE))# stud performs pretty badly
-                        tmp=length(coef.hat)*1+ifelse(family=="gaussian",2,1) # need to adjust depending on the last else clause
+                        # for studentized bootstrap interval, need variance estimates as well, however, stud performs pretty badly
+                        fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method=est.method, var.type="none", b.transition=b.transition, chngpt.init=coef.hat["chngpt"], useC=useC, verbose=verbose>=3))
+                        tmp=length(coef.hat)*1+ifelse(!boot.test.inv.ci, 0, ifelse(family=="gaussian",2,1)) # need to adjust depending on the last else clause
                         out = if(inherits(fit.ii,"try-error")) {
                             rep(NA,tmp) 
                         } else if (any(is.na(fit.ii$coefficients))) {
@@ -580,67 +620,79 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
 #                        } else if (any(abs(fit.ii$coefficients[1:(length(fit.ii$coefficients)-1)])>search.bound)) {
 #                            rep(NA,tmp)
                         } else {
-                            # compute profile likelihood ratio
-                            # pl can be negative even when grid search is used in both point estimate and bootstrap
-                            # this is because the estimated chngpt may not be in the {x} of the bootstrapped dataset, and a value in between can be better than {x}
-                            dat.tmp=make.chngpt.var(chngpt.var[ii], coef.hat["chngpt"], type, data[ii,], b.transition) # don't forget to do chngpt.var[ii]!
-                            fit.ii.ehat=do.regression (formula.new, data=dat.tmp, weights, family); if(length(fit.ii.ehat$warning)!=0 & verbose) print(fit.ii.ehat$warning)
-                            pl= 2*(as.numeric(logLik(fit.ii$best.fit)) - as.numeric(logLik(fit.ii.ehat$value)))
-                            Fs=n*(sigma(fit.ii.ehat$value)^2/sigma(fit.ii$best.fit)^2-1) # F statistic, an approximation of pl, but may work better for linear regression
-                            if(pl<0 & verbose) {
-                                print(summary(fit.ii$best.fit))
-                                print("------------------------------------------------------------")
-                                print(summary(fit.ii.ehat$value))
-                                print("------------------------------------------------------------")
-                                print(summary(fit.ii))
-                                print(sort(dat[ii,"x"]))
-                                stop("debugging")
-                            }
-                            c(fit.ii$coefficients, pl, if(family=="gaussian") Fs) # for Gaussian, return both pl and Fs
+                            if(!boot.test.inv.ci) {
+                                fit.ii$coefficients
+                            } else {
+                                # compute profile likelihood ratio
+                                # pl can be negative even when grid search is used in both point estimate and bootstrap
+                                # this is because the estimated chngpt may not be in the {x} of the bootstrapped dataset, and a value in between can be better than {x}
+                                dat.tmp=make.chngpt.var(chngpt.var[ii], coef.hat["chngpt"], type, data[ii,], b.transition) # don't forget to do chngpt.var[ii]!
+                                fit.ii.ehat=do.regression (formula.new, data=dat.tmp, weights, family); if(length(fit.ii.ehat$warning)!=0 & verbose) print(fit.ii.ehat$warning)
+                                pl= 2*(as.numeric(logLik(fit.ii$best.fit)) - as.numeric(logLik(fit.ii.ehat$value)))
+                                Fs=n*(sigma(fit.ii.ehat$value)^2/sigma(fit.ii$best.fit)^2-1) # F statistic, an approximation of pl, but may work better for linear regression
+                                if(pl<0 & verbose) {
+                                    print(summary(fit.ii$best.fit))
+                                    print("------------------------------------------------------------")
+                                    print(summary(fit.ii.ehat$value))
+                                    print("------------------------------------------------------------")
+                                    print(summary(fit.ii))
+                                    print(sort(dat[ii,"x"]))
+                                    #stop("debugging")
+                                }
+                                c(fit.ii$coefficients, pl, if(family=="gaussian") Fs) # for Gaussian, return both pl and Fs
+                            }  
                         }
                         out                        
-                    }, 
-                    R=ci.bootstrap.size, sim = "ordinary", stype = "i"
-                )
+                    }) # end boot call
+                    #str(boot.out$call)
+                }
                 # restore rng state 
                 assign(".Random.seed", save.seed, .GlobalEnv)     
-                boot.samples=boot.out$t
                 
+                boot.samples=boot.out$t
                 # use boot.ci to extract basic, percentile and abc confidence intervals
                 outs=list(perc=NULL, basic=NULL, bc=NULL) # this fixes the order of the list components
                 for (i in 1:length(coef.hat)){
                     # for stud, index needs to be of length 2 and the second element needs to be var. If the second element is not present, will have warnings: index out of bounds; minimum index only used
                     #ci.out=try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca","stud"), index=c(i, i+length(coef.hat))))
                     ci.out=suppressWarnings({
-                        try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca"), index=i))  
+                        #try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n & is.null(boot.out$fake)) "bca"), index=i), silent=TRUE)# bca requires a true boot.out object
+                        try(boot.ci(boot.out, type=c("perc","basic"), index=i), silent=TRUE)# bca requires a true boot.out object, changed to this for performance timing to be fair to true boot call
                     })
-                    outs$perc= cbind(outs$perc,  if(inherits(ci.out,"try-error")) c(NA,NA) else ci.out$percent[1,4:5])
-                    outs$basic=cbind(outs$basic, if(inherits(ci.out,"try-error")) c(NA,NA) else ci.out$basic[1,4:5])
-                    # for bca to work, the number of bootstrap replicates needs to be greater than sample size
-                    outs$abc=  cbind(outs$abc,   if(inherits(ci.out,"try-error")) c(NA,NA) else if(ci.bootstrap.size>n) ci.out$bca[1,4:5] else c(NA,NA) )
-                    #outs$stud= cbind(outs$stud,  if(inherits(ci.out,"try-error")) c(NA,NA) else ci.out$student[1,4:5])
+                    # suppressWarnings changes the return type
+                    outs$perc= cbind(outs$perc,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$percent[1,4:5])
+                    outs$basic=cbind(outs$basic, if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$basic[1,4:5])                    
+                    #outs$abc=  cbind(outs$abc,   if(!inherits(ci.out,"bootci")) c(NA,NA) else if(ci.bootstrap.size>n) ci.out$bca[1,4:5] else c(NA,NA) ) # for bca to work, the number of bootstrap replicates needs to be greater than sample size
+                    #outs$stud= cbind(outs$stud,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$student[1,4:5])
                 }
+                colnames(outs$perc)<-colnames(outs$basic)<-names(coef.hat) # <-colnames(outs$abc)
                 # find bc CI from boot.out$t as ci.out does not provide bc
                 outs$bc=sapply (1:length(coef.hat), function(i) {
                     z.0=qnorm(mean(boot.samples[,i]<coef.hat[i], na.rm=TRUE))                    
                     quantile(boot.samples[,i], c(pnorm(2*z.0+qnorm(alpha/2)), pnorm(2*z.0+qnorm(1-alpha/2))), na.rm=TRUE)
                 })
-                # compute symmetric percentile CI as defined in Hansen (2017)
+                colnames(outs$bc)<-names(coef.hat) 
+                # symmetric percentile CI as defined in Hansen (2017)
                 outs$symm=sapply (1:length(coef.hat), function(i) {
                     q.1=quantile(abs(boot.samples[,i]-coef.hat[i]), 1-alpha, na.rm=TRUE)
                     coef.hat[i]+c(-q.1, q.1)
                 })                
+                colnames(outs$symm)<-names(coef.hat) 
+                
                 # compute test inversion CI for threshold based on bootstrap critical value
-                outs$testinv=matrix(NA,nrow=2,ncol=length(coef.hat))
-                if(verbose>=2) print(summary(boot.samples[,1+length(coef.hat)]))
-                if (family=="gaussian") {
-                    # print both c.alpha for comparison, but use Fs-based, because it seems to work better
-                    c.alpha=quantile(boot.samples[,1+length(coef.hat)], 1-alpha, na.rm=TRUE); if(verbose) myprint(c.alpha)
-                    c.alpha=quantile(boot.samples[,2+length(coef.hat)], 1-alpha, na.rm=TRUE); if(verbose) myprint(c.alpha)
-                    if (!is.na(c.alpha) & boot.test.inv.ci) outs$testinv[,length(coef.hat)]= ci.test.inv.F(c.alpha) 
-                } else {
-                    c.alpha=quantile(boot.samples[,1+length(coef.hat)], 1-alpha, na.rm=TRUE); myprint(c.alpha)
-                    if (!is.na(c.alpha) & boot.test.inv.ci) outs$testinv[,length(coef.hat)]= ci.test.inv(c.alpha)                     
+                if(boot.test.inv.ci) {
+                    outs$testinv=matrix(NA,nrow=2,ncol=length(coef.hat))
+                    colnames(outs$testinv)<-names(coef.hat)
+                    if(verbose>=2) print(summary(boot.samples[,1+length(coef.hat)]))
+                    if (family=="gaussian") {
+                        # print both c.alpha for comparison, but use Fs-based, because it seems to work better
+                        c.alpha=quantile(boot.samples[,1+length(coef.hat)], 1-alpha, na.rm=TRUE); if(verbose) myprint(c.alpha)
+                        #c.alpha=quantile(boot.samples[,2+length(coef.hat)], 1-alpha, na.rm=TRUE); if(verbose) myprint(c.alpha)
+                        if (!is.na(c.alpha)) outs$testinv[,length(coef.hat)]= ci.test.inv.F(c.alpha) 
+                    } else {
+                        c.alpha=quantile(boot.samples[,1+length(coef.hat)], 1-alpha, na.rm=TRUE); if(verbose) myprint(c.alpha)
+                        if (!is.na(c.alpha)) outs$testinv[,length(coef.hat)]= ci.test.inv(c.alpha)                     
+                    }
                 }
          
                 # the following percentile CI is numerically different from boot.ci results because the latter use norm.inter to do interpolation on the normal quantile scale
@@ -824,6 +876,7 @@ getFixedEf.chngptm=function(object, ...) {
     })
     rbind(res$coefficients, chngpt=c(res$chngpt[1], NA, res$chngpt[2:3]))
 }
+
 summary.chngptm=function(object, var.type=NULL, verbose=FALSE, ...) {    
     # "Estimate" "Std. Error" "t value" "Pr(>|t|)"        
     fit=object
@@ -831,30 +884,33 @@ summary.chngptm=function(object, var.type=NULL, verbose=FALSE, ...) {
     n=nrow(fit$best.fit$data)
     type=fit$type
     
-    boot.conf=FALSE
-    if (!is.null(var.type)) if (var.type %in% c("perc","basic","bc","bcabc","symm")) boot.conf=TRUE
-    
     if (is.null(fit$vcov)) {
         cat("No variance estimate available.\n\n")
         print(fit)
         return (invisible())
     } else {
-        if(is.null(var.type)) {
+    
+        boot.conf=FALSE        
+        if(!is.null(var.type)) {
+            if (var.type %in% c("perc","basic","bc","bcabc","symm")) {
+                boot.conf=TRUE
+            }
+            vcov=fit$vcov[[var.type]]
+
+        } else {            
             if(is.list(fit$vcov)){
                 if (!is.null(fit$vcov$robust)) {
                     vcov=fit$vcov$robust
-                } else if (!is.null(fit$vcov$abc)){
+                } else if (!is.null(fit$vcov$symm)){
+                    vcov=fit$vcov$symm
                     boot.conf=TRUE
-                    vcov=fit$vcov$abc
                     #if (all(is.na(vcov))) vcov=fit$vcov$bc # if the bootstrap samples have too many NA, only bc quantiles can be estimated. However, bc quantiles may be misleading
                 }
                 
             } else {
                 vcov=fit$vcov
             }
-        } else {
-            vcov=fit$vcov[[var.type]]
-        }
+        } 
         if(is.null(vcov)) {
             cat("No variance estimate available.\n\n")
             print(fit)
@@ -862,6 +918,7 @@ summary.chngptm=function(object, var.type=NULL, verbose=FALSE, ...) {
         }         
     
     }
+    str(vcov)
     
     if(object$type %in% c("hinge","segmented") & !boot.conf) {
         vcov.t=vcov[p.z,p.z]
@@ -1062,6 +1119,45 @@ good.soln=function(fit, df=7, plot=FALSE) {
         if (abs(match(fit$chngpt,fit$chngpts)-optimum.1)<=length(fit$chngpts)/10) return (TRUE) else return (FALSE) # 20 is hardcoded
     }        
 }
+
+
+performance.unit.test=function(formula.1, formula.2, family, data, B, I){
+    y=model.frame(formula.1, data)[,1]
+    Z=model.matrix(formula.1, data)
+    tmp=model.matrix(formula.2, data)[,-1,drop=F]
+    chngpt.var.name=setdiff(colnames(tmp), colnames(Z))[1]
+    if(is.na(chngpt.var.name)) stop("Something is wrong. Check the formulal. ")
+    z.1.name=intersect(colnames(tmp), colnames(Z))
+    chngpt.var = tmp[,chngpt.var.name]
+    chngpt.var.sorted=sort(chngpt.var)
+    #print(chngpt.var.sorted); chngpt.var.sorted=chngpt.var[order(chngpt.var)]; print(chngpt.var.sorted)
+    Z.sorted=Z[order(chngpt.var),,drop=FALSE]
+    y.sorted=y[order(chngpt.var)]
+    data.sorted=data[order(chngpt.var),]
+    z.1 = tmp[,z.1.name] # if the intersection is a null set, z.1 is a matrix of n x 0 dimension
+    has.itxn = length(z.1.name)>0
+    
+    type="segmented"
+    n=nrow(Z)
+    p.z=ncol(Z)
+    p.2=switch(type, step=1, hinge=1, segmented=2, segmented2=2, stegmented=3)
+    p.2.itxn=p.2*ifelse(has.itxn,2,1)
+    p=p.z+p.2.itxn+1 #total number of paramters, including threshold
+    
+    # make formula that includes all parameters but threshold
+    formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%+%chngpt.var.name)) else formula.1
+    f.alt=get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)
+    formula.new=update(formula.new, as.formula(f.alt))
+    
+    if (FALSE) {
+        myprint(type, est.method, has.itxn)     
+        print(formula.new)
+        myprint(p.z, p.2.itxn, p)
+    }
+        
+    -.Call("performance_unit_test", cbind(Z.sorted,chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), as.double(y.sorted), B, I)
+}
+
 
 
 #    c.init=ifelse(beta<0, (alpha+beta), (alpha)); names(c.init)="c"

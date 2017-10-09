@@ -5,8 +5,8 @@ citEntry(entry="Article",
          author = personList(as.person("Youyi Fong"), as.person("Ying Huang"), as.person("Peter Gilbert"), as.person("Sallie Permar")),
          journal      = "BMC Bioinformatics",
          year         = "2017",
-	     volume       = "under review",
+	     volume       = "in press",
          textVersion = 
          paste("Fong, Huang, Gilbert, Permar (2017).", 
-               "chngpt: threshold regression model estimation and inference.")
+               "chngpt: threshold regression model estimation and inference. BMC Bioinformatics, in press.")
 )

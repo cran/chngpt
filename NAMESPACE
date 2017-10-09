@@ -1,4 +1,6 @@
-export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm,  antoch.test)
+useDynLib(chngpt, .registration = TRUE)
+
+export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm,  antoch.test, performance.unit.test)
 export(sim.pastor, sim.my, sim.chngpt) 
 
 importFrom(kyotil, '%+%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf)

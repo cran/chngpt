@@ -14,18 +14,19 @@ Estimate change point logistic model
 
 \usage{
 
-chngptm (formula.1, formula.2, family, data,
-  type=c("step","hinge","segmented","segmented2","stegmented"), 
-  est.method=c("default","smoothapprox","grid"), est.method.boot=c("grid","smoothapprox"),
-  var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"),
-  aux.fit=NULL,
-  test.inv.ci=TRUE, boot.test.inv.ci=TRUE,
-  lb.quantile=.1, ub.quantile=.9, grid.search.max=500, ci.bootstrap.size=500, alpha=0.05, 
-  save.boot=FALSE, m.out.of.n=FALSE,
+chngptm (formula.1, formula.2, family, data, 
+  type=c("step","hinge","segmented","segmented2","stegmented"),
+  est.method=c("default","smoothapprox","grid"),
+  var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), 
+  aux.fit=NULL, test.inv.ci=TRUE, boot.test.inv.ci=FALSE, 
+  lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, ci.bootstrap.size=500, 
+  alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE,
   b.transition=Inf,
   tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
-  weights=NULL, verbose=FALSE,
+  weights=NULL, verbose=FALSE, 
+  useC=TRUE, fast=TRUE,
   ...) 
+
 
 
 \method{coef}{chngptm} (object, ...)
@@ -58,13 +59,14 @@ chngptm (formula.1, formula.2, family, data,
   \item{chngpt.init}{numeric. Initial value for the change point.}
   \item{weights}{passed to glm}
   \item{verbose}{Boolean.}
+  \item{useC}{Boolean.}
+  \item{fast}{Whether to use the fast bootstrap confidence interval methods.}
 
   \item{x}{chngptm fit object.}
   \item{object}{chngptm fit object.}
   \item{\dots}{arguments passed to glm or coxph}
   \item{m.out.of.n}{whether to perform m out of n bootstrap}
 
-  \item{est.method.boot}{estimation search method for bootstrap}
   \item{boot.test.inv.ci}{whether to get test inversion CI under bootstrap}
   \item{search.bound}{bounds for search for sloping parameters}
 
@@ -83,7 +85,7 @@ A an object of type chngptm with the following components
 }
 \references{
 
-Fong, Y., Huang, Y., Gilbert, P., Permar S. (2017) Estimation and hypothesis testing under four types of change point models using chngpt, BMC Bioinformatics, under review.
+Fong, Y., Huang, Y., Gilbert, P. (2017) chngpt: threshold regression model estimation and hypothesis testing, BMC Bioinformatics, in press.
 
 Fong, Y., Di, C., Huang, Y., Gilbert, P. (2017) Model-robust inference for continuous threshold regression models, Biometrics, 73(2):452-462.
 
@@ -100,14 +102,20 @@ summary(fit.1)
 
 \dontrun{
 # not run because otherwise the examples take >5s and that is a problem for R CMD check
-# has interaction
 
+# a survival example
 library(survival)
 test1 <- data.frame(time=c(4,3,1,1,2,2,3), 
               status=c(1,1,1,0,1,1,0), 
               x=c(0,2,1,1,1,0,0), 
               sex=c(0,0,0,0,1,1,1)) 
 fit=chngptm(formula.1=Surv(time, status)~1, formula.2=~x, data=test1, family="coxph", type="step")
+
+# an interaction example
+fit=chngptm(formula.1=mpg~cyl + disp + hp, formula.2=~hp*drat, mtcars, type="segmented", 
+    family="gaussian", est.method="grid", var.type="bootstrap", ci.bootstrap.size=10)
+summary(fit)
+
 
 }
 

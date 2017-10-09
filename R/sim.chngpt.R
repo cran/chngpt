@@ -14,6 +14,7 @@ sim.chngpt = function (
     
     set.seed(seed)
     if (!requireNamespace("mvtnorm")) {print("mvtnorm does not load successfully"); return (NULL) }
+    if (!is.numeric(n)) stop("n is not numeric")
     
     if (missing(type) & startsWith(label,"sigmoid")) stop("type mssing")
     type<-match.arg(type)    

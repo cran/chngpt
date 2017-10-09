@@ -111,7 +111,7 @@ A list of class htest and chngpt.test
 }
 \references{
 
-Fong, Y., Huang, Y., Gilbert, P. (2017) Estimation and hypothesis testing under four types of change point models using chngpt, BMC Bioinformatics, under review.
+Fong, Y., Huang, Y., Gilbert, P. (2017) chngpt: threshold regression model estimation and hypothesis testing, BMC Bioinformatics, in press.
 
 Fong Y, Di C, and Permar S. (2014) Change-Point Testing in Logistic Regression Models with Interaction Term. Statistics in Medicine.
 
@@ -138,6 +138,14 @@ plot(test)
 }
 
 #antoch.test(y~1, dat, "x.star")
+
+\dontrun{
+
+test=chngpt.test(formula.null=mpg~cyl + disp + hp, formula.chngpt=~hp*drat, family="gaussian", 
+    data=mtcars, type="segmented")
+)
+
+}
 
 
 }

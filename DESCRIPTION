@@ -1,17 +1,17 @@
 Package: chngpt
 LazyLoad: yes
 LazyData: yes
-Version: 2017.08-28
-Title: Change Point Regression
+Version: 2017.10-9
+Title: Estimation and Hypothesis Testing for Threshold Regression
 Author: Youyi Fong
 Maintainer: Youyi Fong <youyifong@gmail.com>
-Depends: R (>= 3.2.0), kyotil, MASS, boot, splines
+Depends: R (>= 3.2.0), MASS, boot
 Suggests: R.rsp, RUnit, mvtnorm
-Imports: survival
+Imports: survival, splines, kyotil
 VignetteBuilder: R.rsp
-Description: Change point regression models are also called two-phase regression, break-point regression, split-point regression, structural change models and threshold regression models. Hypothesis testing in change point logistic regression with or without interaction terms (Fong, Y., Di, C., Perma, S. (2014) <doi:10.1002/sim.6419>). Several options are provided for testing in models with interaction, including a maximum of likelihood ratios test that determines p-value through Monte Carlo. Estimation under change point model is also included with model-robust confidence intervals for continuous threshold regression models (Fong, Y., Di, C., Huang, Y., Gilbert, P. (2017) <doi:10.1111/biom.12623>). 
+Description: Threshold regression models are also called two-phase regression, broken-stick regression, split-point regression, structural change models, and regression kink models. Methods for both continuous and discontinuous threshold models are included, but the support for the former is much greater. This package is described in Fong, Huang, Gilbert and Permar (2017) chngpt: threshold regression model estimation and inference, BMC Bioinformatics, in press, DOI not yet available. 
 License: GPL (>= 2)
-NeedsCompilation: no
-Packaged: 2017-08-28 18:18:32 UTC; Youyi
+NeedsCompilation: yes
+Packaged: 2017-10-09 17:36:34 UTC; Youyi
 Repository: CRAN
-Date/Publication: 2017-08-28 18:43:12 UTC
+Date/Publication: 2017-10-09 22:56:23 UTC
