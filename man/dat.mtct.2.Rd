@@ -1,5 +1,5 @@
-\name{dat.mtct}
-\alias{dat.mtct}
+\name{dat.mtct.2}
+\alias{dat.mtct.2}
 \docType{data}
 \title{
 An Example Dataset
@@ -7,13 +7,12 @@ An Example Dataset
 \description{
 A dataset from the immune correlates study of Maternal To Child Transmission of HIV-1
 }
-\usage{data("dat.mtct")}
+\usage{dat.mtct.2}
 \format{
-  A data frame with 236 observations on the following 3 variables.
+  A data frame with 248 observations on the following 2 variables.
   \describe{
-    \item{\code{y}}{a numeric vector}
-    \item{\code{birth}}{a factor with levels \code{C-section} \code{Vaginal}}
-    \item{\code{NAb_SF162LS}}{a numeric vector}
+    \item{\code{NAb_score}}{a numeric vector}
+    \item{\code{V3_BioV3B}}{a numeric vector}
   }
 }
 \references{

@@ -11,7 +11,7 @@ if(require("RUnit", quietly=TRUE)) {
   } else {
     ## Path to unit tests for R CMD check
     ## PKG.Rcheck/tests/../PKG/unitTests
-    path <- system.file("unitTests", package=pkg)
+    path <- tempdir()
   }
   cat("\nRunning unit tests\n")
   print(list(pkg=pkg, getwd=getwd(), pathToUnitTests=path))

@@ -9,25 +9,24 @@ Generate simulation datasets for change point Monte Carlo studies.
 }
 \usage{
 
-sim.chngpt (
-    label=c("sigmoid2","sigmoid3","sigmoid4","sigmoid5","sigmoid6","quadratic",
-            "quadratic2b","cubic2b","exp","flatHyperbolic"), 
-    n, seed, 
-    type=c("NA","step","hinge","segmented","segmented2","stegmented"),
-    family=c("binomial","gaussian"),
+sim.chngpt  (
+    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b",
+        "cubic2b","exp","flatHyperbolic"),
+    threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),
+    b.transition=Inf,
+    family=c("binomial","gaussian"), 
     x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2"),
-    e.=NULL, b.transition=Inf,
-    beta=NULL, coef.z=log(1.4), alpha=NULL,
-    sd=0.3, mu=4.7, sd.x=NULL,
-    alpha.candidate=NULL, verbose=FALSE) 
+    e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, 
+    alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
+    n, seed, 
+    weighted=FALSE, # sampling weights
+    verbose=FALSE) 
+
 
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
-  \item{label}{
-string. Simulate scenario, see details.
-}
-  \item{type}{
+  \item{threshold.type}{
 string. Types of threshold effect to simulate, only applicable when label does not start with sigmoid.
 }
   \item{family}{
@@ -39,19 +38,28 @@ string. Glm family.
   \item{seed}{
 %%     ~~Describe \code{seed} here~~
 }
+  \item{weighted}{
+%%     ~~Describe \code{beta} here~~
+}
   \item{beta}{
 %%     ~~Describe \code{beta} here~~
 }
   \item{coef.z}{
 numeric. Coefficient for z.
 }
+  \item{beta.itxn}{
+numeric. Coefficient for z.
+}
   \item{alpha}{
 numeric, intercept.
 }
-  \item{mu}{
+  \item{mu.x}{
 numeric
 }
   \item{sd.x}{
+numeric
+}
+  \item{mean.model}{
 numeric
 }
   \item{x.distr}{
@@ -70,7 +78,7 @@ string. Possible values: norm (normal distribution), gam (gamma distribution). g
   \item{alpha.candidate}{candidate values of alpha, used in code to determine alpha values}
 }
 \details{
-When label is "sigmoid1", an intercept only model is the data generative model. When label is "sigmoid2", a binary covariate z is also part of the data generative model. 
+mean.model, threshold.type and b.transition all affect mean models. 
 }
 \value{
 A data frame with following columns: 

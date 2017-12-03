@@ -2,8 +2,10 @@
 \alias{chngptm}
 \alias{coef.chngptm}
 \alias{vcov.chngptm}
+\alias{plot.chngptm}
 \alias{print.chngptm}
 \alias{summary.chngptm}
+\alias{lincomb}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{
 Estimate change point logistic model
@@ -14,25 +16,28 @@ Estimate change point logistic model
 
 \usage{
 
-chngptm (formula.1, formula.2, family, data, 
-  type=c("step","hinge","segmented","segmented2","stegmented"),
-  est.method=c("default","smoothapprox","grid"),
+chngptm (formula.1, formula.2, family, data,
+  type=c("step","hinge","segmented","segmented2","stegmented"), 
+  est.method=c("default","smoothapprox","grid","fastgrid"), useC=TRUE, 
   var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), 
-  aux.fit=NULL, test.inv.ci=TRUE, boot.test.inv.ci=FALSE, 
-  lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, ci.bootstrap.size=500, 
-  alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE,
+  aux.fit=NULL, test.inv.ci=TRUE, boot.test.inv.ci=FALSE,
+  lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
+  ci.bootstrap.size=1000, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, 
   b.transition=Inf,
   tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
-  weights=NULL, verbose=FALSE, 
-  useC=TRUE, fast=TRUE,
-  ...) 
+  weights=NULL, verbose=FALSE, ...) 
+
 
 
 
 \method{coef}{chngptm} (object, ...)
-\method{vcov}{chngptm} (object, ...)
+\method{vcov}{chngptm} (object, var.type=NULL, ...)
 \method{print}{chngptm} (x, ...)
+\method{plot}{chngptm} (x, which=NULL, xlim=NULL, lwd=2, lcol="darkgray", add=FALSE, 
+    add.points=TRUE, add.ci=TRUE, breaks=20, ...) 
 \method{summary}{chngptm} (object, var.type=NULL, verbose=FALSE, ...)
+
+lincomb(object, comb, alpha=0.05)
 
 }
 
@@ -60,7 +65,10 @@ chngptm (formula.1, formula.2, family, data,
   \item{weights}{passed to glm}
   \item{verbose}{Boolean.}
   \item{useC}{Boolean.}
-  \item{fast}{Whether to use the fast bootstrap confidence interval methods.}
+  \item{add.points}{Boolean.}
+  \item{add.ci}{Boolean.}
+  \item{add}{Boolean.}
+  \item{breaks}{integer.}
 
   \item{x}{chngptm fit object.}
   \item{object}{chngptm fit object.}
@@ -69,6 +77,12 @@ chngptm (formula.1, formula.2, family, data,
 
   \item{boot.test.inv.ci}{whether to get test inversion CI under bootstrap}
   \item{search.bound}{bounds for search for sloping parameters}
+  \item{which}{an integer}
+  \item{xlim}{xlim}
+  \item{lwd}{lwd}
+  \item{lcol}{line col}
+  
+  \item{comb}{a vector of combination coefficients that will be used to form an inner product with the estimated slope}
 
 }
 \details{
@@ -94,7 +108,7 @@ Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for 
 }
 \examples{
 
-dat=sim.chngpt("sigmoid4", type="step", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4)
+dat=sim.chngpt("thresholded", "step", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4)
 
 fit.1=chngptm(formula.1=y~z, formula.2=~x, family="binomial", dat, type="step", est.method="grid")
 print(fit.1)
@@ -111,7 +125,7 @@ test1 <- data.frame(time=c(4,3,1,1,2,2,3),
               sex=c(0,0,0,0,1,1,1)) 
 fit=chngptm(formula.1=Surv(time, status)~1, formula.2=~x, data=test1, family="coxph", type="step")
 
-# an interaction example
+# an interaction example, not working yet
 fit=chngptm(formula.1=mpg~cyl + disp + hp, formula.2=~hp*drat, mtcars, type="segmented", 
     family="gaussian", est.method="grid", var.type="bootstrap", ci.bootstrap.size=10)
 summary(fit)

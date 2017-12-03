@@ -122,7 +122,7 @@ Antoch, J. and Gregoire, G. and Jaruskova, D. (2004) Detection of structural cha
 }
 \examples{
 
-dat=sim.chngpt("sigmoid4", type="step", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4)
+dat=sim.chngpt("thresholded", "step", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4)
 
 test=chngpt.test(formula.null=y~z, formula.chngpt=~x, dat, type="step", family="binomial")
 test
@@ -132,7 +132,7 @@ plot(test)
 \dontrun{
 # not run because otherwise the examples take >5s and that is a problem for R CMD check
 # has interaction
-test = chngpt.test(formula.null=y~z, formula.chngpt=~x*z, dat, type="step")
+test = chngpt.test(formula.null=y~z, formula.chngpt=~x*z, dat, type="step", family="binomial")
 test
 plot(test)
 }
@@ -143,7 +143,7 @@ plot(test)
 
 test=chngpt.test(formula.null=mpg~cyl + disp + hp, formula.chngpt=~hp*drat, family="gaussian", 
     data=mtcars, type="segmented")
-)
+
 
 }
 

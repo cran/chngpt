@@ -25,13 +25,13 @@
 2015-10-18  Youyi Fong
 
     * when est.method==smoothapprox, effective chgnpt needs to be determined
-	to stop infinite loops. It used to be defined in between two observed data
-	values, but is not set to one observed data value
+    to stop infinite loops. It used to be defined in between two observed data
+    values, but is not set to one observed data value
 
 2015-11-19  Youyi Fong
 
     * make.chngpt.var now takes b. as an argument, the results of smoothapprox
-	estimation will change!
+    estimation will change!
 
 2016-01-24  Youyi Fong
 
@@ -40,12 +40,16 @@
 2017-05-13  Youyi Fong
 
     * modify make.chngpt.var to fit smooth transition model
-	* add sandwich variance estimator
-	* add segmented2
-	* change b to -b
+    * add sandwich variance estimator
+    * add segmented2
+    * change b to -b
 
 2017-09-16  Youyi Fong
 
     * this version contains some commented out code related to indices, which
-	was used to compare with R implemention
-	
+    was used to compare with R implemention
+    
+2017-10-27  Youyi Fong
+
+    * a major cleanup of sim.chngpt
+	* weighted estimation now works

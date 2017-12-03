@@ -1,12 +1,12 @@
 useDynLib(chngpt, .registration = TRUE)
 
-export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm,  antoch.test, performance.unit.test)
-export(sim.pastor, sim.my, sim.chngpt) 
+export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm,  antoch.test, performance.unit.test, plot.chngptm)
+export(sim.pastor, sim.my, sim.chngpt, lincomb) 
 
-importFrom(kyotil, '%+%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf)
+importFrom(kyotil, '%+%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope)
 importFrom(MASS, mvrnorm)
 import(survival)
-importFrom("graphics", "abline", "plot", "axis", "lines", "par")
+importFrom("graphics", "abline", "plot", "axis", "lines", "par", "points", "hist")
 importFrom("utils", "str", "capture.output")
 importFrom("boot", "boot.ci", "boot")
 importFrom("splines", "ns")
@@ -26,3 +26,5 @@ S3method(predict,chngptm)
 S3method(getFixedEf,chngptm)
 
 S3method(plot,chngpt.test)
+S3method(plot,chngptm)
+
