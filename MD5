@@ -1,5 +1,5 @@
 f45d8a65f9290c6ff3821ab56592d1b6 *ChangeLog
-1e515b5fd074d8feb767fe3237da5d58 *DESCRIPTION
+a79607bd9d2f412f9bade392dace1e14 *DESCRIPTION
 5790e8ec985d543988d6aad768b50905 *NAMESPACE
 298f7e7509911b1e4dddff149d691b3c *R/antoch.test.R
 902d5850975d6149d7a054403e5c0d4e *R/chngpt.test.2.R
@@ -36,7 +36,7 @@ d34ad817114b329fb91cdb341d383f4a *man/sim.pastor.Rd
 1f2958f45770fcf1762decf37d039a64 *src/Makevars
 3408837f3795673546f955b725effc21 *src/Makevars.win
 5362ed41a42ce34cf7817f6bfd988935 *src/algorithm.h
-ac3c191a8a97f0b94dc9512b34d67bd7 *src/chnpgt_boot.cc
+bee28b44f7f4ec88643b2dc4a794d51f *src/chnpgt_boot.cc
 80eab6b8072ae34de6c192af41324093 *src/datablock.h
 5da8702c23b61c037f61dccebec10838 *src/defs.h
 62288e8cb29f90983d0ab28852cf5ba7 *src/distributions.h

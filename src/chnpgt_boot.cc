@@ -123,7 +123,7 @@ extern "C" {
     for(i=nLower-1; i<nUpper; i++) thresholds[i-nLower+1]=X(i,p-1);
 
     Matrix <double> A, Ainv, Ainv_save;
-    double delta, rss, rss_min=INFINITY;
+    double delta, rss, rss_min=R_PosInf;
     
     // Step 2: compuate A:=X_e'X_e and C:=X_e'Y at the first point in the grid
     // compute X_e
@@ -179,24 +179,24 @@ extern "C" {
 
   // assume X is sorted in chngptvar from small to large
   // nLower and nUpper are 1-based index
-  SEXP fastgrid_search(SEXP _X, SEXP _Y, SEXP _W, SEXP _wAllOne, SEXP _nLower, SEXP _nUpper)
+  SEXP fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper)
   {
     // input
-    double* X_dat = REAL(_X);
-    double *Y_dat=REAL(_Y);
-    double *W=REAL(_W);
-    bool wAllOne=asLogical(_wAllOne)==1;
-    const int n = nrows(_X);
-    const int p = ncols(_X);
-    int nLower=asInteger (_nLower);
-    int nUpper=asInteger (_nUpper);
+    double* uX_dat = REAL(u_X);
+    double *Y_dat=REAL(u_Y);
+    double *W=REAL(u_W);
+    bool wAllOne=asLogical(u_wAllOne)==1;
+    const int n = nrows(u_X);
+    const int p = ncols(u_X);
+    int nLower=asInteger (u_nLower);
+    int nUpper=asInteger (u_nUpper);
     
     // output
     SEXP _ans=PROTECT(allocVector(REALSXP, nUpper-nLower+1));
     double *ans=REAL(_ans);        
     
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe
-    Matrix<double,Col,Concrete> Xcol (n, p, X_dat); //column major 
+    Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major 
     Matrix<double,Row,Concrete> X(Xcol); // convert to row major to pass to _fastgrid_search    
     vector<double> Y(n);
     for (int i=0; i<n; i++) Y[i]=Y_dat[i]; 
@@ -215,28 +215,28 @@ extern "C" {
   
   // assume X and Y are sorted
   // nLower and nUpper are 1-based index
-  SEXP boot_fastgrid_search(SEXP _X, SEXP _Y, SEXP _W, SEXP _wAllOne, SEXP _nLower, SEXP _nUpper, SEXP _B)
+  SEXP boot_fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP _B)
   {
-    // put _X and _Y into Matrixes Xori and Y
+    // put u_X and u_Y into Matrixes Xori and Y
     // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
-    double* X_dat = REAL(_X);
-    const int n = nrows(_X);
-    const int p = ncols(_X);
+    double* uX_dat = REAL(u_X);
+    const int n = nrows(u_X);
+    const int p = ncols(u_X);
     double B = asReal(_B);
-    int nLower=asInteger (_nLower);
-    int nUpper=asInteger (_nUpper);
+    int nLower=asInteger (u_nLower);
+    int nUpper=asInteger (u_nUpper);
     
     // output
     SEXP _ans=PROTECT(allocVector(REALSXP, B*(p+2)));// p slopes, 1 threshold, 1 goodness of fit stat
     double *ans=REAL(_ans);    
     
-    Matrix<double,Col,Concrete> Xcol (n, p, X_dat); //column major 
+    Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major 
     // convert to row major so that creating bootstrap datasets can be faster   
     Matrix<double,Row,Concrete> Xori(Xcol); // row major, name this Xori instead of X so that there is less a mistake of using X when Xb should be used below
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
-    double *Y=REAL(_Y);
-    double *W=REAL(_W);
-    bool wAllOne=asLogical(_wAllOne)==1;
+    double *Y=REAL(u_Y);
+    double *W=REAL(u_W);
+    bool wAllOne=asLogical(u_wAllOne)==1;
     
 	// these variables are reused within each bootstrap replicate
 	vector<int> index(n);
@@ -265,27 +265,27 @@ extern "C" {
   // an optimized implementation that serves as a reference for more advanced algebraic optimization
   // assume X and Y are sorted
   // nLower and nUpper are 1-based index
-  SEXP boot_grid_search(SEXP _X, SEXP _Y, SEXP _W, SEXP _wAllOne, SEXP _nLower, SEXP _nUpper, SEXP _B)
+  SEXP boot_grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP _B)
   {
     int i,j; //for loop index
-    // put _X and _Y into Matrixes Xori and Y
+    // put u_X and u_Y into Matrixes Xori and Y
     // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
-    double* X_dat = REAL(_X);
-    const int n = nrows(_X);
-    const int p = ncols(_X);
-    Matrix<double,Col,Concrete> Xcol (n, p, X_dat); //column major 
+    double* uX_dat = REAL(u_X);
+    const int n = nrows(u_X);
+    const int p = ncols(u_X);
+    Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major 
     // convert to row major so that creating bootstrap datasets can be faster   
     Matrix<double,Row,Concrete> Xori(Xcol); // row major        
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
-    double *Y_dat=REAL(_Y);
+    double *Y_dat=REAL(u_Y);
     Matrix <> Y (n, 1, Y_dat);
     // bootstrap replicate
     double B = asReal(_B);
     // bounds
-    int nLower=asInteger (_nLower);
-    int nUpper=asInteger (_nUpper);
-    //double *W=REAL(_W);
-    //bool wAllOne=asLogical(_wAllOne)==1;
+    int nLower=asInteger (u_nLower);
+    int nUpper=asInteger (u_nUpper);
+    //double *W=REAL(u_W);
+    //bool wAllOne=asLogical(u_wAllOne)==1;
     
     // output
     SEXP _ans=PROTECT(allocVector(REALSXP, B*(p+2)));// p slopes, 1 threshold, 1 goodness of fit stat
@@ -355,22 +355,22 @@ extern "C" {
   // the function that performs grid search and returns the best chngpt 
   // assume X is sorted in chngptvar from small to large
   // nLower and nUpper are 1-based index
-  SEXP grid_search(SEXP _X, SEXP _Y, SEXP _W, SEXP _wAllOne, SEXP _nLower, SEXP _nUpper)
+  SEXP grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper)
   {
 
-    // put _X and _Y into Matrixes X and Y
+    // put u_X and u_Y into Matrixes X and Y
     // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe
     int i,j;
-    double* X_dat = REAL(_X);
-    const int n = nrows(_X);
-    const int p = ncols(_X);
-    Matrix <> X (n, p, X_dat);
-    double *Y_dat=REAL(_Y);
+    double* uX_dat = REAL(u_X);
+    const int n = nrows(u_X);
+    const int p = ncols(u_X);
+    Matrix <> X (n, p, uX_dat);
+    double *Y_dat=REAL(u_Y);
     Matrix <> Y (n, 1, Y_dat);
-    int nLower=asInteger (_nLower);
-    int nUpper=asInteger (_nUpper);
-    //double *W=REAL(_W);
-    //bool wAllOne=asLogical(_wAllOne)==1;
+    int nLower=asInteger (u_nLower);
+    int nUpper=asInteger (u_nUpper);
+    //double *W=REAL(u_W);
+    //bool wAllOne=asLogical(u_wAllOne)==1;
     // output
     SEXP _ans=PROTECT(allocVector(REALSXP, nUpper-nLower+1));
     double *ans=REAL(_ans);    
@@ -396,20 +396,20 @@ extern "C" {
   
   
   // unit testing for performance comparison
-  SEXP performance_unit_test(SEXP _X, SEXP _Y, SEXP _B, SEXP _I)
+  SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP _B, SEXP _I)
   {
 
     int i,j; //for loop index
-    // put _X and _Y into Matrixes X and Y
+    // put u_X and u_Y into Matrixes X and Y
     // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
-    double* X_dat = REAL(_X);
-    const int n = nrows(_X);
-    const int p = ncols(_X);
-    Matrix<double,Col,Concrete> Xcol (n, p, X_dat); //column major 
+    double* uX_dat = REAL(u_X);
+    const int n = nrows(u_X);
+    const int p = ncols(u_X);
+    Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major 
     // convert to row major so that creating bootstrap datasets can be faster   
     Matrix<double,Row,Concrete> X(Xcol); // row major        
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
-    double *Y_dat=REAL(_Y);
+    double *Y_dat=REAL(u_Y);
     Matrix <> Y (n, 1, Y_dat);
     // bootstrap replicate
     int B = asInteger(_B); B=B*1;
