@@ -56,9 +56,6 @@ static void SampleReplace(int k, int n, int *y)
 }
 
 
-
-extern "C" {
-  
   // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
   inline void make_symmetric(double* matrix, int rows)
   {
@@ -88,6 +85,10 @@ extern "C" {
 
     return res;
   }
+
+
+extern "C" {
+  
 
   // assume X is sorted in chngptvar from small to large
   // nLower and nUpper are 1-based index
@@ -215,14 +216,14 @@ extern "C" {
   
   // assume X and Y are sorted
   // nLower and nUpper are 1-based index
-  SEXP boot_fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP _B)
+  SEXP boot_fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP u_B)
   {
     // put u_X and u_Y into Matrixes Xori and Y
     // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
     double* uX_dat = REAL(u_X);
     const int n = nrows(u_X);
     const int p = ncols(u_X);
-    double B = asReal(_B);
+    double B = asReal(u_B);
     int nLower=asInteger (u_nLower);
     int nUpper=asInteger (u_nUpper);
     
@@ -265,7 +266,7 @@ extern "C" {
   // an optimized implementation that serves as a reference for more advanced algebraic optimization
   // assume X and Y are sorted
   // nLower and nUpper are 1-based index
-  SEXP boot_grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP _B)
+  SEXP boot_grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP u_B)
   {
     int i,j; //for loop index
     // put u_X and u_Y into Matrixes Xori and Y
@@ -280,7 +281,7 @@ extern "C" {
     double *Y_dat=REAL(u_Y);
     Matrix <> Y (n, 1, Y_dat);
     // bootstrap replicate
-    double B = asReal(_B);
+    double B = asReal(u_B);
     // bounds
     int nLower=asInteger (u_nLower);
     int nUpper=asInteger (u_nUpper);
@@ -396,7 +397,7 @@ extern "C" {
   
   
   // unit testing for performance comparison
-  SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP _B, SEXP _I)
+  SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP u_B, SEXP u_I)
   {
 
     int i,j; //for loop index
@@ -412,8 +413,8 @@ extern "C" {
     double *Y_dat=REAL(u_Y);
     Matrix <> Y (n, 1, Y_dat);
     // bootstrap replicate
-    int B = asInteger(_B); B=B*1;
-    int I = asInteger(_I); I=I*1;
+    int B = asInteger(u_B); B=B*1;
+    int I = asInteger(u_I); I=I*1;
 
     // output
     SEXP _ans=PROTECT(allocVector(REALSXP, 1));
