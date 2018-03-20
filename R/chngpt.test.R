@@ -3,13 +3,14 @@
 chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussian"), data, 
     type=c("step","hinge","segmented","stegmented"),
     main.method=c("lr","score"),
+    robust=FALSE,
     chngpts=NULL, lb.quantile=.1, ub.quantile=.9, 
     chngpts.cnt=50, # this is set to 25 if int is weighted.two.sided or weighted.one.sided
     single.weight=1,
-    mc.n=5e4, 
+    mc.n=5e4, # 1e3 won't cut it, the p values estimated could be smaller than nominal
     prob.weights=NULL,
     compute.p.value=TRUE,
-    verbose=FALSE 
+    verbose=FALSE, use.fastgrid=FALSE 
 ) {    
     
     DNAME = deparse(substitute(data))
@@ -30,6 +31,8 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     chngpt.var = tmp[,chngpt.var.name]
     has.itxn = length(z.1.name)>0   
     
+    # fastgrid and C version of grid is implemented only for the following scenarios
+    fastgrid.ok = family=="gaussian" & type %in% c("hinge","segmented")
     
     #####################################################################################
     # make formula 
@@ -49,12 +52,21 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     if (is.null(prob.weights)) prob.weights=rep(1,n) 
     data$prob.weights=prob.weights # try put it in data to be found by glm
     
-    if (is.null(chngpts)) chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt))
+    # change point candidates
+    if (is.null(chngpts)) {
+        # old
+        chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt)) 
+#        # new, to be consistent with how chngpts are defined in chngptm()
+#        nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile)
+#        chngpt.var.sorted=sort(chngpt.var)
+#        chngpts=chngpt.var.sorted[nLower:nUpper]
+#        if (length(chngpts)>chngpts.cnt) chngpts=chngpts[round(seq(1,length(chngpts),length=chngpts.cnt))]    
+    }
     M <- length(chngpts)  
     
     if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%+%type)
     if(verbose) {
-        myprint(n, p.null, p.alt, chngpt.var.name)        
+        myprint(n, p.null, p.alt, chngpt.var.name, mc.n)        
         cat("Null model: "); print(f.null)
         cat("Change point model: "); print(formula.chngpt)
         if (has.itxn) cat("interaction var: ", z.1.name, "\n")
@@ -70,7 +82,8 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     #####################################################################################
     # fit null model
     
-    fit.null=keepWarnings(glm(formula=f.null, data=data, family=family, weights=prob.weights)) # if glm gives a warning, use sandwich estimator to get variance est
+    # if glm gives a warning ...
+    fit.null=keepWarnings(glm(formula=f.null, data=data, family=family, weights=prob.weights)) 
     if(length(fit.null$warning)!=0) {
         if(verbose) print(fit.null$warning)
         # ignore warning, often startsWith(fit.null$warning[[1]]$message,"non-integer #successes in a binomial glm!")
@@ -83,45 +96,56 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     #####################################################################################
     # compute LR statistics
     
-    if(!do.score) {        
-        glm.warn=FALSE
-        QQ = numeric(M)
-        for (m in 1:M) {
-            data=make.chngpt.var(chngpt.var, chngpts[m], type, data)
-            fit.alt=keepWarnings(glm(f.alt, data=data, family=family, weights=prob.weights)) 
-            if(length(fit.alt$warning)!=0) {
-                # how warning is handled greatly affects finite sample performance!
-                # there are two main types of warnings: 
-                #    glm.fit: fitted probabilities numerically 0 or 1 occurred
-                #    glm.fit: algorithm did not converge
-                if(verbose) { cat("At the ",m,"out of ",M," change point:"); print(fit.alt$warning) } 
-                glm.warn=TRUE
-                #print(summary(fit.alt$value))
-                #return (list(chngpt=NA, p.value=NA, glm.warn=glm.warn))# need these fields for sim_test_batch
-                QQ[m] = fit.null$aic - fit.alt$value$aic + 2*p.alt.2
-            } else {
-                QQ[m] = fit.null$aic - fit.alt$value$aic + 2*p.alt.2
-                #QQ[m] = fit.null$deviance - fit.alt$value$deviance # this may not give the actual deviance, but up to a constant, and is family-dependent
+    if(!do.score) {
+        
+        if(fastgrid.ok & use.fastgrid) {
+            tmpfit=chngptm (formula.null, formula.chngpt, family, data, type, est.method="fastgrid", var.type="none", grid.search.max=Inf, verbose=0) 
+            chngpt=tmpfit$chngpt
+            fit.alt=tmpfit$best.fit
+            Q.max=fit.null$aic - fit.alt$aic + 2*p.alt.2 
+            #QQ=numeric(M) # not tmpfit$logliks because it does not correspond to chngpts
+            #chngpts=tmpfit$chngpts
+        } else {
+            glm.warn=FALSE
+            QQ = numeric(M)
+            for (m in 1:M) {
+                data=make.chngpt.var(chngpt.var, chngpts[m], type, data)
+                fit.alt=keepWarnings(glm(f.alt, data=data, family=family, weights=prob.weights)) 
+                if(length(fit.alt$warning)!=0) {
+                    # how warning is handled greatly affects finite sample performance!
+                    # there are two main types of warnings: 
+                    #    glm.fit: fitted probabilities numerically 0 or 1 occurred
+                    #    glm.fit: algorithm did not converge
+                    if(verbose) { cat("At the ",m,"out of ",M," change point:"); print(fit.alt$warning) } 
+                    glm.warn=TRUE
+                    #print(summary(fit.alt$value))
+                    #return (list(chngpt=NA, p.value=NA, glm.warn=glm.warn))# need these fields for sim_test_batch
+                    QQ[m] = fit.null$aic - fit.alt$value$aic + 2*p.alt.2
+                } else {
+                    QQ[m] = fit.null$aic - fit.alt$value$aic + 2*p.alt.2
+                    #QQ[m] = fit.null$deviance - fit.alt$value$deviance # this may not give the actual deviance, but up to a constant, and is family-dependent
+                }
             }
+            Q.max=max(QQ,na.rm=TRUE)
+            max.id=which.max(QQ)
+            chngpt=chngpts[max.id]
+            # the following is used by chngptm, which call test to get starting value
+            if(!compute.p.value) {
+                res=list()
+                res$chngpt=chngpt
+                res$QQ=QQ
+                res$chngpts=chngpts
+                res$parameter=chngpt
+                res$method=method
+                res$fit.null.dev=fit.null$deviance
+                class(res)=c("chngpt.test","htest",class(res))
+                return (res) 
+            }
+            # repeat the fit at the chosen change point
+            data=make.chngpt.var(chngpt.var, chngpt, type, data)
+            fit.alt=glm(f.alt, data=data, family=family, weights=prob.weights)        
         }
-        Q.max=max(QQ,na.rm=TRUE)
-        max.id=which.max(QQ)
-        chngpt=chngpts[max.id]
-        # the following is used by chngptm, which call test to get starting value
-        if(!compute.p.value) {
-            res=list()
-            res$chngpt=chngpt
-            res$QQ=QQ
-            res$chngpts=chngpts
-            res$parameter=chngpt
-            res$method=method
-            res$fit.null.dev=fit.null$deviance
-            class(res)=c("chngpt.test","htest",class(res))
-            return (res) 
-        }
-        # repeat the fit at the chosen change point
-        data=make.chngpt.var(chngpt.var, chngpt, type, data)
-        fit.alt=glm(f.alt, data=data, family=family, weights=prob.weights)        
+                
     }
     
     
@@ -135,7 +159,21 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     mu.h = fit.null$fitted.values
     
     # D.h is the inverse of the variance of working response variable
-    D.h = if (family=="binomial") diag(c(mu.h*(1-mu.h))) else if (family=="gaussian") diag(length(mu.h)) / summary(fit.null)$dispersion 
+    if(!robust) {
+        D.h = if (family=="binomial") {
+            diag(c(mu.h*(1-mu.h))) 
+        } else if (family=="gaussian") {
+            diag(length(mu.h)) / summary(fit.null)$dispersion 
+        }
+    } else {
+        D.h = if (family=="binomial") {
+            stop("no robust est for logistic yet")
+        } else if (family=="gaussian") {
+            outer(y, y)
+        }
+        str(D.h)
+    }
+    
     V.beta.h = solve(t(Z) %*% diag(prob.weights * diag(D.h)) %*% Z)
     V.eta.h = Z %*% V.beta.h %*% t(Z)
     A.h = diag(n) - D.h %*% V.eta.h %*% diag(prob.weights)
@@ -217,6 +255,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
         sam=sam**2
         x.max = apply(sam, 1, function(aux) max( colSums(matrix(aux,nrow=p.alt.2)) )  )
         p.value = mean(x.max>Q.max)      
+        str(x.max)
             
         method="Maximum of Likelihood Ratio Statistics"
         
@@ -270,7 +309,7 @@ plot.chngpt.test <- function(x, by.percentile=TRUE, both=FALSE, main=NULL, ...) 
     idx=seq(1, length(x$chngpts), length.out=5)
     if(by.percentile) {
         # the primary x axis is percentile
-        plot(perc, x$QQ, xlab=ifelse(both,"","change point (%)"), ylab="statistic", type="b", main=ifelse(is.null(main), x$method, main), xaxt="n", ...)
+        plot(perc, x$QQ, xlab=ifelse(both,"","change point (%)"), ylab="statistic", type="b", main=ifelse(is.null(main), "Test by "%+%x$method, main), xaxt="n", ...)
         axis(side=1, at=perc[idx], labels=round(perc[idx]))
         abline(v=(0:(fold-1))*100+as.numeric(strtrim(names(x$chngpt),nchar(names(x$chngpt))-1))  , lty=2)
         if (both) {
@@ -278,7 +317,7 @@ plot.chngpt.test <- function(x, by.percentile=TRUE, both=FALSE, main=NULL, ...) 
         }
     } else {
         # the primary x axis is change point
-        plot(x$chngpts, x$QQ, xlab=ifelse(both,"","change point"), ylab="statistic", type="b", main=ifelse(is.null(main), x$method, main), xaxt="n", ...)
+        plot(x$chngpts, x$QQ, xlab=ifelse(both,"","change point"), ylab="statistic", type="b", main=ifelse(is.null(main), "Test by "%+%x$method, main), xaxt="n", ...)
         axis(side=1, at=x$chngpts[idx], labels=signif(x$chngpts[idx],2))
         abline(v=x$parameter, lty=2)
         if (both) {

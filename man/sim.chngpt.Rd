@@ -11,11 +11,12 @@ Generate simulation datasets for change point Monte Carlo studies.
 
 sim.chngpt  (
     mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b",
-        "cubic2b","exp","flatHyperbolic"),
+        "cubic2b","exp","flatHyperbolic","z2"),
     threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),
     b.transition=Inf,
     family=c("binomial","gaussian"), 
-    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2"),
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2",
+        "fixnorm", "fixnorm3", "fixnorm6"),
     e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, 
     alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
     n, seed, 

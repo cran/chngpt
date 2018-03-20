@@ -5,7 +5,6 @@ test.chngpt.test <- function() {
 
 
     RNGkind("Mersenne-Twister", "Inversion")    
-    data=sim.chngpt("sigmoid4", type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=Inf)
     tolerance=1e-1
     # R.Version()$system is needed b/c 32 bit system gives different results from 64 bit system
     if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_checkReproducibility")) & R.Version()$system %in% c("x86_64, mingw32","x86_64, linux-gnu")) tolerance=1e-6 
@@ -22,6 +21,7 @@ test.chngpt.test <- function() {
     
 
     # logistic regression
+    data=sim.chngpt(mean.model="thresholded", family="binomial", threshold.type="step", n=250, seed=1, beta=-log(.67), x.distr="norm", e.=3.4, b.=Inf, alpha=chngpt::sim.alphas$thresholded_gam[1,1])
     
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="hinge", mc.n=1e4, verbose=0, chngpts.cnt=10, main.method="lr"); test
     checkEqualsNumeric(test$p.value, c(.3475), tolerance=tolerance) 

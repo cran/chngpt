@@ -11,7 +11,7 @@ if(require("RUnit", quietly=TRUE)) {
   } else {
     ## Path to unit tests for R CMD check
     ## PKG.Rcheck/tests/../PKG/unitTests
-    path <- tempdir()
+    path <- system.file("unitTests", package=pkg)
   }
   cat("\nRunning unit tests\n")
   print(list(pkg=pkg, getwd=getwd(), pathToUnitTests=path))
@@ -33,7 +33,7 @@ if(require("RUnit", quietly=TRUE)) {
   tests <- runTestSuite(testSuite)
  
   ## Default report name
-  pathReport <- file.path(path, "report")
+  pathReport <- tempdir() #file.path(path, "report")
  
   ## Report to stdout and text files
   cat("------------------- UNIT TEST SUMMARY ---------------------\n\n")

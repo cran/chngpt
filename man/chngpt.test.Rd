@@ -12,13 +12,15 @@ Hypothesis testing for change point covariate in logistic regression and linear 
 chngpt.test (formula.null, formula.chngpt, family=c("binomial","gaussian"), data, 
     type=c("step","hinge","segmented","stegmented"),
     main.method=c("lr","score"),
+    robust = FALSE,
     chngpts=NULL, lb.quantile=.1, ub.quantile=.9, 
     chngpts.cnt=50, # this is set to 25 if int is weighted.two.sided or weighted.one.sided
     single.weight=1,
     mc.n=5e4, 
     prob.weights=NULL,
     compute.p.value=TRUE,
-    verbose=FALSE 
+    verbose=FALSE,
+    use.fastgrid=FALSE
 )
 
 
@@ -43,6 +45,12 @@ If instead we are interested in testing the null that neither I(x>cutff) nor z*I
   \item{chngpts}{
 A grid of potential change points to maximize over. If not supplied, they will be 
 set to a vector of length chngpt.cnt equally spaced between lb.quantile and ub.quantile.
+}
+  \item{robust}{
+Boolean.
+}
+  \item{use.fastgrid}{
+Boolean.
 }
   \item{lb.quantile}{
 number. The lower bound in the search for change point in the unit of quantile.

@@ -1,10 +1,10 @@
 expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 sim.chngpt = function (
-    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic"), 
+    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2"), 
     threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),# segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
     b.transition=Inf,
     family=c("binomial","gaussian"), 
-    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2"), # gam1 is a hack to allow e. be different
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm", "fixnorm3", "fixnorm6"), # gam1 is a hack to allow e. be different
     e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, 
     alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
     n, seed, 
@@ -12,7 +12,6 @@ sim.chngpt = function (
     verbose=FALSE) 
 {
     
-    set.seed(seed)
     if (!requireNamespace("mvtnorm")) {print("mvtnorm does not load successfully"); return (NULL) }
     if (!is.numeric(n)) stop("n is not numeric")
     
@@ -24,6 +23,11 @@ sim.chngpt = function (
     
     if(is.null(sd.x)) sd.x=if (mean.model=="quadratic") sd.x=1.4 else 1.6
     
+    if(startsWith(x.distr,"fix")) {
+        set.seed(1) # "seed" will be set before simulation of y
+    } else {
+        set.seed(seed)
+    }
     
     #######################################################################################
     # generate covariates
@@ -53,12 +57,12 @@ sim.chngpt = function (
         }            
         x.distr="gam" # the number trailing gam is only used to change e.
         
-    } else if(startsWith(x.distr,"norm")) { # normal
-        if (x.distr=="norm") {
+    } else if(startsWith(x.distr,"norm") | startsWith(x.distr,"fixnorm")) { # normal, fixnorm means design matrix is not random
+        if (x.distr=="norm" | x.distr=="fixnorm") {
              rho=0
-        } else if (x.distr=="norm3") {
+        } else if (x.distr=="norm3" | x.distr=="fixnorm3") {
             rho=0.3 
-        } else if (x.distr=="norm6") {
+        } else if (x.distr=="norm6" | x.distr=="fixnorm6") {
             rho=0.6
         } else {
             stop("x.distr not supported: "%+%x.distr)
@@ -86,7 +90,7 @@ sim.chngpt = function (
         # but if mean.model is NULL, an error is thrown
         if(!is.null(alpha.candidate)) alpha=alpha.candidate # used to determine sim.alphas
         #cat(e., beta, "\n")
-        if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[mean.model%+%"_"%+%x.distr]][e.%+%"", ifelse(mean.model=="thresholdedItxn",beta.itxn,beta)%+%""], silent=TRUE)
+        if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[mean.model%+%"_"%+%sub("fix","",x.distr)]][e.%+%"", ifelse(mean.model=="thresholdedItxn",beta.itxn,beta)%+%""], silent=TRUE)
         if(is.null(alpha) | inherits(alpha, "try-error")) stop("alpha not found, please check beta or provide a null") 
         
         X=cbind(1,     z,        x,   x.star,   if(threshold.type=="segmented2") x.star*x else x.star*(x-e.),     z*x,   z*x.star,   z*x.star*(x-e.))
@@ -127,49 +131,53 @@ sim.chngpt = function (
     #        coef.=c(alpha, coef.z, log(.67),  beta)
     #        X=cbind(1, z, x.star, x.star*z^3)    
         
-    } else {
         
-        if (mean.model=="quadratic") { 
-        # x+x^2 
-            X=cbind(1,     z,        x,   x*x)
-            coef.=c(alpha=-1, z=coef.z, x=-1 , x.quad=0.3)
-        
-        } else if (mean.model=="quadratic2b") { 
-            X=cbind(1,     z,        x,   x*x)
-            coef.=c(alpha=-1, z=coef.z, x=-2*mu.x , x.quad=1)
-        
-        } else if (mean.model=="cubic2b") { 
-        # x+x^2+x^3
-            X=cbind(1,     z,        x,   x*x,   x*x*x)
-            coef.=c(alpha=-1, z=coef.z, x=-1 , x.quad=beta, x.cube=1)
-        
-        } else if (mean.model=="exp") { 
-            if(x.distr=="norm") {
-                X=cbind(1,     z,        exp((x-5)/2.5))
-                coef.=c(alpha=-5, z=coef.z, expx=4)
-            } else if(x.distr=="gam") {
-                X=cbind(1,     z,        exp((x-5)/2.5))
-                coef.=c(alpha=-3, z=coef.z, expx=4)
-            } else stop("wrong x.distr")
-        
-        } else if (mean.model=="flatHyperbolic") { 
-        # beta*(x-e)+beta*sqrt((x-e)^2+g^2)
-            if(x.distr=="norm") {
-                g=1
-                X=cbind(1,     z,        (x-e.)+sqrt((x-e.)^2+g^2) )
-                coef.=c(alpha=-5, z=coef.z, 2)
-            } else if(x.distr=="gam") {
-                g=1
-                X=cbind(1,     z,        (x-4)+sqrt((x-4)^2+g^2) )
-                coef.=c(alpha=-2, z=coef.z, 2)
-            }
-        
-        } else stop("mean.model not supported: "%+%mean.model) 
-        
-    }       
-    if (verbose) {myprint(coef., digits=10)}
+    } else if (mean.model=="quadratic") { 
+    # x+x^2 
+        X=cbind(1,     z,        x,   x*x)
+        coef.=c(alpha=-1, z=coef.z, x=-1 , x.quad=0.3)
+    
+    } else if (mean.model=="quadratic2b") { 
+        X=cbind(1,     z,        x,   x*x)
+        coef.=c(alpha=-1, z=coef.z, x=-2*mu.x , x.quad=1)
+    
+    } else if (mean.model=="cubic2b") { 
+    # x+x^2+x^3
+        X=cbind(1,     z,        x,   x*x,   x*x*x)
+        coef.=c(alpha=-1, z=coef.z, x=-1 , x.quad=beta, x.cube=1)
+    
+    } else if (mean.model=="exp") { 
+        if(x.distr=="norm") {
+            X=cbind(1,     z,        exp((x-5)/2.5))
+            coef.=c(alpha=-5, z=coef.z, expx=4)
+        } else if(x.distr=="gam") {
+            X=cbind(1,     z,        exp((x-5)/2.5))
+            coef.=c(alpha=-3, z=coef.z, expx=4)
+        } else stop("wrong x.distr")
+    
+    } else if (mean.model=="flatHyperbolic") { 
+    # beta*(x-e)+beta*sqrt((x-e)^2+g^2)
+        if(x.distr=="norm") {
+            g=1
+            X=cbind(1,     z,        (x-e.)+sqrt((x-e.)^2+g^2) )
+            coef.=c(alpha=-5, z=coef.z, 2)
+        } else if(x.distr=="gam") {
+            g=1
+            X=cbind(1,     z,        (x-4)+sqrt((x-4)^2+g^2) )
+            coef.=c(alpha=-2, z=coef.z, 2)
+        }
+    
+    } else if (mean.model=="z2") { 
+    # z^2
+        X=cbind(1,     z,        z*z)
+        coef.=c(alpha=-1, z=coef.z, z.quad=0.3)
+    
+    } else stop("mean.model not supported: "%+%mean.model)     
+    if (verbose) myprint(coef., digits=10)
     
     linear.predictors=drop(X %*% coef.)
+    # simulate y
+    if(startsWith(x.distr,"fix")) set.seed(seed)
     y=if(family=="binomial") rbern(n, expit(linear.predictors)) else if(family=="gaussian") rnorm(n, linear.predictors, sd)
     
     dat=data.frame (

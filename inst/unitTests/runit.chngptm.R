@@ -9,14 +9,14 @@ test.chngptm <- function() {
     if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_checkReproducibility")) & R.Version()$system %in% c("x86_64, mingw32","x86_64, linux-gnu")) tolerance=1e-6 
     print(tolerance)
     
-#    # performance unit testing
-#    data=sim.chngpt("quadratic", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
-#    system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)); system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 2))
-#    data=sim.chngpt("quadratic", n=500, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
-#    system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)); system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 2))
-#    data=sim.chngpt("quadratic", n=1000, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
-#    system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)); system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 2))
-    
+    # performance unit testing
+    data=sim.chngpt("quadratic", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
+    system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)); system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 2))
+    data=sim.chngpt("quadratic", n=500, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
+    system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)); system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 2))
+    data=sim.chngpt("quadratic", n=1000, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
+    system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)); system.time(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 2))
+    #
     # ci.bootstrap.size being 1 or 5 affects the first bootstrap sample because of the way random numbers are generated and used. 
     data=sim.chngpt("quadratic", n=50, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf)      
 
@@ -66,7 +66,10 @@ test.chngptm <- function() {
     checkEqualsNumeric(diag(fit$vcov), c(22.1371998,0.1588287,0.0604084,0.3344677), tolerance=tolerance)    
     checkEqualsNumeric(fit$coefficients, c(-22.722485,3.816606,1.075842,17.900000), tolerance=tolerance)    
     
-
+    fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="hinge", est.method="fastgrid", var.type="none", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+    fit.1=chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="hinge", est.method="grid", useC=FALSE, var.type="none", verbose=2, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+    checkEqualsNumeric(fit$coefficients, fit.1$coefficients, tolerance=tolerance)    
+    
     ########################################
     # hinge model
     
@@ -80,9 +83,9 @@ test.chngptm <- function() {
     checkEqualsNumeric(sum(diag(fit$vcov[["robust"]])), 2.311749, tolerance=tolerance)        
     
     #bootstrap
-    fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data[1:100,], type="hinge", est.method="smoothapprox", var.type="bootstrap", verbose=0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=10, boot.test.inv.ci=TRUE)
-    checkEqualsNumeric(fit$vcov$symm[1,], c(-0.7218213,0.5248393,-242.0967555,5.9602234), tolerance=tolerance)
-    checkEqualsNumeric(fit$vcov$testinv[,4], c(2.484917,6.170364), tolerance=tolerance)
+    fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data[1:120,], type="hinge", est.method="smoothapprox", var.type="bootstrap", verbose=0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=10, boot.test.inv.ci=TRUE)
+    checkEqualsNumeric(fit$vcov$symm[1,], c(-0.4888763,0.6802883,-6.0128577,4.4632592), tolerance=tolerance)
+    checkEqualsNumeric(fit$vcov$testinv[,4], c(1.043623,6.013954), tolerance=tolerance)
     
     fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="gaussian", data[1:100,], type="hinge", est.method="grid", var.type="bootstrap", verbose=0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=100, save.boot=TRUE)
     checkEqualsNumeric(fit$vcov$boot.samples[2,], c(0.4613017,0.18780891,-0.1779347,4.416634,16.134385), tolerance=tolerance)

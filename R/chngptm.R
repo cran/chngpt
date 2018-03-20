@@ -1,4 +1,3 @@
-#weighting is not implemented for grid/useC in linear models
 # useC=T; tol=1e-4; maxit=1e2; verbose=TRUE; est.method="grid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fift=NULL
 chngptm = function(formula.1, formula.2, family, data, #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
   type=c("step","hinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
@@ -17,6 +16,9 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
     
+    # fastgrid and C version of grid is implemented only for the following scenarios
+    fastgrid.ok = family=="gaussian" & type %in% c("hinge","segmented")
+    
     # remove missing observations
     form.all = update(formula.1, formula.2)
     subset. = complete.cases(model.frame(form.all, data, na.action=na.pass))
@@ -33,15 +35,25 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     }     
     if (var.type %in% c("robust","robusttruth","all") & is.null(aux.fit)) stop("need an aux.fit for robust variance estimate")
     
+    # set est.method
+    if (!family%in%c("binomial","gaussian") & est.method=="smoothapprox") stop ("smoothapprox not implemented for this family")
+    if(est.method=="fastgrid"    & !fastgrid.ok) stop ("fastgrid only implemented for guassian family and hinge/segmented models")
+    if(est.method=="grid" & useC & (!fastgrid.ok | !is.null(weights))) {useC=FALSE; warning ("C implementatin of grid only works for guassian family hinge/segmented models without weights. Will perform non-C version of grid search.")}
+    if (est.method=="default") {
+        if(fastgrid.ok) {
+            est.method="fastgrid" 
+        } else if(family=="binomial") {
+            est.method="smoothapprox"
+        } else {
+            est.method="grid"; useC=FALSE
+        }        
+    }
+    if (fastgrid.ok & est.method!="fastgrid") warning("For linear models, fastgrid is the best option.")
+    
     # set weights
     if (is.null(weights)) weights=rep(1,nrow(data)) 
     data$weights=weights # try put it in data to be found by glm
     w.all.one=all(weights==1) 
-    
-    # set est.method
-    if (est.method=="default") est.method=switch(family, gaussian="fastgrid", binomial="smoothapprox", "grid")
-    if (!family%in%c("binomial","gaussian") & est.method=="smoothapprox") stop ("smoothapprox not implemented for this family")
-    if (family=="gaussian" & est.method!="fastgrid") warning("For linear models, fastgrid is the best option.")
     
     y=model.frame(formula.1, data)[,1]
     Z=model.matrix(formula.1, data)
@@ -74,7 +86,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     f.alt=get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)
     formula.new=update(formula.new, as.formula(f.alt))
     
-    if (verbose) {myprint(type, est.method, has.itxn); print(formula.new); myprint(p.z, p.2.itxn, p)}
+    if (verbose) {myprint(type, est.method, has.itxn, p.z, p.2.itxn, p); print(formula.new)}
         
     # change point candidates
     nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile); #myprint(nLower, nUpper)    
@@ -90,8 +102,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     
     
     grid.search=function(){
-        if(verbose) cat("perform grid search\n")
-        if(family=="gaussian" & (est.method=="fastgrid" | est.method=="grid" & useC)) {
+        if(fastgrid.ok & (est.method=="fastgrid" | est.method=="grid" & useC)) {
             # putting as.double around a matrix changes the matrix into a vector, which affects 
             # as.double is needed around y.sorted b/c if y.sort is integer, this throws an error b/c the cpp function expects real
             # logliks is actually -rss here
@@ -102,8 +113,12 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                 data=make.chngpt.var(chngpt.var, e, type, data, b.transition)
                 fit = do.regression (formula.new, data, weights, family)            
                 if(length(fit$warning)!=0) {
-                    if(verbose>=3) print(fit$warning)
-                    #print(summary(fit$value))
+                    if(verbose>=3) {
+                        myprint(e)
+                        print(fit$warning)
+                        print(coef(fit$value))
+                        print((logLik(fit$value)))
+                    }
                     as.numeric(logLik(fit$value))
                 } else as.numeric(logLik(fit$value))            
                 # debug use
@@ -245,6 +260,8 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                 
     ###############################################################################################
     # variance-covariance 
+    
+    warn.var=NULL
     
     # only implemented when there is no interaction and for linear and logistic regression
     if (var.type!="bootstrap" & (has.itxn | !family %in% c("binomial","gaussian"))) {
@@ -506,7 +523,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                     ub=chngpt.var.sorted[idx-1]
                     
                     if (verbose==2) {
-                        plot(chngpt.var.sorted, chngpt.test.0$fit.null.dev + 2*profile.liks, xlab="change points", ylab="deviance relative to null model", main="Profile Likelihood")
+                        plot(chngpt.var.sorted, chngpt.test.0$fit.null.dev + 2*profile.liks, xlab="change points", ylab="deviance relative to null model", main="Test Inversion CI")
                     }
                     
                     c(lb,ub)
@@ -591,7 +608,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                 if (class(save.seed)=="try-error") {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
                 set.seed(1)     # this is only added on 7/30/2017, well after biometrics paper is published. should not change the results qualitatively
                 
-                if (family=="gaussian" & (est.method=="grid" & useC | est.method=="fastgrid")) {                    
+                if (fastgrid.ok & (est.method=="grid" & useC | est.method=="fastgrid")) {                    
                     boot.out=list()
                     class(boot.out)="boot"
                     boot.out$t0=coef.hat
@@ -722,15 +739,16 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
             
             # if perfect segregation happens, cann't compute variance estimate
             # what to do with glm.warn?
-            if (var.type=="none") {
+            if (family=="binomial" & any(abs(coef.hat[-c(1,length(coef.hat))])>=search.bound)) {
+                warn.var="Point estimate over search bound. Not computing variance estimate."
+                cat(warn.var, "\n")
                 var.est=NULL
-            } else if (var.type=="bootstrap") {
-                var.est=ci.bootstrap()
-            } else {                
-                if (any(abs(coef.hat[-c(1,length(coef.hat))])>=search.bound)) {
-                    cat("point estimate over search bound. No analytical variance estimate produced\n")
+            } else {
+                if (var.type=="none") {
                     var.est=NULL
-                } else {
+                } else if (var.type=="bootstrap") {
+                    var.est=ci.bootstrap()
+                } else {                
                     var.est=switch(var.type, 
                         smooth=var.est.smooth(), 
                         model=var.est.model(test.inv.ci), 
@@ -763,6 +781,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
         , family=family    
         , var.type=var.type
     )
+    if (!is.null(warn.var)) res[["warning"]]=warn.var
     names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %+% "%"
     
     if (est.method=="smoothapprox") {
