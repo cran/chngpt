@@ -1,5 +1,5 @@
 f45d8a65f9290c6ff3821ab56592d1b6 *ChangeLog
-3c54d73c198917326b57fb089e79c7b4 *DESCRIPTION
+f6f6d96c002dd356e0016036f90df39e *DESCRIPTION
 5790e8ec985d543988d6aad768b50905 *NAMESPACE
 298f7e7509911b1e4dddff149d691b3c *R/antoch.test.R
 902d5850975d6149d7a054403e5c0d4e *R/chngpt.test.2.R
@@ -14,7 +14,7 @@ fc3b1a0b9fdd091957b9388640df06a8 *data/coef.0.ls.rda
 ee6e5c17e1479c09ab44d478b43ae080 *data/dat.mtct.rda
 ea25138d0df2c1eada8655acc16886da *data/sim.alphas.rda
 d68fe8e41ea91aabf748f9cb3af44c68 *inst/CITATION
-0a9d93730ea4029f69772c3761466e4c *inst/doc/chngpt-vignette.pdf
+e783dc3ca7ba162f3460888f39f16a1b *inst/doc/chngpt-vignette.pdf
 82e747aa9aeaf112cb1b9113ff6d881f *inst/doc/chngpt-vignette.pdf.asis
 a616e808bd826e929f56223020649675 *inst/unitTests/Makefile
 0c12c1ada770c9626aae4253db6d4e85 *inst/unitTests/report.html
@@ -52,5 +52,5 @@ f924b218cd6eaed80846ed0cba534b03 *src/matrix_forward_iterator.h
 d0cf994cd4c6886f8bd348c351a00ecf *src/rng.h
 9a1656760820e50605248198302c308c *src/smath.h
 a5574b5829f3cab30cd73eb26725ae68 *src/stat.h
-5c50e77964b0e5c22ea7c3c8fcccda99 *tests/doRUnit.R
+c223277d8ce6e79156a723b274abdf5e *tests/doRUnit.R
 82e747aa9aeaf112cb1b9113ff6d881f *vignettes/chngpt-vignette.pdf.asis
