@@ -1,14 +1,16 @@
-# useC=T; tol=1e-4; maxit=1e2; verbose=TRUE; est.method="grid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fift=NULL
-chngptm = function(formula.1, formula.2, family, data, #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
-  type=c("step","hinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
+# useC=T; tol=1e-4; maxit=1e2; verbose=TRUE; est.method="fastgrid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fit=NULL        
+#family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
+chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
+  weights=NULL, # this arg is kept here due to historical reasons
   est.method=c("default","smoothapprox","grid","fastgrid"), useC=TRUE, 
   var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), aux.fit=NULL, 
-  test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
   lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
+  test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
   ci.bootstrap.size=1000, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, # grid.search.max is the maximum number of grid points used in grid search
   b.transition=Inf,# controls whether threshold model or smooth transition model
   tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
-  weights=NULL, verbose=FALSE, ...) 
+  keep.best.fit=TRUE, # best.fit is needed for making prediction and plotting
+  verbose=FALSE, ...) 
 {
     
     if (missing(type)) stop("type mssing")
@@ -16,12 +18,8 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
     
-    # fastgrid and C version of grid is implemented only for the following scenarios
-    fastgrid.ok = family=="gaussian" & type %in% c("hinge","segmented")
-    
     # remove missing observations
-    form.all = update(formula.1, formula.2)
-    subset. = complete.cases(model.frame(form.all, data, na.action=na.pass))
+    subset. = complete.cases(model.frame(update(formula.1, formula.2), data, na.action=na.pass))
     data=data[subset.,,drop=FALSE]
     
     # set b.search
@@ -35,27 +33,8 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     }     
     if (var.type %in% c("robust","robusttruth","all") & is.null(aux.fit)) stop("need an aux.fit for robust variance estimate")
     
-    # set est.method
-    if (!family%in%c("binomial","gaussian") & est.method=="smoothapprox") stop ("smoothapprox not implemented for this family")
-    if(est.method=="fastgrid"    & !fastgrid.ok) stop ("fastgrid only implemented for guassian family and hinge/segmented models")
-    if(est.method=="grid" & useC & (!fastgrid.ok | !is.null(weights))) {useC=FALSE; warning ("C implementatin of grid only works for guassian family hinge/segmented models without weights. Will perform non-C version of grid search.")}
-    if (est.method=="default") {
-        if(fastgrid.ok) {
-            est.method="fastgrid" 
-        } else if(family=="binomial") {
-            est.method="smoothapprox"
-        } else {
-            est.method="grid"; useC=FALSE
-        }        
-    }
-    if (fastgrid.ok & est.method!="fastgrid") warning("For linear models, fastgrid is the best option.")
-    
-    # set weights
-    if (is.null(weights)) weights=rep(1,nrow(data)) 
-    data$weights=weights # try put it in data to be found by glm
-    w.all.one=all(weights==1) 
-    
-    y=model.frame(formula.1, data)[,1]
+    # note that in chngpt.test, Z may already include chngptvar if type is segmented
+    y=model.frame(formula.1, data)[,1] #if lhs of formula.1 is cbind(,), y is a matrix
     Z=model.matrix(formula.1, data)
     tmpdat=model.matrix(formula.2, data)[,-1,drop=F]
     chngpt.var.name=setdiff(colnames(tmpdat), colnames(Z))[1];     if(verbose>=2) myprint(chngpt.var.name)
@@ -67,51 +46,93 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     has.itxn = length(z.1.name)>0
     z.1 = tmpdat[,z.1.name] # if the intersection is a null set, z.1 is a matrix of n x 0 dimension
     
-    # sorted data
-    chngpt.var.sorted=sort(chngpt.var)
-    Z.sorted=Z[order(chngpt.var),,drop=FALSE]
-    y.sorted=y[order(chngpt.var)]
-    w.sorted=data$weights[order(chngpt.var)]
-    data.sorted=data[order(chngpt.var),]    
-    
-    # dimensions
+    # covariate dimensions
     n=nrow(Z)
     p.z=ncol(Z)
     p.2=switch(type, step=1, hinge=1, segmented=2, segmented2=2, stegmented=3)
     p.2.itxn=p.2*ifelse(has.itxn,2,1)
     p=p.z+p.2.itxn+1 #total number of paramters, including threshold
         
-    # make formula that includes all parameters but threshold
+    # formula.new is the model to fit
     formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%+%chngpt.var.name)) else formula.1
-    f.alt=get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)
-    formula.new=update(formula.new, as.formula(f.alt))
-    
-    if (verbose) {myprint(type, est.method, has.itxn, p.z, p.2.itxn, p); print(formula.new)}
+    formula.new=update(formula.new, as.formula(get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)))
         
-    # change point candidates
-    nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile); #myprint(nLower, nUpper)    
-    chngpts=chngpt.var.sorted[nLower:nUpper]; #print(chngpts)
-#    # take the mid points between data points as change point candidates. For step models, use any point in between does not change likelihood, but it does change likelihood for segmented model
-#    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
-    if (length(chngpts)>grid.search.max) {
-        chngpts=chngpts[round(seq(1,length(chngpts),length=grid.search.max))]
-        if(est.method %in% c("grid","fastgrid")) stop("some work needs to be done to resolve this issue")
-    }
-    # another way to define nLower/nUpper is as follows. It is equivalent
-    #nLower=sum(chngpt.var.sorted<quantile(chngpt.var.sorted, lb.quantile))+1; nUpper=sum(chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile));myprint(nLower, nUpper)
+    # set weights
+    # w.all.one is needed in the next block. 
+    # chngpt.glm.weights goes with the data because glm() is incredible that if the weights arg does not have global scope, it needs to be a variable name in the data frame
+    # chngpt.glm.weights and does not get updated in the next block while weights are updated
+    if (is.null(weights)) weights=rep(1,nrow(data)) 
+    data$chngpt.glm.weights=weights
+    w.all.one=all(weights==1)     
+    # create a copy of chngpt.glm.weights in the function scope so that do.regression works
+    chngpt.glm.weights=data$chngpt.glm.weights  
     
+    do.regression=function(formula.new, data, family){
+        if (family=="coxph") {
+            fit = keepWarnings(survival::coxph(formula.new, data=data, weights=chngpt.glm.weights)) # interestingly and I don't understand why weights=data$chngpt.glm.weights fails
+        } else {
+    #    str(formula.new); str(data); str(chngpt.glm.weights); str(family)
+            fit =             keepWarnings(glm(formula.new, data=data, weights=chngpt.glm.weights, family=family) )
+        }
+        fit
+    }
+    
+    # deal with cbind() in lhs in logistic regression 
+    # convert cbind() to single column and update weights (but not chngpt.glm.weights, b/c formula is still cbind())
+    if(is.matrix(y)) {
+        n.tmp <- y[,1]+y[,2]
+        y <- ifelse(n.tmp == 0, 0, y[,1]/n.tmp)        
+        weights <- n.tmp*weights
+        w.all.one=FALSE
+    }
+    
+    # set est.method
+    # for now, fastgrid and C version of grid is implemented only for the following scenarios
+    # smoothapprox cannot work when lhs of formula.1 is cbind() 
+    fastgrid.ok = family=="gaussian" & type %in% c("hinge","segmented") & !has.itxn
+    if ((!family%in%c("binomial","gaussian")) & est.method=="smoothapprox") stop ("smoothapprox only implemented for binomial and guassian families and when lhs of formula is not cbind()")
+    if(est.method=="fastgrid" & !fastgrid.ok) {
+        warning ("Fastgrid only implemented for guassian family and hinge/segmented models without interaction. Switching to grid search ...")
+        est.method="grid"
+    }
+    if(est.method=="grid" & useC & (!fastgrid.ok | !w.all.one)) useC=FALSE # useC for grid only supports a subset of scenario that supports fastgrid, namely no weight support
+    if (est.method=="default") {
+        if(fastgrid.ok) { est.method="fastgrid" 
+        } else if(family=="binomial") { est.method="smoothapprox"
+        } else { est.method="grid"; useC=FALSE
+        }        
+    }
+    if (fastgrid.ok & est.method!="fastgrid") cat("For linear models, fastgrid is the best est.method.\n")
+    
+    # sorted data
+    chngpt.var.sorted=sort(chngpt.var)
+    Z.sorted=Z[order(chngpt.var),,drop=FALSE]
+    y.sorted=y[order(chngpt.var)]
+    w.sorted=weights[order(chngpt.var)]
+    data.sorted=data[order(chngpt.var),]    
+    
+    if (verbose) {myprint(family, type, est.method, var.type); myprint(has.itxn, p.z, p.2.itxn, p); print(formula.new)}
+        
+    # choose chngpts - threshold candidates
+    nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile)
+    # an alternative and equivalent way to define nLower/nUpper: nLower=sum(chngpt.var.sorted<quantile(chngpt.var.sorted, lb.quantile))+1; nUpper=sum(chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile));myprint(nLower, nUpper)
+    chngpts=get.chngpts(chngpt.var.sorted,nLower,nUpper,n.chngpts=grid.search.max)
+    msg="If there are more data between lower and upper bound than grid.search.max, fastgrid.search cannot be used yet. One could try increasing grid.search.max."
+    if (nUpper-nLower+1>grid.search.max & est.method=="fastgrid") stop(msg)
     
     grid.search=function(){
         if(fastgrid.ok & (est.method=="fastgrid" | est.method=="grid" & useC)) {
             # putting as.double around a matrix changes the matrix into a vector, which affects 
             # as.double is needed around y.sorted b/c if y.sort is integer, this throws an error b/c the cpp function expects real
-            # logliks is actually -rss here
+            # logliks is actually Y' * H_e * Y here
+            if(verbose) myprint(fastgrid.ok, est.method, useC)
             f.name=est.method%+%"_search" # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
             logliks=-.Call(f.name, cbind(Z.sorted,chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), as.double(y.sorted), as.double(w.sorted), w.all.one, nLower, nUpper) 
         } else {
+            if(verbose) myprint(fastgrid.ok, est.method, useC)
             logliks=sapply (chngpts, function(e) {
                 data=make.chngpt.var(chngpt.var, e, type, data, b.transition)
-                fit = do.regression (formula.new, data, weights, family)            
+                fit = do.regression (formula.new, data, family)            
                 if(length(fit$warning)!=0) {
                     if(verbose>=3) {
                         myprint(e)
@@ -121,15 +142,16 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                     }
                     as.numeric(logLik(fit$value))
                 } else as.numeric(logLik(fit$value))            
-                # debug use
+                # debug use in conjunction with line +4 to compare C and R implementations
                 #sum(resid(fit$value)**2)
             } )
         }
-        #print(logliks)
+        #plot(sum(y.sorted**2)-logliks.old, logliks) #logliks.old refers to .Call output
     
         e=chngpts[which.max(logliks)]
-        #myprint(which.max(logliks))
-        #myprint(e)
+#        print(logliks)
+#        myprint(which.max(logliks))
+#        myprint(e)
         attr(e, "glm.warn")=any(is.na(logliks))
         attr(e, "logliks")=logliks
         if(verbose>=2) {
@@ -149,19 +171,21 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     #### Newton-Raphson
         
         if(verbose) cat("smoothapprox search\n")
-        # do a test to get init value for change point to be used in estimation 
         e.init=chngpt.init
         if (is.null(e.init)) {
-            if(verbose) cat("looking for init\n")
-            chngpt.test.0 = chngpt.test (formula.1, formula.2, family=family, data, type=ifelse(type=="segmented2","segmented",type), compute.p.value=FALSE)# note main.method is lr by default, which is faster
-            if (verbose>=2) plot(chngpt.test.0, by.percentile=FALSE)
-            e.init=chngpt.test.0$chngpt
+            if(verbose) cat("initializing through coarse grid search\n")
+            tmp=chngptm (formula.1, formula.2, family=family, data, type=type, weights=weights, est.method="grid", lb.quantile=lb.quantile, ub.quantile=ub.quantile, grid.search.max=50, 
+                        b.transition=b.transition, search.bound=search.bound, keep.best.fit=FALSE, verbose=0) 
+            e.init=tmp$chngpt
         } 
         
         if(length(e.init)==0) {
+            # if there are no initial values for some reason, just do grid search
             e.final=grid.search()
             glm.warn=attr(e.final,"glm.warn")
+            
         } else {
+            # smooth approximation 
             names(e.init)="e"
             if (verbose) cat("init e: ", e.init, "\n")
             glm.warn=FALSE
@@ -178,14 +202,14 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                 
                 # remake the binary change point variable in every iteration based on the change point estimate from last iteration
                 data = make.chngpt.var(chngpt.var, e.init, type, data, b.search) # b.search is used here to be consistent with optim which uses b.search as well
-                fit.0 = do.regression(formula.new, data, weights, family)$value
+                fit.0 = do.regression(formula.new, data, family)$value
                 
                 # update threshold and associated coefficients
                 beta.init=coef(fit.0)[p.z+1:p.2.itxn]; #names(beta.init)=c("beta1","beta2")# we may need this for variance calculation to work
                 alpha.hat=coef(fit.0)[1:p.z]
                 stopifnot(all(!is.na(alpha.hat)))
                 alpha.z = c(Z %*% alpha.hat)
-                
+    
                 # search for better e and slopes associated with x and thresholded x
                 optim.out = try(optim(par=c(beta.init, e.init), 
                       fn = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"f"), 
@@ -233,7 +257,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     } else stop("wrong est.method") # end if grid/smoothapprox
     # fit glm using e.final
     data = make.chngpt.var(chngpt.var, e.final, type, data, b.transition) # note that b.transition is used here instead of b.search
-    fit = do.regression (formula.new, data, weights, family)$value
+    fit = do.regression (formula.new, data, family)$value
     coef.hat=c(coef(fit), "chngpt"=e.final)
     best.fit=fit
     
@@ -241,15 +265,15 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     if (type=="stegmented") {
         replacement="I("%+%chngpt.var.name%+%">chngpt)"
         replacement.2="("%+%chngpt.var.name%+%"-chngpt)+"
-        new.names=sub("x.gt.e.2", replacement.2, names(coef.hat))    
-        new.names=sub("x.gt.e", replacement, new.names)    
+        new.names=sub("x.mod.e.2", replacement.2, names(coef.hat))    
+        new.names=sub("x.mod.e", replacement, new.names)    
     } else {
         if(type=="step") {
             replacement="I("%+%chngpt.var.name%+%">chngpt)"
         } else if (type %in% c("hinge","segmented","segmented2")) {
             replacement="("%+%chngpt.var.name%+%"-chngpt)+"
         } 
-        new.names=sub("x.gt.e", replacement, names(coef.hat))    
+        new.names=sub("x.mod.e", replacement, names(coef.hat))    
     }
     if (verbose) cat(new.names,"\n")
     names(coef.hat)=new.names
@@ -269,7 +293,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     } else {
         if (type %in% c("step","stegmented")) {
             # discontinous models
-            var.est=vcov(best.fit)
+            var.est=NULL
             
         } else if (type %in% c("hinge","segmented","segmented2")) { # continuous change point models
             
@@ -310,8 +334,8 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                 names(param.list)=params.long    
                 tmp=do.call(loss.f, param.list)
                 hess=apply(attr(tmp,"h"), 2:3, sum, na.rm=T)       
-                print(hess)
-                print(eigen(hess))         
+                #print(hess)
+                #print(eigen(hess))         
                 var.est = try(solve(hess)) # should keep change point in, and not do hess[-ncol(hess), -ncol(hess)], otherwise lead to over estimation of sd
                 
                 if (family=="gaussian") {
@@ -451,7 +475,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                         myprint(last(diag(var.est)), -last(diag(V.inv))/n, scale.chisq)
                     }
                     if (scale.chisq<0) {
-                        warning("scale.chisq is negative")
+                        cat("scale.chisq is negative\n")
                         scale.chisq=abs(scale.chisq)
                     }                     
                     if (family=="binomial") {
@@ -476,7 +500,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                     
                     idx.chngpt=which(chngpt.var.sorted>=coef.hat["chngpt"])[1]
                     data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], type, data, b.transition)
-                    fit=do.regression (formula.new, data, weights, family)
+                    fit=do.regression (formula.new, data, family)
                     lik.max = as.numeric(logLik(fit$value))
                     
                     profile.liks=rep(NA, length(chngpt.var.sorted))
@@ -493,7 +517,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                             lik=NA; break
                         }
                         data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
-                        fit = do.regression (formula.new, data, weights, family)
+                        fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
                             lik = NA; break
@@ -513,7 +537,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                             lik=NA; break
                         }
                         data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
-                        fit = do.regression (formula.new, data, weights, family)
+                        fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
                             lik = NA; break
@@ -523,7 +547,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                     ub=chngpt.var.sorted[idx-1]
                     
                     if (verbose==2) {
-                        plot(chngpt.var.sorted, chngpt.test.0$fit.null.dev + 2*profile.liks, xlab="change points", ylab="deviance relative to null model", main="Test Inversion CI")
+                        plot(chngpt.var.sorted, 2*profile.liks, xlab="change points", ylab="deviance relative to null model", main="Test Inversion CI")
                     }
                     
                     c(lb,ub)
@@ -541,7 +565,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                     
                     idx.chngpt=which(chngpt.var.sorted>=coef.hat["chngpt"])[1]
                     data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], type, data, b.transition)# it is ok that data is assigned to b/c the function adds columns
-                    fit=do.regression (formula.new, data, weights, family)
+                    fit=do.regression (formula.new, data, family)
                     sigsq.max = (sigma(fit$value))**2; #myprint(sigsq.max)
                     #sigsq.max = (sigma(best.fit))**2; myprint(sigsq.max)
                     
@@ -559,7 +583,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                             sigsq=NA; break
                         }
                         data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
-                        fit = do.regression (formula.new, data, weights, family)
+                        fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
                             sigsq = NA; break
@@ -580,7 +604,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                             sigsq=NA; break
                         }
                         data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
-                        fit = do.regression (formula.new, data, weights, family)
+                        fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
                             sigsq = NA; break
@@ -589,11 +613,8 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                     #ub=if(is.na(sigsq)) NA else chngpt.var.sorted[idx-1]
                     ub=chngpt.var.sorted[idx-1]
                     
-                    if (verbose==2) {
-                        plot(chngpt.var.sorted, chngpt.test.0$fit.null.dev + 2*profile.sigsqs, xlab="change points", ylab="F-statistic", main="Test Inversion")
-                    }
-                    
                     c(lb,ub)
+                    
                 } else stop("wrong est.method")
                 
             } 
@@ -629,7 +650,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                         if (m.out.of.n) ii=ii[1:(4*sqrt(n))] # m out of n bootstrap
                         # use chngpt.init so that the mle will be less likely to be inferior to the model conditional on e.hat, but it does not always work
                         # for studentized bootstrap interval, need variance estimates as well, however, stud performs pretty badly
-                        fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method=est.method, var.type="none", b.transition=b.transition, chngpt.init=coef.hat["chngpt"], useC=useC, verbose=verbose>=3))
+                        fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method=est.method, var.type="none", b.transition=b.transition, chngpt.init=coef.hat["chngpt"], useC=useC, verbose=verbose>=3, keep.best.fit=TRUE, lb.quantile=lb.quantile, ub.quantile=ub.quantile, grid.search.max=grid.search.max))
                         tmp=length(coef.hat)*1+ifelse(!boot.test.inv.ci, 0, ifelse(family=="gaussian",2,1)) # need to adjust depending on the last else clause
                         out = if(inherits(fit.ii,"try-error")) {
                             rep(NA,tmp) 
@@ -646,7 +667,7 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
                                 # pl can be negative even when grid search is used in both point estimate and bootstrap
                                 # this is because the estimated chngpt may not be in the {x} of the bootstrapped dataset, and a value in between can be better than {x}
                                 dat.tmp=make.chngpt.var(chngpt.var[ii], coef.hat["chngpt"], type, data[ii,], b.transition) # don't forget to do chngpt.var[ii]!
-                                fit.ii.ehat=do.regression (formula.new, data=dat.tmp, weights, family); if(length(fit.ii.ehat$warning)!=0 & verbose) print(fit.ii.ehat$warning)
+                                fit.ii.ehat=do.regression (formula.new, data=dat.tmp, family); if(length(fit.ii.ehat$warning)!=0 & verbose) print(fit.ii.ehat$warning)
                                 pl= 2*(as.numeric(logLik(fit.ii$best.fit)) - as.numeric(logLik(fit.ii.ehat$value)))
                                 Fs=n*(sigma(fit.ii.ehat$value)^2/sigma(fit.ii$best.fit)^2-1) # F statistic, an approximation of pl, but may work better for linear regression
                                 if(pl<0 & verbose) {
@@ -767,11 +788,11 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
     
         
     res=list(
-          best.fit=best.fit # this is placed first b/c it is too long
-        , coefficients=coef.hat
+          coefficients=coef.hat
         , vcov=var.est
-        , formula.1=formula.1
-        , formula.2=formula.2
+#        , formula.1=formula.1
+#        , formula.2=formula.2
+        , formula.new=formula.new
         , chngpt.var=chngpt.var.name
         , chngpt=coef.hat["chngpt"]
         , est.method = est.method
@@ -780,19 +801,24 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
         , glm.warn = glm.warn
         , family=family    
         , var.type=var.type
+        , n=n # after removing rows with missing values
     )
-    if (!is.null(warn.var)) res[["warning"]]=warn.var
-    names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %+% "%"
-    
     if (est.method=="smoothapprox") {
-        res=c(res, list(converged=converged, iter=n.iter))
+        res=c(res, list(
+            converged=converged, 
+            iter=n.iter))
     } else if (est.method %in% c("grid","fastgrid")) {
-        res=c(res, list(chngpts=chngpts, logliks=attr(e.final,"logliks")))
+        res=c(res, list(
+            chngpts=chngpts, 
+            logliks=attr(e.final,"logliks")))
 #        # good.soln needs to take as input a chngptm object that has chngpts etc
 #        class(res)=c("chngptm", class(res)) 
 #        tmp=good.soln(res, plot=verbose==3)
 #        res=c(res, list(good.soln=tmp) )
     }
+    if (!is.null(warn.var)) res[["warning"]]=warn.var
+    if(keep.best.fit) res$best.fit=best.fit 
+    names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %+% "%"     
     
     class(res)=c("chngptm", class(res))
     res    
@@ -802,21 +828,6 @@ chngptm = function(formula.1, formula.2, family, data, #family can be coxph or a
 ## make.chngpt.var is needed in both testing and estimation
 ## in estimation by grid search, b.transition is set to null when this function is called
 ## in estimation by smooth approx, b.transition value is saved to object
-#
-# The difference between the next two versions is that when b.transition is not infinity, if x<e, x is 0 in the older version but only close to 0 in the newer version
-## before May 13, 2017
-#make.chngpt.var=function(x, e, type, data=NULL, b.transition=NULL) {    
-#    if(type=="step") {
-#        out=ifelse(x>=e, 1, 0)
-#    } else if (type=="hinge") {
-#        out=ifelse(x>=e, x-e, 0)
-#    } else if (type=="segmented") {
-#        out=ifelse(x>=e, x-e, 0) # x also becomes part of the null model
-#    } else if (type=="stegmented") {
-#        out=cbind(ifelse(x>=e, 1, 0), ifelse(x>=e, x-e, 0))  # x also becomes part of the null model
-#    }    
-#    if (!is.null(b.transition)) out=out * 1/(1+exp(b.transition*(x-e))) 
-#
 ## New on May 13, 2017 this function is modified to fit smooth transition model
 make.chngpt.var=function(x, e, type, data=NULL, b.transition=Inf) {    
     transition=expit(b.transition*(x-e))
@@ -839,31 +850,38 @@ make.chngpt.var=function(x, e, type, data=NULL, b.transition=Inf) {
         out    
     } else {
         if (type=="stegmented") {
-            data$x.gt.e = out[,1]
-            data$x.gt.e.2 = out[,2]
+            data$x.mod.e = out[,1]
+            data$x.mod.e.2 = out[,2]
         } else {
-            data$x.gt.e = out
+            data$x.mod.e = out
         }
         data
     }
 }
-    
-do.regression=function(formula.new, data, weights, family){
-    if (family=="coxph") {
-        fit = keepWarnings(survival::coxph(formula.new, data=data, weights=weights))
-    } else {
-#    str(formula.new); str(data); str(weights); str(family)
-        fit =             keepWarnings(glm(formula.new, data=data, weights=weights, family=family) )
-    }
-    fit
-}
+#
+# The difference between the next two versions is that when b.transition is not infinity, if x<e, x is 0 in the older version but only close to 0 in the newer version
+## before May 13, 2017
+#make.chngpt.var=function(x, e, type, data=NULL, b.transition=NULL) {    
+#    if(type=="step") {
+#        out=ifelse(x>=e, 1, 0)
+#    } else if (type=="hinge") {
+#        out=ifelse(x>=e, x-e, 0)
+#    } else if (type=="segmented") {
+#        out=ifelse(x>=e, x-e, 0) # x also becomes part of the null model
+#    } else if (type=="stegmented") {
+#        out=cbind(ifelse(x>=e, 1, 0), ifelse(x>=e, x-e, 0))  # x also becomes part of the null model
+#    }    
+#    if (!is.null(b.transition)) out=out * 1/(1+exp(b.transition*(x-e))) 
+#
+
+
 get.f.alt=function(type, has.itxn, z.1.name, chngpt.var.name) {
     if (type=="stegmented") {
-        f.alt=if(has.itxn) "~.+(x.gt.e+x.gt.e.2)*"%+%z.1.name%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name else "~.+x.gt.e+x.gt.e.2"
+        f.alt=if(has.itxn) "~.+(x.mod.e+x.mod.e.2)*"%+%z.1.name%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name else "~.+x.mod.e+x.mod.e.2"
     } else if (type %in% c("segmented","segmented2")) {
-        f.alt=if(has.itxn) "~."%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name%+%"+x.gt.e*"%+%z.1.name else "~.+x.gt.e"
+        f.alt=if(has.itxn) "~."%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name%+%"+x.mod.e*"%+%z.1.name else "~.+x.mod.e"
     } else if (type %in% c("step","hinge")) {
-        f.alt=if(has.itxn) "~.+x.gt.e*"%+%z.1.name else "~.+x.gt.e"
+        f.alt=if(has.itxn) "~.+x.mod.e*"%+%z.1.name else "~.+x.mod.e"
     }
     f.alt
 }
@@ -873,6 +891,7 @@ get.f.alt=function(type, has.itxn, z.1.name, chngpt.var.name) {
 
 
 predict.chngptm=function (object, newdata = NULL, type = c("link", "response", "terms"), ...){    
+    if (is.null(object$best.fit)) stop("To make predictions, chngptm fit needs to have keep.best.fit=TRUE in the option.")
     newdata = make.chngpt.var(newdata[[object$chngpt.var]], object$chngpt, object$type, newdata, object$b.transition)            
     predict(object$best.fit, newdata, type, ...)
 }
@@ -884,6 +903,9 @@ print.chngptm=function(x, ...) {
 }
 coef.chngptm=function(object, ...) {
     object$coefficients[-length(object$coefficients)] # not return the chngpoint estimate
+}
+residuals.chngptm=function(object, ...) {
+    residuals(object$best.fit, ...)
 }
 vcov.chngptm=function(object, var.type=NULL, ...) {
 #    if(object$type %in% c("hinge","segmented")) {
@@ -923,13 +945,15 @@ getFixedEf.chngptm=function(object, ...) {
 }
 lincomb=function(object, comb, alpha=0.05){
     est=c(coef(object)%*%comb)
-    samples=object$vcov$boot.samples[,1:(ncol(object$vcov$boot.samples)-2)] %*% comb
+    samples=object$vcov$boot.samples[,1:length(comb)] %*% comb
     
     # symmetrical bootstrap CI
     q.1=quantile(abs(samples-est), 1-alpha, na.rm=TRUE)
     ci=est+c(-q.1, q.1)
     c(est, ci)    
 }
+
+# which=1: scatterplot with fitted line, only works for simple regression
 plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="darkgray", add=FALSE, add.points=TRUE, add.ci=TRUE, breaks=20, ...) {
     
     has.boot.samples=FALSE
@@ -946,11 +970,11 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="darkgray", add=FALS
     }    
     
     fit=x
-    linkinv=fit$best.fit$family$linkinv
+    linkinv=get(fit$family)()$linkinv
     if(is.null(xlim)) xlim=range(fit$best.fit$data[[fit$chngpt.var]])
     
     if(which==1) {
-    # scatterplot with fitted line, only works for simple regression
+    # scatterplot with lines
         if(!add) plot(fit$best.fit$data[[fit$chngpt.var]], fit$best.fit$y, xlim=xlim, xlab=fit$chngpt.var, ylab=names(fit$best.fit$model)[1], type="n", ...)
         chngpt.est=fit$chngpt        
         intercept=coef(fit)[1]
@@ -982,11 +1006,11 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="darkgray", add=FALS
     
 }
 
-summary.chngptm=function(object, var.type=NULL, verbose=FALSE, ...) {    
+summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) {    
     # "Estimate" "Std. Error" "t value" "Pr(>|t|)"        
     fit=object
     p.z=length(fit$coefficients)
-    n=nrow(fit$best.fit$data)
+    n=fit$n
     type=fit$type
     
     if (is.null(fit$vcov)) {
@@ -1017,7 +1041,7 @@ summary.chngptm=function(object, var.type=NULL, verbose=FALSE, ...) {
     res=list()
     
     # coefficients
-    transf=if(fit$family=="binomial") exp else if (fit$family=="gaussian") identity
+    transf=if(fit$family=="binomial" & expo) exp else identity
     if (boot.conf){
         lb=transf(vcov[1,])
         ub=transf(vcov[2,])
@@ -1040,7 +1064,7 @@ summary.chngptm=function(object, var.type=NULL, verbose=FALSE, ...) {
         )
     })
     rownames(res$coefficients)=names(fit$coefficients)[-p.z]
-    colnames(res$coefficients)[1]=if(fit$family=="binomial") "OR" else if (fit$family=="gaussian") "Est"
+    colnames(res$coefficients)[1]=if(fit$family=="binomial" & expo) "OR" else "Est"
     
     # change point
     i=p.z
@@ -1205,4 +1229,19 @@ good.soln=function(fit, df=7, plot=FALSE) {
     if(length(optimum.1)!=1) return (FALSE) else {
         if (abs(match(fit$chngpt,fit$chngpts)-optimum.1)<=length(fit$chngpts)/10) return (TRUE) else return (FALSE) # 20 is hardcoded
     }        
+}
+
+
+get.chngpts=function (chngpt.var.sorted, nLower, nUpper, n.chngpts) {
+    
+#    # old from chngptm, take the mid points between data points as change point candidates. For step models, use any point in between does not change likelihood, but it does change likelihood for segmented model
+#    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
+    
+    chngpts=chngpt.var.sorted[nLower:nUpper]            
+    if (length(chngpts)>n.chngpts) chngpts=chngpts[round(seq(1,length(chngpts),length=n.chngpts))]
+    
+#    # old from chngpt.test, chngpts are mostly between observed values
+#    chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt)) 
+    
+    chngpts
 }

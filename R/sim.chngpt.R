@@ -9,6 +9,7 @@ sim.chngpt = function (
     alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
     n, seed, 
     weighted=FALSE, # sampling weights
+    heteroscedastic=FALSE,
     verbose=FALSE) 
 {
     
@@ -16,6 +17,7 @@ sim.chngpt = function (
     if (!is.numeric(n)) stop("n is not numeric")
     
     if (missing(threshold.type) & startsWith(mean.model,"thresholded")) stop("threshold.type mssing")
+    if (missing(family)) stop("family mssing")
     threshold.type<-match.arg(threshold.type)    
     mean.model<-match.arg(mean.model)    
     family<-match.arg(family)    
@@ -170,7 +172,7 @@ sim.chngpt = function (
     } else if (mean.model=="z2") { 
     # z^2
         X=cbind(1,     z,        z*z)
-        coef.=c(alpha=-1, z=coef.z, z.quad=0.3)
+        coef.=c(alpha=alpha, z=coef.z, z.quad=0.3)
     
     } else stop("mean.model not supported: "%+%mean.model)     
     if (verbose) myprint(coef., digits=10)
@@ -178,7 +180,15 @@ sim.chngpt = function (
     linear.predictors=drop(X %*% coef.)
     # simulate y
     if(startsWith(x.distr,"fix")) set.seed(seed)
-    y=if(family=="binomial") rbern(n, expit(linear.predictors)) else if(family=="gaussian") rnorm(n, linear.predictors, sd)
+    y=if(family=="binomial") {
+        rbern(n, expit(linear.predictors)) 
+    } else if(family=="gaussian") {
+        if (!heteroscedastic) {
+            rnorm(n, linear.predictors, sd)
+        } else {
+            rnorm(n, linear.predictors, sd*abs(linear.predictors))
+        }
+    }
     
     dat=data.frame (
         y=y,
@@ -216,8 +226,18 @@ sim.chngpt = function (
             dat=dat[rbern(n, dat$sampling.p)==1,]
             
         } else if (family=="binomial") {
+            # create strata
+            dat$strata=2-dat$y # 1: cases; 2: controls
+            dat$strata[dat$strata==2 & dat$z>0]=3
+            #table(dat$strata)
+            dat$sampling.p[dat$strata==1]=1
+            dat$sampling.p[dat$strata==2]=1
+            dat$sampling.p[dat$strata==3]=0.5
+            dat=dat[rbern(n, dat$sampling.p)==1,]
             
-        }
+        } else stop("weighted not supported here yet")
+    } else {
+        dat$sampling.p=rep(1, nrow(dat))
     }
     
     dat

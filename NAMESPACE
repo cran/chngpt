@@ -1,7 +1,7 @@
 useDynLib(chngpt, .registration = TRUE)
 
 export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm,  antoch.test, performance.unit.test, plot.chngptm)
-export(sim.pastor, sim.my, sim.chngpt, lincomb) 
+export(sim.pastor, sim.my, sim.chngpt, lincomb, sim.hinge, hinge.test ) 
 
 importFrom(kyotil, '%+%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope)
 importFrom(MASS, mvrnorm)
@@ -15,10 +15,11 @@ importFrom("stats", "as.formula", "coef", "complete.cases", "cov2cor",
              "model.matrix", "na.pass", "optim", "pchisq", "pnorm",
              "predict", "pt", "qt", "quantile", "rbeta", "rgamma",
              "rnorm", "runif", "update", "density", "dnorm", "qchisq", "qnorm",
-             "smooth.spline", "vcov", "sigma", "resid")
+             "smooth.spline", "vcov", "sigma", "resid", "lm.fit", "rbinom", "residuals")
 
-S3method(coef,chngptm)
-S3method(vcov,chngptm)
+S3method(coef, chngptm)
+S3method(residuals,chngptm)
+S3method(vcov, chngptm)
 S3method(summary,chngptm)
 S3method(print,chngptm)
 S3method(print,summary.chngptm)

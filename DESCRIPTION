@@ -1,9 +1,9 @@
 Package: chngpt
 LazyLoad: yes
 LazyData: yes
-Version: 2018.3-29
+Version: 2018.5-2
 Title: Estimation and Hypothesis Testing for Threshold Regression
-Author: Youyi Fong
+Authors@R: c(person("Youyi", "Fong", role = "cre", email = "youyifong@gmail.com"), person("Zonglin", "He", role = "aut", email = "nkhezl@gmail.com")  )
 Maintainer: Youyi Fong <youyifong@gmail.com>
 Depends: R (>= 3.2.0), MASS, boot
 Suggests: R.rsp, RUnit, mvtnorm
@@ -12,6 +12,8 @@ VignetteBuilder: R.rsp
 Description: Threshold regression models are also called two-phase regression, broken-stick regression, split-point regression, structural change models, and regression kink models. Methods for both continuous and discontinuous threshold models are included, but the support for the former is much greater. This package is described in Fong, Huang, Gilbert and Permar (2017) chngpt: threshold regression model estimation and inference, BMC Bioinformatics, in press, <DOI:10.1186/s12859-017-1863-x>. 
 License: GPL (>= 2)
 NeedsCompilation: yes
-Packaged: 2018-03-29 16:52:58 UTC; Youyi
+Packaged: 2018-05-02 04:08:42 UTC; Youyi
+Author: Youyi Fong [cre],
+  Zonglin He [aut]
 Repository: CRAN
-Date/Publication: 2018-03-29 20:05:42 UTC
+Date/Publication: 2018-05-02 07:43:25 UTC

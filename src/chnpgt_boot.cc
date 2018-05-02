@@ -91,6 +91,7 @@ extern "C" {
   
 
   // assume X is sorted in chngptvar from small to large
+  // assume last col of X is chngptvar
   // nLower and nUpper are 1-based index
   void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, double * w, bool wAllOne, int nLower, int nUpper, int n, int p, 
     Matrix<double,Row>& Xcusum, vector<double>& Ycusum, vector<double>& Wcusum, vector<double>& thresholds, vector<double>& Cps, 
@@ -160,7 +161,7 @@ extern "C" {
         
         // Step 3 and 4b: compute Y'HY                
         Ainv = invpd(A);
-        rss=0; for (j=0; j<p; j++) for (int k=0; k<p; k++) rss -= C[j] * C[k] * Ainv(j,k);
+        rss=0; for (j=0; j<p; j++) for (int k=0; k<p; k++) rss -= C[j] * C[k] * Ainv(j,k); // -Y'HY
         ans1[i-(nLower-1)] = rss;
         if(rss<=rss_min) {
             chosen = i-(nLower-1);
@@ -179,6 +180,7 @@ extern "C" {
 
 
   // assume X is sorted in chngptvar from small to large
+  // assume last col of X is chngptvar
   // nLower and nUpper are 1-based index
   SEXP fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper)
   {
@@ -437,6 +439,7 @@ extern "C" {
     Matrix<double> A1=crossprod1(X);
     for (i=0; i<p; i++) {for (j=0; j<p; j++)  PRINTF("%f ", A(i,j)); PRINTF("\n");}        
     for (i=0; i<p; i++) {for (j=0; j<p; j++)  PRINTF("%f ", A1(i,j)); PRINTF("\n");}        
+    
     
     double* Xpnt = X.getArray();
     double* Xcolpnt = Xcol.getArray();
