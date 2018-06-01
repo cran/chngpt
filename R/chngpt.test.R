@@ -163,12 +163,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
             diag(length(mu.h)) * summary(fit.null)$dispersion # dispersion is variance estimate under gaussian family
         }
     } else {
-        D.h = if (family=="binomial") {
-            stop("no robust test for logistic regression yet")
-        } else if (family=="gaussian") {
-            diag(resid(fit.null)**2)
-        }
-        #str(D.h)
+        D.h = diag(resid(fit.null, type="response")**2)
     }
     
     DW = if(prec.w.all.one) D.h else diag(diag(D.h) * prec.weights)
@@ -262,7 +257,6 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
         }
     
     } else if (p.val.method=="param.boot") {    
-    
         if (!fastgrid.ok | test.statistic=="score") stop("only /lr method and fastgrid.ok is supported for parametric bootstrap for now")
         
         sd.null=sqrt(summary(fit.null)$dispersion)
@@ -271,7 +265,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
             # simulate from fit.null
             y.b=rnorm(n, linear.predictors.null.sorted, sd.null) 
             llik.null.b=-n/2*log(mean(lm.fit(Z.sorted, y.b)$residuals**2)) # #tmpfit=lm(y~Girth, data.frame(y=y.b, Z)); logLik(tmpfit) + n/2*(1+log(2*pi)) # same as llik.null.b
-            rss = sum(y.b**2) + .Call("fastgrid_search", cbind(Z.sorted,chngpt.var.sorted), as.double(y.b), as.double(w.sorted), prec.w.all.one, nLower, nUpper) 
+            rss = sum(y.b**2) + .Call("fastgrid_search", cbind(Z.sorted,chngpt.var.sorted), as.double(y.b), as.double(w.sorted), prec.w.all.one, attr(chngpts,"index")) 
             2 * (max(-n/2*log(rss/n)) - llik.null.b)
         })
         p.value = mean(Q.max.boot>Q.max)      

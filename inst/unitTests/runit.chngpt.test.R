@@ -28,13 +28,15 @@ test.chngpt.test <- function() {
     checkEqualsNumeric(test$p.value, 0.1745, tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z+I(z^2), formula.chngpt=~x, family="gaussian", data=data, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr")
     checkEqualsNumeric(test$p.value, 0.5628, tolerance=tolerance) 
-    test = chngpt.test (formula.null=y~1, formula.chngpt=~z, family="gaussian", data=data, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr", p.val.method="param.boot")
-    checkEqualsNumeric(test$p.value, 0.1764, tolerance=tolerance) 
+    test = chngpt.test (formula.null=y~1, formula.chngpt=~z, family="gaussian", data=data, type="segmented", boot.B=1e3, verbose=verbose, chngpts.cnt=100, test.statistic="lr", p.val.method="param.boot")
+    checkEqualsNumeric(test$p.value, 0.178, tolerance=tolerance) 
 #    test = chngpt.test (formula.null=y~1, formula.chngpt=~z, family="gaussian", data=data, type="hinge", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr")
 #    checkEqualsNumeric(test$p.value, 0, tolerance=tolerance) 
 #    test = chngpt.test (formula.null=y~1, formula.chngpt=~z, family="gaussian", data=data, type="hinge", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr", p.val.method="param.boot")
 #    checkEqualsNumeric(test$p.value, 0, tolerance=tolerance) 
     
+#    test = chngpt.test (formula.null=y~-1+z+I(z^2), formula.chngpt=~x, family="gaussian", data=data, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr")
+#    checkEqualsNumeric(test$p.value, 0.5628, tolerance=tolerance) 
 
     #################################
     # logistic regression

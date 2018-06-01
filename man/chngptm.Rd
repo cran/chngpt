@@ -21,7 +21,7 @@ chngptm (formula.1, formula.2, family, data,
   type=c("step","hinge","segmented","segmented2","stegmented"), 
   # segmented2 is the model studied in Cheng 2008
   weights=NULL, # this arg is kept here due to historical reasons
-  est.method=c("default","smoothapprox","grid","fastgrid"), useC=TRUE, 
+  est.method=c("default","smoothapprox","grid","fastgrid"), 
   var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), 
   aux.fit=NULL, 
   lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
@@ -70,7 +70,6 @@ lincomb(object, comb, alpha=0.05)
   \item{chngpt.init}{numeric. Initial value for the change point.}
   \item{weights}{passed to glm}
   \item{verbose}{Boolean.}
-  \item{useC}{Boolean.}
   \item{add.points}{Boolean.}
   \item{add.ci}{Boolean.}
   \item{add}{Boolean.}
@@ -96,6 +95,8 @@ lincomb(object, comb, alpha=0.05)
 \details{
 Without lb.quantile and ub.quantile, finite sample performance of estimator drops considerably!
 When est.method is smoothapprox, Newton-Raphson is done with initial values chosen by change point hypothesis testing. The testing procedure may be less subjective to finite sample volatility. 
+
+If var.method is bootstrap, summary of fitted model contains p values for each estimated slope. These p values are approximate p-values, obtained assuming that the bootstrap distributions are normal. 
 
 }
 \value{

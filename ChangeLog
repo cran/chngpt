@@ -65,3 +65,7 @@
 2018-04-23  Youyi Fong
 	* Add support for cbind() on the lhs for the binomial family. Both grid
 	and smoothapprox are supported.
+
+2018-05-17
+	* Implement fastgrid for thinned thresholds. 
+	* Deprecate useC for grid search

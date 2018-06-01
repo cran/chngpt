@@ -1,6 +1,6 @@
 expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 sim.chngpt = function (
-    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2"), 
+    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear"), 
     threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),# segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
     b.transition=Inf,
     family=c("binomial","gaussian"), 
@@ -80,7 +80,7 @@ sim.chngpt = function (
     if (is.null(e.) | !startsWith(mean.model,"thresholded")) e.=4.7 # hard code e. for mean models other than thresholded
     if (verbose) {print(e.); print(mean(x<e.))}
     
-    x.star = expit.2pl(x, e=e., b=b.transition)  
+    x.star = expit.2pl(x, e=e., b=b.transition)  # 0 when x is smaller than e. and 1 otherwise
     
         
     #######################################################################################
@@ -172,7 +172,19 @@ sim.chngpt = function (
     } else if (mean.model=="z2") { 
     # z^2
         X=cbind(1,     z,        z*z)
-        coef.=c(alpha=alpha, z=coef.z, z.quad=0.3)
+        coef.=c(alpha=alpha, z=coef.z, z.quad=0.3)    
+    } else if (mean.model=="z2hinge") { 
+    # z^2 + (x-e)+
+        X=cbind(1,     z,        z*z,     x.star*(x-e.))
+        coef.=c(alpha=alpha, z=coef.z, z.quad=0.3, beta)
+    } else if (mean.model=="z2linear") { 
+    # z^2 + x
+        X=cbind(1,     z,        z*z,     x)
+        coef.=c(alpha=alpha, z=coef.z, z.quad=0.3, -log(.67))    
+    } else if (mean.model=="z2segmented") { 
+    # z^2 + x + (x-e)+
+        X=cbind(1,     z,        z*z,     x,    x.star*(x-e.))
+        coef.=c(alpha=alpha, z=coef.z, z.quad=0.3, -log(.67), beta)
     
     } else stop("mean.model not supported: "%+%mean.model)     
     if (verbose) myprint(coef., digits=10)

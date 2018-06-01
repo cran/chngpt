@@ -1,8 +1,8 @@
-# useC=T; tol=1e-4; maxit=1e2; verbose=TRUE; est.method="fastgrid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fit=NULL        
+# tol=1e-4; maxit=1e2; verbose=TRUE; est.method="fastgrid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fit=NULL        
 #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
 chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
   weights=NULL, # this arg is kept here due to historical reasons
-  est.method=c("default","smoothapprox","grid","fastgrid"), useC=TRUE, 
+  est.method=c("default","smoothapprox","grid","fastgrid"), 
   var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), aux.fit=NULL, 
   lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
   test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
@@ -17,6 +17,10 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     type<-match.arg(type)    
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
+    
+    # useC used to be a parameter, but has been deprecated. 
+    # We may further remove useC from this function later. 
+    useC=FALSE
     
     # remove missing observations
     subset. = complete.cases(model.frame(update(formula.1, formula.2), data, na.action=na.pass))
@@ -95,14 +99,14 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
         warning ("Fastgrid only implemented for guassian family and hinge/segmented models without interaction. Switching to grid search ...")
         est.method="grid"
     }
-    if(est.method=="grid" & useC & (!fastgrid.ok | !w.all.one)) useC=FALSE # useC for grid only supports a subset of scenario that supports fastgrid, namely no weight support
+    #if(est.method=="grid" & useC & (!fastgrid.ok | !w.all.one)) useC=FALSE # useC for grid only supports a subset of scenario that supports fastgrid, namely no weight support
     if (est.method=="default") {
         if(fastgrid.ok) { est.method="fastgrid" 
         } else if(family=="binomial") { est.method="smoothapprox"
         } else { est.method="grid"; useC=FALSE
         }        
     }
-    if (fastgrid.ok & est.method!="fastgrid") cat("For linear models, fastgrid is the best est.method.\n")
+    if (fastgrid.ok & est.method!="fastgrid" & var.type!="none") cat("Note that for linear models, fastgrid is the best est.method.\n") # var.type condition is added so that this is not printed during bootstrap
     
     # sorted data
     chngpt.var.sorted=sort(chngpt.var)
@@ -117,17 +121,23 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile)
     # an alternative and equivalent way to define nLower/nUpper: nLower=sum(chngpt.var.sorted<quantile(chngpt.var.sorted, lb.quantile))+1; nUpper=sum(chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile));myprint(nLower, nUpper)
     chngpts=get.chngpts(chngpt.var.sorted,nLower,nUpper,n.chngpts=grid.search.max)
-    msg="If there are more data between lower and upper bound than grid.search.max, fastgrid.search cannot be used yet. One could try increasing grid.search.max."
-    if (nUpper-nLower+1>grid.search.max & est.method=="fastgrid") stop(msg)
+#    msg="If there are more data between lower and upper bound than grid.search.max, fastgrid.search cannot be used yet. One could try increasing grid.search.max."
+#    if (nUpper-nLower+1>grid.search.max & est.method=="fastgrid") stop(msg)
     
     grid.search=function(){
-        if(fastgrid.ok & (est.method=="fastgrid" | est.method=="grid" & useC)) {
+        if(fastgrid.ok & (est.method=="fastgrid")) {
             # putting as.double around a matrix changes the matrix into a vector, which affects 
             # as.double is needed around y.sorted b/c if y.sort is integer, this throws an error b/c the cpp function expects real
             # logliks is actually Y' * H_e * Y here
             if(verbose) myprint(fastgrid.ok, est.method, useC)
-            f.name=est.method%+%"_search" # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
-            logliks=-.Call(f.name, cbind(Z.sorted,chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), as.double(y.sorted), as.double(w.sorted), w.all.one, nLower, nUpper) 
+            f.name=est.method%+%"_search" # It is weird but f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+            logliks=-.Call(f.name, 
+                cbind(Z.sorted, chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), #the last column is to be (x-e)+
+                as.double(y.sorted), 
+                as.double(w.sorted), w.all.one, 
+                attr(chngpts,"index")) 
+            #print(sum(y.sorted**2)-logliks) 
+                
         } else {
             if(verbose) myprint(fastgrid.ok, est.method, useC)
             logliks=sapply (chngpts, function(e) {
@@ -142,11 +152,11 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                     }
                     as.numeric(logLik(fit$value))
                 } else as.numeric(logLik(fit$value))            
-                # debug use in conjunction with line +4 to compare C and R implementations
+                # to compare with fastgrid, uncomment the next line
                 #sum(resid(fit$value)**2)
             } )
+            #print(logliks)
         }
-        #plot(sum(y.sorted**2)-logliks.old, logliks) #logliks.old refers to .Call output
     
         e=chngpts[which.max(logliks)]
 #        print(logliks)
@@ -174,8 +184,9 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
         e.init=chngpt.init
         if (is.null(e.init)) {
             if(verbose) cat("initializing through coarse grid search\n")
+            # est.method has to be grid in the following, otherwise it will create an infinite loop
             tmp=chngptm (formula.1, formula.2, family=family, data, type=type, weights=weights, est.method="grid", lb.quantile=lb.quantile, ub.quantile=ub.quantile, grid.search.max=50, 
-                        b.transition=b.transition, search.bound=search.bound, keep.best.fit=FALSE, verbose=0) 
+                        b.transition=b.transition, search.bound=search.bound, keep.best.fit=FALSE, verbose=ifelse(verbose>3,verbose-3,0))# pass verbose-3 directly seems to fail to do the job 
             e.init=tmp$chngpt
         } 
         
@@ -629,7 +640,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                 if (class(save.seed)=="try-error") {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
                 set.seed(1)     # this is only added on 7/30/2017, well after biometrics paper is published. should not change the results qualitatively
                 
-                if (fastgrid.ok & (est.method=="grid" & useC | est.method=="fastgrid")) {                    
+                if (fastgrid.ok & (est.method=="fastgrid")) {                    
                     boot.out=list()
                     class(boot.out)="boot"
                     boot.out$t0=coef.hat
@@ -641,7 +652,12 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                     
                     # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
                     f.name="boot_"%+%est.method%+%"_search"
-                    boot.out$t=.Call(f.name, cbind(Z.sorted,chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), as.double(y.sorted), as.double(w.sorted), w.all.one, nLower, nUpper, ci.bootstrap.size) # this is a problem, Z may not have chngptvar as the last 
+                    boot.out$t=.Call(f.name, 
+                        cbind(Z.sorted, chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), 
+                        as.double(y.sorted), 
+                        as.double(w.sorted), w.all.one, 
+                        attr(chngpts,"index"),
+                        ci.bootstrap.size) 
                     boot.out$t=t(matrix(boot.out$t, ncol=ci.bootstrap.size))
                     
                 } else {
@@ -1045,7 +1061,9 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) 
     if (boot.conf){
         lb=transf(vcov[1,])
         ub=transf(vcov[2,])
-        pval=rep(NA,p.z)        
+        # an approximate p value, prompted by comment about it being NA from Katie Chartrand, James Cook University
+        sd.star=(vcov[2,]-vcov[1,])/1.96/2
+        pval=pnorm(abs(fit$coefficients/sd.star), lower.tail=F)*2
     } else  {
         lb=transf(unname(fit$coefficients[1:(p.z-1)] - sqrt(diag(vcov)) * qt(0.975, df=n-p.z, lower.tail=TRUE)))
         ub=transf(unname(fit$coefficients[1:(p.z-1)] + sqrt(diag(vcov)) * qt(0.975, df=n-p.z, lower.tail=TRUE)))
@@ -1054,9 +1072,9 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) 
     res$coefficients=mysapply(1:(p.z-1), function (i) {
         c(
               transf(unname(fit$coefficients[i]))
-            , "p.value" = pval[i]
-            , "(lower" = lb[i]
-            , "upper)" = ub[i]
+            , "p.value" = unname(pval[i])
+            , "(lower" = unname(lb[i])
+            , "upper)" = unname(ub[i])
 #              "Estimate"=unname(fit$coefficients[i])
 #            , "Std. Error" = sqrt(vcov[i,i])
 #            , "t value" = unname(fit$coefficients[i] / sqrt(vcov[i,i]))
@@ -1064,7 +1082,8 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) 
         )
     })
     rownames(res$coefficients)=names(fit$coefficients)[-p.z]
-    colnames(res$coefficients)[1]=if(fit$family=="binomial" & expo) "OR" else "Est"
+    colnames(res$coefficients)[1]=if(fit$family=="binomial" & expo) "OR" else "est"
+    if(boot.conf) colnames(res$coefficients)[2]=colnames(res$coefficients)[2]%+%"*"
     
     # change point
     i=p.z
@@ -1100,6 +1119,7 @@ print.summary.chngptm=function(x,...) {
     cat("Coefficients:\n")
     print(x$coefficients)
     cat("\nThreshold:\n")
+    names(x$chngpt)[1]="est" # Thanks to Katie Chartrand, James Cook University
     print(x$chngpt)    
 }
 
@@ -1237,8 +1257,16 @@ get.chngpts=function (chngpt.var.sorted, nLower, nUpper, n.chngpts) {
 #    # old from chngptm, take the mid points between data points as change point candidates. For step models, use any point in between does not change likelihood, but it does change likelihood for segmented model
 #    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
     
-    chngpts=chngpt.var.sorted[nLower:nUpper]            
-    if (length(chngpts)>n.chngpts) chngpts=chngpts[round(seq(1,length(chngpts),length=n.chngpts))]
+    chngpts=chngpt.var.sorted[nLower:nUpper]
+    ind=round(seq(1,length(chngpts),length=n.chngpts))
+    if (length(chngpts)>n.chngpts) {
+        # get a subset of chngpts 
+        chngpts=chngpts[ind]
+        attr(chngpts, "index")=(nLower:nUpper)[ind]
+    } else {
+        # use all chngpts
+        attr(chngpts, "index")=nLower:nUpper
+    }
     
 #    # old from chngpt.test, chngpts are mostly between observed values
 #    chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt)) 

@@ -11,6 +11,11 @@ test.chngptm <- function() {
     print(tolerance)
     verbose = FALSE
 
+    # thinned thresholds, through grid.search.max
+    fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="segmented", est.method="fastgrid", grid.search.max=10, var.type="none", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+    fit.1=chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="segmented", est.method="grid",     grid.search.max=10, var.type="none", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+    checkEqualsNumeric(fit$coefficients, fit.1$coefficients, tolerance=tolerance)    
+
     # performance unit testing
     data=sim.chngpt("quadratic", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="gaussian")      
     system.time(capture.output(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)))
@@ -21,19 +26,19 @@ test.chngptm <- function() {
     data=sim.chngpt("quadratic", n=1000, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="gaussian")      
     system.time(capture.output(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 1)))
     system.time(capture.output(performance.unit.test (formula.1=y~z, formula.2=~x, family="gaussian", data, 200, 2)))
-        
+    
     # ci.bootstrap.size being 1 or 5 affects the first bootstrap sample because of the way random numbers are generated and used. 
     # note family is binomial by accident
     data=sim.chngpt("quadratic", n=60, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="binomial")      
     # weighted linear models fit
-    fit.a = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="grid", useC=FALSE, var.type="none", weights=rep(1:2,each=30))
-    fit.b = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="fastgrid",         var.type="none", weights=rep(1:2,each=30), verbose=verbose)
-    fit.c = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="smoothapprox",     var.type="none", weights=rep(1:2,each=30), verbose=verbose)
+    fit.a = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="grid",         var.type="none", weights=rep(1:2,each=30))
+    fit.b = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="fastgrid",     var.type="none", weights=rep(1:2,each=30), verbose=verbose)
+    fit.c = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="smoothapprox", var.type="none", weights=rep(1:2,each=30), verbose=verbose)
     checkEqualsNumeric(coef(fit.a), coef(fit.b), tolerance=tolerance)    
     checkEqualsNumeric(coef(fit.c), c(-1.0047160,0.1049567,0.3468411,-0.3261100), tolerance=tolerance)    
     # weighted logistic models fit
-    fit.d = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="segmented", est.method="grid", useC=FALSE, var.type="none", weights=rep(1:2,each=30), verbose=verbose)
-    fit.e = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="segmented", est.method="smoothapprox",     var.type="none", weights=rep(1:2,each=30), verbose=verbose)
+    fit.d = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="segmented", est.method="grid",         var.type="none", weights=rep(1:2,each=30), verbose=verbose)
+    fit.e = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="segmented", est.method="smoothapprox", var.type="none", weights=rep(1:2,each=30), verbose=verbose)
     checkEqualsNumeric(coef(fit.d), c(-8.4120932,0.8365985,1.9086715,135.5846880), tolerance=tolerance)    
     checkEqualsNumeric(coef(fit.e), c(-8.5621192,0.8431925,1.9465604,1713.3986973), tolerance=tolerance)    
     
@@ -44,13 +49,13 @@ test.chngptm <- function() {
     checkEqualsNumeric(fit$vcov$boot.samples[1,], c(-1.12622283,0.09335172,0.39529622,-0.43627796,5.49760748,9.19697651,10.09715698), tolerance=tolerance)        
     checkEqualsNumeric(fit$vcov$symm[1,], c(-1.776669105,-0.009065366,0.104055843,-0.612082626,5.161310881), tolerance=tolerance)            
     # useC or not leads to different bootstrap results b/c bootstrap data are generated differently
-    fit.1 = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=5, boot.test.inv.ci=TRUE, save.boot=TRUE, useC=FALSE)
+    fit.1 = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=5, boot.test.inv.ci=TRUE, save.boot=TRUE)
     checkEqualsNumeric(fit.1$vcov$symm[1,], c(-2.2037845,-0.0121389,-0.0834454,-1.0730307,3.7849741), tolerance=tolerance)    
-    fit.2 = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=5, boot.test.inv.ci=TRUE, save.boot=TRUE, useC=TRUE)
-    checkEqualsNumeric(fit.2$vcov$symm[1,], c(-2.470325465,0.009685969,-0.073207089,-0.707083210,4.702745101), tolerance=tolerance)    
-    fit.3 = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=5, boot.test.inv.ci=TRUE, save.boot=TRUE, useC=TRUE)
+#    fit.2 = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=5, boot.test.inv.ci=TRUE, save.boot=TRUE, useC=TRUE)
+#    checkEqualsNumeric(fit.2$vcov$symm[1,], c(-2.470325465,0.009685969,-0.073207089,-0.707083210,4.702745101), tolerance=tolerance)    
+    fit.3 = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", data,  type="segmented", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=5, boot.test.inv.ci=TRUE, save.boot=TRUE)
     checkEqualsNumeric(fit.3$vcov$symm[1,], c(-2.470325465,0.009685969,-0.073207089,-0.707083210,4.702745101), tolerance=tolerance)    
-    checkEqualsNumeric(coef(fit.2), coef(fit.3), tolerance=tolerance)    
+    checkEqualsNumeric(c(-0.79278049,0.04070927,0.32493281,-0.33134206), coef(fit.3), tolerance=tolerance)    
     # Also note that sym CI also depends on est, thus est.method makes a difference. Although, now that est.method.boot is removed as an argument, this may not have any real impact
     
     # cbind() in formula
@@ -103,7 +108,7 @@ test.chngptm <- function() {
     
     #formula.1=Volume~1; formula.2=~Girth; family="gaussian"; trees;  type="hinge"; est.method="fastgrid"; var.type="none"; verbose=verbose; lb.quantile=0.1; ub.quantile=0.9; tol=1e-4; maxit=1e3
     fit = chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="hinge", est.method="fastgrid", var.type="none", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
-    fit.1=chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="hinge", est.method="grid", useC=FALSE, var.type="none", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+    fit.1=chngptm (formula.1=Volume~1, formula.2=~Girth, family="gaussian", trees,  type="hinge", est.method="grid",     var.type="none", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
     checkEqualsNumeric(fit$coefficients, fit.1$coefficients, tolerance=tolerance)    
     
     ########################################
@@ -123,8 +128,8 @@ test.chngptm <- function() {
     checkEqualsNumeric(fit$vcov$symm[1,], c(-0.4888763,0.6802883,-6.0128577,4.4632592), tolerance=tolerance)
     checkEqualsNumeric(fit$vcov$testinv[,4], c(1.043623,6.013954), tolerance=tolerance)
     
-    fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="gaussian", data[1:100,], type="hinge", est.method="grid", var.type="bootstrap", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=100, save.boot=TRUE)
-    checkEqualsNumeric(fit$vcov$boot.samples[2,], c(0.4613017,0.18780891,-0.1779347,4.416634,16.134385), tolerance=tolerance)
+    fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="gaussian", data[1:100,], type="hinge", est.method="grid", var.type="bootstrap", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=10, save.boot=TRUE)
+    checkEqualsNumeric(fit$vcov$boot.samples[2,], c(0.5145782,0.1862760,-0.2376753,4.7962567), tolerance=tolerance)
     
     
     ########################################

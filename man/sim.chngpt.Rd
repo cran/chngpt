@@ -10,8 +10,8 @@ Generate simulation datasets for change point Monte Carlo studies.
 \usage{
 
 sim.chngpt (
-    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b",
-        "cubic2b","exp","flatHyperbolic","z2"), 
+    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b",
+        "exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear"), 
     threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),
 #segmented2 differs from segmented in parameterization, it is studied in Cheng 2008
     b.transition=Inf,

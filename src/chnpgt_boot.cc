@@ -1,3 +1,8 @@
+// There are four main functions: fastgrid_search, boot_fastgrid_search, grid_search, boot_grid_search. 
+// Both fastgrid_search and boot_fastgrid_search call _fastgrid_search.
+// grid_search and boot_grid_search are commented out because it is done as a comparator and did not implemented weights, thinned thresholds etc.
+
+
 //////////////////////////////////////////////////////////////////////////
 // 
 // This software is distributed under the terms of the GNU GENERAL
@@ -88,18 +93,16 @@ static void SampleReplace(int k, int n, int *y)
 
 
 extern "C" {
-  
-
-  // assume X is sorted in chngptvar from small to large
-  // assume last col of X is chngptvar
-  // nLower and nUpper are 1-based index
-  void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, double * w, bool wAllOne, int nLower, int nUpper, int n, int p, 
+         
+  //vectors such as thresholds are defined outside this function since when bootstrapping, we don't want to allocate the memory over and over again
+  void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, double * w, bool wAllOne, int * thresholdIdx,
+    int n, int p, int nThresholds,
     Matrix<double,Row>& Xcusum, vector<double>& Ycusum, vector<double>& Wcusum, vector<double>& thresholds, vector<double>& Cps, 
     double* ans1, double* ans2)
   {
 
-    // loop index
-    int i,j;
+    // loop index. iX is the index of the x vector, i is the index of threshold vector
+    int i,iX,j;
     
 	int chosen=0;//initialize to get rid of compilation warning
     vector<double> C(p); 
@@ -122,16 +125,15 @@ extern "C" {
     //for (i=0; i<n; i++) PRINTF("%f ", Ycusum[i]); PRINTF("\n");
     
     // grid of e
-    for(i=nLower-1; i<nUpper; i++) thresholds[i-nLower+1]=X(i,p-1);
+    for(i=0; i<nThresholds; i++) thresholds[i]=X(thresholdIdx[i]-1,p-1);
 
     Matrix <double> A, Ainv, Ainv_save;
     double delta, rss, rss_min=R_PosInf;
     
-    // Step 2: compuate A:=X_e'X_e and C:=X_e'Y at the first point in the grid
+    // Step 2: Initialize A and C at the first point in the grid
     // compute X_e
-    for(i=0; i<nLower-1; i++) X(i,p-1)=0;  
-    // change from nLower-1 to n-1, but has to be from back to front
-    for(i=n-1; i>nLower-2; i--) X(i,p-1)=X(i,p-1)-X(nLower-1,p-1); 
+    for(iX=0; iX<thresholdIdx[0]; iX++) X(iX,p-1)=0;  
+    for(iX=thresholdIdx[0]; iX<n; iX++) X(iX,p-1)=X(iX,p-1)-thresholds[0]; 
     //for (j=0; j<n; j++) PRINTF("%f ", X(j,p-1)); PRINTF("\n");
     if(wAllOne) {
         for (j=0; j<p; j++) {C[j]=0; for (int k=0; k<n; k++) C[j] += X(k,j) * Y[k];}
@@ -139,32 +141,34 @@ extern "C" {
     } else {
         for (j=0; j<p; j++) {C[j]=0; for (int k=0; k<n; k++) C[j] += X(k,j) * Y[k] * w[k];}
         // mutiply X with sqrt(w) before crossprod. Note that this changes X! Don't use X after this
-        for (i=0; i<n; i++) X(i,_)=X(i,_)*sqrt(w[i]);
+        for (iX=0; iX<n; iX++) X(iX,_)=X(iX,_)*sqrt(w[iX]);
         A = crossprod1(X);
     }
     Cps[0]=C[p-1];// save C[p-1]
             
     // loop through candidate thresholds
-    for(i=nLower-1; i<nUpper; i++) {            
-        // Step 4a: update A:=X'X and C:=X'Y
+    for(i=0; i<nThresholds; i++) {            
+        iX = thresholdIdx[i]-1; 
+           
+        // Step 4a: update A and C
         // wAllOne handled by replacing n-i with Wcusum(i)
-        if(i>nLower-1) {
-            delta= thresholds[i-nLower+1]-thresholds[i-nLower]; //X(i,p-1)-X(i-1,p-1); //PRINTF("%f ", delta); PRINTF("\n"); 
-            A(p-1,p-1) += pow(delta,2) * Wcusum[i]; // Delta' * W * Delta
-            for (j=0; j<p-1; j++) A(p-1,j) -= delta * Xcusum(i,j); // Delta' * W * X
+        if(i>0) {
+            delta= thresholds[i]-thresholds[i-1]; //X(i,p-1)-X(i-1,p-1); //PRINTF("%f ", delta); PRINTF("\n"); 
+            A(p-1,p-1) += pow(delta,2) * Wcusum[iX]; // Delta' * W * Delta
+            for (j=0; j<p-1; j++) A(p-1,j) -= delta * Xcusum(iX,j); // Delta' * W * X
             for (j=0; j<p-1; j++) A(j,p-1) = A(p-1,j);  // X' * W * Delta
-            A(p-1,p-1) -= 2 * delta * (Xcusum(i,p-1) - thresholds[i-nLower]*Wcusum[i]); // the last element of both Delta' * W * X and X' * W * Delta
-            C[p-1] -= delta * Ycusum[i];
-            Cps[i-nLower+1]=C[p-1];// save C[p-1]
+            A(p-1,p-1) -= 2 * delta * (Xcusum(iX,p-1) - thresholds[i-1]*Wcusum[iX]); // the last element of both Delta' * W * X and X' * W * Delta
+            C[p-1] -= delta * Ycusum[iX];
+            Cps[i]=C[p-1];// save C[p-1]
             //for (int k=0; k<p; k++) for (j=0; j<p; j++)  PRINTF("%f ", A(k,j)); PRINTF("\n");        
         }
         
-        // Step 3 and 4b: compute Y'HY                
+        // Step 4b (or step 3 when i=0): compute Y'HY                
         Ainv = invpd(A);
         rss=0; for (j=0; j<p; j++) for (int k=0; k<p; k++) rss -= C[j] * C[k] * Ainv(j,k); // -Y'HY
-        ans1[i-(nLower-1)] = rss;
+        ans1[i] = rss;
         if(rss<=rss_min) {
-            chosen = i-(nLower-1);
+            chosen = i;
             Ainv_save=Ainv;
             rss_min=rss;
         }             
@@ -173,16 +177,16 @@ extern "C" {
     // save results: estimated coefficients and threshold
     ans2[p]=thresholds[chosen];
     C[p-1]=Cps[chosen];
-    for (i=0; i<p; i++) { ans2[i]=0; for (j=0; j<p; j++) ans2[i]+=Ainv_save(i,j)*C[j]; }            
+    for (int jj=0; jj<p; jj++) { ans2[jj]=0; for (j=0; j<p; j++) ans2[jj]+=Ainv_save(jj,j)*C[j]; }            
     ans2[p+1]=-rss_min;
     
   }
 
 
   // assume X is sorted in chngptvar from small to large
-  // assume last col of X is chngptvar
-  // nLower and nUpper are 1-based index
-  SEXP fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper)
+  // assume last col of X is chngptvar, which will be updated as move through the grid
+  // thresholdIdx are 1-based index, which define the grid of thresholds
+  SEXP fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_thresholdIdx)
   {
     // input
     double* uX_dat = REAL(u_X);
@@ -191,11 +195,12 @@ extern "C" {
     bool wAllOne=asLogical(u_wAllOne)==1;
     const int n = nrows(u_X);
     const int p = ncols(u_X);
-    int nLower=asInteger (u_nLower);
-    int nUpper=asInteger (u_nUpper);
+    int *thresholdIdx=INTEGER(u_thresholdIdx);
+    int nThresholds=length(u_thresholdIdx);
+    //for (int i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
     
     // output
-    SEXP _ans=PROTECT(allocVector(REALSXP, nUpper-nLower+1));
+    SEXP _ans=PROTECT(allocVector(REALSXP, nThresholds));
     double *ans=REAL(_ans);        
     
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe
@@ -205,10 +210,11 @@ extern "C" {
     for (int i=0; i<n; i++) Y[i]=Y_dat[i]; 
 
     Matrix <double,Row,Concrete> Xcusum (n, p, true, 0);
-	vector<double> thresholds(nUpper-nLower+1), Cps(nUpper-nLower+1), Ycusum(n); 			
+	vector<double> thresholds(nThresholds), Cps(nThresholds), Ycusum(n); 			
 	vector<double> Wcusum(n);//double stats[p+2], Wcusum[n]; 
     double * stats = (double *) malloc((p+2) * sizeof(double));
-    _fastgrid_search(X, Y, W, wAllOne, nLower, nUpper, n, p, Xcusum, Ycusum, Wcusum, thresholds, Cps, ans, stats); // stats not used here
+    _fastgrid_search(X, Y, W, wAllOne, thresholdIdx, n, p, nThresholds, 
+                        Xcusum, Ycusum, Wcusum, thresholds, Cps, ans, stats); // stats not used here
         
     UNPROTECT(1);
     free(stats);
@@ -217,8 +223,7 @@ extern "C" {
        
   
   // assume X and Y are sorted
-  // nLower and nUpper are 1-based index
-  SEXP boot_fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP u_B)
+  SEXP boot_fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_thresholdIdx, SEXP u_B)
   {
     // put u_X and u_Y into Matrixes Xori and Y
     // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
@@ -226,8 +231,8 @@ extern "C" {
     const int n = nrows(u_X);
     const int p = ncols(u_X);
     double B = asReal(u_B);
-    int nLower=asInteger (u_nLower);
-    int nUpper=asInteger (u_nUpper);
+    int *thresholdIdx=INTEGER(u_thresholdIdx);
+    int nThresholds=length(u_thresholdIdx);
     
     // output
     SEXP _ans=PROTECT(allocVector(REALSXP, B*(p+2)));// p slopes, 1 threshold, 1 goodness of fit stat
@@ -244,9 +249,9 @@ extern "C" {
 	// these variables are reused within each bootstrap replicate
 	vector<int> index(n);
     Matrix <double,Row,Concrete> Xb (n, p), Xcusum (n, p, true, 0);
-	vector<double> thresholds(nUpper-nLower+1), Cps(nUpper-nLower+1), Ycusum(n), Yb(n); 
-	vector<double> Wcusum(n); //double rsses[nUpper-nLower+1], Wcusum[n];
-    double * rsses = (double *) malloc((nUpper-nLower+1) * sizeof(double));
+	vector<double> thresholds(nThresholds), Cps(nThresholds), Ycusum(n), Yb(n); 
+	vector<double> Wcusum(n); //double rsses[nThresholds], Wcusum[n];
+    double * rsses = (double *) malloc((nThresholds) * sizeof(double));
 
 	
     for (int b=0; b<B; b++) {        
@@ -256,7 +261,8 @@ extern "C" {
         sort (index.begin(), index.end());
         for (int i=0; i<n; i++) { Xb(i,_)=Xori(index[i]-1,_); Yb[i]=Y[index[i]-1]; } //note that index need to -1 to become 0-based
         //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
-        _fastgrid_search(Xb, Yb, W, wAllOne, nLower, nUpper, n, p, Xcusum, Ycusum, Wcusum, thresholds, Cps, rsses, ans+b*(p+2)); // rsses not used here
+        _fastgrid_search(Xb, Yb, W, wAllOne, thresholdIdx, n, p, nThresholds, 
+                             Xcusum, Ycusum, Wcusum, thresholds, Cps, rsses, ans+b*(p+2)); // rsses not used here
     } 
      
     UNPROTECT(1);
@@ -264,139 +270,139 @@ extern "C" {
     return _ans;
   }
 
-  // weights not implemented
-  // an optimized implementation that serves as a reference for more advanced algebraic optimization
-  // assume X and Y are sorted
-  // nLower and nUpper are 1-based index
-  SEXP boot_grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP u_B)
-  {
-    int i,j; //for loop index
-    // put u_X and u_Y into Matrixes Xori and Y
-    // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
-    double* uX_dat = REAL(u_X);
-    const int n = nrows(u_X);
-    const int p = ncols(u_X);
-    Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major 
-    // convert to row major so that creating bootstrap datasets can be faster   
-    Matrix<double,Row,Concrete> Xori(Xcol); // row major        
-    //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
-    double *Y_dat=REAL(u_Y);
-    Matrix <> Y (n, 1, Y_dat);
-    // bootstrap replicate
-    double B = asReal(u_B);
-    // bounds
-    int nLower=asInteger (u_nLower);
-    int nUpper=asInteger (u_nUpper);
-    //double *W=REAL(u_W);
-    //bool wAllOne=asLogical(u_wAllOne)==1;
-    
-    // output
-    SEXP _ans=PROTECT(allocVector(REALSXP, B*(p+2)));// p slopes, 1 threshold, 1 goodness of fit stat
-    double *ans=REAL(_ans);    
-    
-	// these variables are reused within each bootstrap replicate
-	vector<int> index(n);
-    Matrix <double,Row,Concrete> Xb (n, p);
-    Matrix <> Yb (n, 1);
-    Matrix <double> H, J;
-	vector<double> logliks(nUpper-nLower+1); 
-	vector<double> thresholds(nUpper-nLower+1); 
-	int chosen;
-	double efinal;
-	Matrix <> estimatedSlope(p, 1);
-	
-	// loop through bootstrap replicates
-    for (int b=0; b<B; b++) {
-        
-        // fill index, note that it is 1-based
-        SampleReplace(n, n, &(index[0]));
-        // sort index
-        sort (index.begin(), index.end());
-        // create bootstrap dataset
-        for (i=0; i<n; i++) { 
-            Xb(i,_)=Xori(index[i]-1,_); //-1 to become 0-based
-            Yb(i)=Y(index[i]-1); 
-        }
-        
-        // save a copy of x as thresholds because they get changed below
-        for(i=nLower-1; i<nUpper; i++) thresholds[i-nLower+1]=Xb(i,p-1);
-        // set the x lower than nLower to 0
-        for(i=0; i<nLower-1; i++) Xb(i,p-1)=0;        
-                
-        // loop through candidate thresholds
-        double delta;
-        double rss;
-        for(i=nLower-1; i<nUpper; i++) {    
-            // Update the change point variable in Xb. 
-            delta=Xb(i,p-1); //delta is e in the first iteration
-            for (j=i; j<n; j++) Xb(j,p-1)=Xb(j,p-1)-delta; //for (j=0; j<n; j++) PRINTF("%f ", Xb(j,p-1)); PRINTF("\n");
-            H = Xb * invpd(crossprod1(Xb)) * t(Xb); // hat matrix
-            //the next line offer a faster way than: -(t(Yb) * H * Yb)(0);
-            rss=0; for (j=0; j<n; j++) for (int k=0; k<n; k++) rss -= Yb[j] * Yb[k] * H(j,k);
-            logliks[i-(nLower-1)] = -rss; // since Yb'Yb does not depend on threshold, there is no need to compute it
-        }        
-        //for(i=nLower-1; i<nUpper; i++)  PRINTF("%f ", logliks[i-(nLower-1)]); PRINTF("\n");
-        
-        // save the estimated coefficients and threshold
-        chosen = distance(logliks.begin(), max_element(logliks.begin(), logliks.end()));
-        efinal=thresholds[chosen];
-        // compute slope estimate. Alternative, slope estimates could be computed withint the previous loop, but it would be slower
-        for(i=nLower-1+chosen; i<n; i++) Xb(i,p-1)=Xori(index[i]-1,p-1)-efinal; //-1 to become 0-based
-        //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
-        estimatedSlope = invpd(crossprod1(Xb)) * t(Xb) * Yb;
-        for (i=0; i<p; i++) ans[b*(p+2)+i]=estimatedSlope(i);
-        ans[b*(p+2)+p]=efinal;
-        ans[b*(p+2)+p+1]=logliks[chosen];
-        
-    }
-     
-    UNPROTECT(1);
-    return _ans;
-  }
 
-  // weights not implemented
-  // the function that performs grid search and returns the best chngpt 
-  // assume X is sorted in chngptvar from small to large
-  // nLower and nUpper are 1-based index
-  SEXP grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper)
-  {
-
-    // put u_X and u_Y into Matrixes X and Y
-    // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe
-    int i,j;
-    double* uX_dat = REAL(u_X);
-    const int n = nrows(u_X);
-    const int p = ncols(u_X);
-    Matrix <> X (n, p, uX_dat);
-    double *Y_dat=REAL(u_Y);
-    Matrix <> Y (n, 1, Y_dat);
-    int nLower=asInteger (u_nLower);
-    int nUpper=asInteger (u_nUpper);
-    //double *W=REAL(u_W);
-    //bool wAllOne=asLogical(u_wAllOne)==1;
-    // output
-    SEXP _ans=PROTECT(allocVector(REALSXP, nUpper-nLower+1));
-    double *ans=REAL(_ans);    
-    
-    // set the x lower than nLower to 0
-    for(i=0; i<nLower-1; i++) X(i,p-1)=0;
-    
-    Matrix<double> H;
-    double delta;
-    for(i=nLower-1; i<nUpper; i++) {    
-        // update the change point variable in X
-        delta=X(i,p-1); // delta is e in the first iteration 
-        for (j=i; j<n; j++) X(j,p-1)=X(j,p-1)-delta;
-        //for (j=0; j<n; j++) PRINTF("%f ", X(j,p-1)); PRINTF("\n");
-        H = - X * invpd(crossprod1(X)) * t(X); // - hat matrix
-        for (j=0; j<n; j++) H(j,j)=1+H(j,j); // I - H
-        ans[i-(nLower-1)] = (t(Y) * H * Y)(0);
-    }
-          
-    UNPROTECT(1);
-    return _ans;
-  }
+//  // an optimized implementation that serves as a reference for more advanced algebraic optimization
+//  // assume X and Y are sorted
+//  // nLower and nUpper are 1-based index
+//  SEXP boot_grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP u_thresholdIdx, SEXP u_B)
+//  {
+//    int i,j; //for loop index
+//    // put u_X and u_Y into Matrixes Xori and Y
+//    // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
+//    double* uX_dat = REAL(u_X);
+//    const int n = nrows(u_X);
+//    const int p = ncols(u_X);
+//    Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major 
+//    // convert to row major so that creating bootstrap datasets can be faster   
+//    Matrix<double,Row,Concrete> Xori(Xcol); // row major        
+//    //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
+//    double *Y_dat=REAL(u_Y);
+//    Matrix <> Y (n, 1, Y_dat);
+//    // bootstrap replicate
+//    double B = asReal(u_B);
+//    // bounds
+//    int nLower=asInteger (u_nLower);
+//    int nUpper=asInteger (u_nUpper);
+//    //double *W=REAL(u_W);
+//    //bool wAllOne=asLogical(u_wAllOne)==1;
+//    
+//    // output
+//    SEXP _ans=PROTECT(allocVector(REALSXP, B*(p+2)));// p slopes, 1 threshold, 1 goodness of fit stat
+//    double *ans=REAL(_ans);    
+//    
+//	// these variables are reused within each bootstrap replicate
+//	vector<int> index(n);
+//    Matrix <double,Row,Concrete> Xb (n, p);
+//    Matrix <> Yb (n, 1);
+//    Matrix <double> H, J;
+//	vector<double> logliks(nUpper-nLower+1); 
+//	vector<double> thresholds(nUpper-nLower+1); 
+//	int chosen;
+//	double efinal;
+//	Matrix <> estimatedSlope(p, 1);
+//	
+//	// loop through bootstrap replicates
+//    for (int b=0; b<B; b++) {
+//        
+//        // fill index, note that it is 1-based
+//        SampleReplace(n, n, &(index[0]));
+//        // sort index
+//        sort (index.begin(), index.end());
+//        // create bootstrap dataset
+//        for (i=0; i<n; i++) { 
+//            Xb(i,_)=Xori(index[i]-1,_); //-1 to become 0-based
+//            Yb(i)=Y(index[i]-1); 
+//        }
+//        
+//        // save a copy of x as thresholds because they get changed below
+//        for(i=nLower-1; i<nUpper; i++) thresholds[i-nLower+1]=Xb(i,p-1);
+//        // set the x lower than nLower to 0
+//        for(i=0; i<nLower-1; i++) Xb(i,p-1)=0;        
+//                
+//        // loop through candidate thresholds
+//        double delta;
+//        double rss;
+//        for(i=nLower-1; i<nUpper; i++) {    
+//            // Update the change point variable in Xb. 
+//            delta=Xb(i,p-1); //delta is e in the first iteration
+//            for (j=i; j<n; j++) Xb(j,p-1)=Xb(j,p-1)-delta; //for (j=0; j<n; j++) PRINTF("%f ", Xb(j,p-1)); PRINTF("\n");
+//            H = Xb * invpd(crossprod1(Xb)) * t(Xb); // hat matrix
+//            //the next line offer a faster way than: -(t(Yb) * H * Yb)(0);
+//            rss=0; for (j=0; j<n; j++) for (int k=0; k<n; k++) rss -= Yb[j] * Yb[k] * H(j,k);
+//            logliks[i-(nLower-1)] = -rss; // since Yb'Yb does not depend on threshold, there is no need to compute it
+//        }        
+//        //for(i=nLower-1; i<nUpper; i++)  PRINTF("%f ", logliks[i-(nLower-1)]); PRINTF("\n");
+//        
+//        // save the estimated coefficients and threshold
+//        chosen = distance(logliks.begin(), max_element(logliks.begin(), logliks.end()));
+//        efinal=thresholds[chosen];
+//        // compute slope estimate. Alternative, slope estimates could be computed withint the previous loop, but it would be slower
+//        for(i=nLower-1+chosen; i<n; i++) Xb(i,p-1)=Xori(index[i]-1,p-1)-efinal; //-1 to become 0-based
+//        //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
+//        estimatedSlope = invpd(crossprod1(Xb)) * t(Xb) * Yb;
+//        for (i=0; i<p; i++) ans[b*(p+2)+i]=estimatedSlope(i);
+//        ans[b*(p+2)+p]=efinal;
+//        ans[b*(p+2)+p+1]=logliks[chosen];
+//        
+//    }
+//     
+//    UNPROTECT(1);
+//    return _ans;
+//  }
+//
+//  // the function that performs grid search and returns the best chngpt 
+//  // assume X is sorted in chngptvar from small to large
+//  // nLower and nUpper are 1-based index
+//  SEXP grid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_nLower, SEXP u_nUpper, SEXP u_thresholdIdx)
+//  {
+//
+//    // put u_X and u_Y into Matrixes X and Y
+//    // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe
+//    int i,j;
+//    double* uX_dat = REAL(u_X);
+//    const int n = nrows(u_X);
+//    const int p = ncols(u_X);
+//    Matrix <> X (n, p, uX_dat);
+//    double *Y_dat=REAL(u_Y);
+//    Matrix <> Y (n, 1, Y_dat);
+//    int nLower=asInteger (u_nLower);
+//    int nUpper=asInteger (u_nUpper);
+//    //double *W=REAL(u_W);
+//    //bool wAllOne=asLogical(u_wAllOne)==1;
+//    // output
+//    SEXP _ans=PROTECT(allocVector(REALSXP, nUpper-nLower+1));
+//    double *ans=REAL(_ans);    
+//    
+//    // set the x lower than nLower to 0
+//    for(i=0; i<nLower-1; i++) X(i,p-1)=0;
+//    
+//    Matrix<double> H;
+//    double delta;
+//    for(i=nLower-1; i<nUpper; i++) {    
+//        // update the change point variable in X
+//        delta=X(i,p-1); // delta is e in the first iteration 
+//        for (j=i; j<n; j++) X(j,p-1)=X(j,p-1)-delta;
+//        //for (j=0; j<n; j++) PRINTF("%f ", X(j,p-1)); PRINTF("\n");
+//        H = - X * invpd(crossprod1(X)) * t(X); // - hat matrix
+//        for (j=0; j<n; j++) H(j,j)=1+H(j,j); // I - H
+//        ans[i-(nLower-1)] = (t(Y) * H * Y)(0);
+//    }
+//          
+//    UNPROTECT(1);
+//    return _ans;
+//  }
   
+
   
   // unit testing for performance comparison
   SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP u_B, SEXP u_I)
