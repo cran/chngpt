@@ -31,7 +31,7 @@ antoch.test (formula, data, chngpt.var, plot.=FALSE)
 }
 \arguments{
   \item{formula.null}{
-formula for the null model. The outcome needs to be a 0/1 variable.
+formula for the null model. 
 }
   \item{formula.chngpt}{
 formula for the change point model. 
@@ -142,6 +142,12 @@ test=chngpt.test(formula.null=y~z, formula.chngpt=~x, dat, type="segmented", fam
     mc.n=10)
 test
 plot(test)
+
+test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, 
+    type="segmented", mc.n=1e4, verbose=FALSE, chngpts.cnt=100, test.statistic="lr")
+test
+plot(test)
+
 
 \dontrun{
 # not run because otherwise the examples take >5s and that is a problem for R CMD check

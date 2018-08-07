@@ -61,13 +61,13 @@ static void SampleReplace(int k, int n, int *y)
 }
 
 
-  // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
   inline void make_symmetric(double* matrix, int rows)
   {
       for (int i = 1; i < rows; ++i)
         for (int j = 0; j < i; ++j)
           matrix[i * rows + j] = matrix[j * rows + i];
   }
+  // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
   // if a row-major matrix is passed as A, it will be transposed automatically
   inline Matrix<> crossprod1(const Matrix<>& A)
   {
@@ -93,6 +93,97 @@ static void SampleReplace(int k, int n, int *y)
 
 
 extern "C" {
+
+
+  //vectors such as thresholds are defined outside this function since when bootstrapping, we don't want to allocate the memory over and over again
+  void _superfastgrid_search(Matrix<double,Row>& X, vector<double>& Y, double * w, bool wAllOne, int * thresholdIdx,
+    int n, int p, int nThresholds,
+    Matrix<double,Row>& Xcusum, vector<double>& Ycusum, vector<double>& Wcusum, vector<double>& thresholds, vector<double>& Cps, 
+    double* ans1, double* ans2)
+  {
+
+    // loop index. iX is the index of the x vector, i is the index of threshold vector
+    int i,iX,j;
+    
+	int chosen=0;//initialize to get rid of compilation warning
+    vector<double> C(p); // C is X'Y
+
+    // compute cusum of X and Y in the reverse order
+    if(wAllOne) {
+        Xcusum(n-1,_) = X(n-1,_);
+        for (i=n-2; i>=0; i--) Xcusum(i,_) = Xcusum(i+1,_) + X(i,_); 
+        Ycusum[n-1] = Y[n-1];
+        for (i=n-2; i>=0; i--) Ycusum[i] = Ycusum[i+1] + Y[i]; 
+    } else  {
+        Xcusum(n-1,_) = X(n-1,_) * w[n-1];
+        for (i=n-2; i>=0; i--) Xcusum(i,_) = Xcusum(i+1,_) + X(i,_) * w[i]; 
+        Ycusum[n-1] = Y[n-1] * w[n-1];
+        for (i=n-2; i>=0; i--) Ycusum[i] = Ycusum[i+1] + Y[i] * w[i]; 
+    }
+    Wcusum[n-1] = w[n-1];
+    for (i=n-2; i>=0; i--) Wcusum[i] = Wcusum[i+1] + w[i]; 
+    //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xcusum(i,j)); PRINTF("\n");}        
+    //for (i=0; i<n; i++) PRINTF("%f ", Ycusum[i]); PRINTF("\n");
+    
+    // grid of e
+    for(i=0; i<nThresholds; i++) thresholds[i]=X(thresholdIdx[i]-1,p-1);
+
+    Matrix <double> A, Ainv, Ainv_save; // A is X'X
+    double delta, rss, rss_min=R_PosInf;
+    
+    // Step 2: Initialize A and C at the first point in the grid
+    // compute X_e
+    for(iX=0; iX<thresholdIdx[0]; iX++) X(iX,p-1)=0;  
+    for(iX=thresholdIdx[0]; iX<n; iX++) X(iX,p-1)=X(iX,p-1)-thresholds[0]; 
+    //for (j=0; j<n; j++) PRINTF("%f ", X(j,p-1)); PRINTF("\n");
+    if(wAllOne) {
+        for (j=0; j<p; j++) {C[j]=0; for (int k=0; k<n; k++) C[j] += X(k,j) * Y[k];}
+        A = crossprod1(X); 
+    } else {
+        for (j=0; j<p; j++) {C[j]=0; for (int k=0; k<n; k++) C[j] += X(k,j) * Y[k] * w[k];}
+        // mutiply X with sqrt(w) before crossprod. Note that this changes X! Don't use X after this
+        for (iX=0; iX<n; iX++) X(iX,_)=X(iX,_)*sqrt(w[iX]);
+        A = crossprod1(X);
+    }
+    Cps[0]=C[p-1];// save C[p-1]
+            
+    // loop through candidate thresholds
+    for(i=0; i<nThresholds; i++) {            
+        iX = thresholdIdx[i]-1; 
+           
+        // Step 4a: update A and C
+        // wAllOne handled by replacing n-i with Wcusum(i)
+        if(i>0) {
+            delta= thresholds[i]-thresholds[i-1]; //X(i,p-1)-X(i-1,p-1); //PRINTF("%f ", delta); PRINTF("\n"); 
+            A(p-1,p-1) += pow(delta,2) * Wcusum[iX]; // Delta' * W * Delta
+            for (j=0; j<p-1; j++) A(p-1,j) -= delta * Xcusum(iX,j); // Delta' * W * X
+            for (j=0; j<p-1; j++) A(j,p-1) = A(p-1,j);  // X' * W * Delta
+            A(p-1,p-1) -= 2 * delta * (Xcusum(iX,p-1) - thresholds[i-1]*Wcusum[iX]); // the last element of both Delta' * W * X and X' * W * Delta
+            C[p-1] -= delta * Ycusum[iX];
+            Cps[i]=C[p-1];// save C[p-1]
+            //for (int k=0; k<p; k++) for (j=0; j<p; j++)  PRINTF("%f ", A(k,j)); PRINTF("\n");        
+        }
+        
+        // Step 4b (or step 3 when i=0): compute Y'HY                
+        Ainv = invpd(A);
+        rss=0; for (j=0; j<p; j++) for (int k=0; k<p; k++) rss -= C[j] * C[k] * Ainv(j,k); // -Y'HY
+        ans1[i] = rss;
+        if(rss<=rss_min) {
+            chosen = i;
+            Ainv_save=Ainv;
+            rss_min=rss;
+        }             
+    }        
+
+    // save results: estimated coefficients and threshold
+    ans2[p]=thresholds[chosen];
+    C[p-1]=Cps[chosen];
+    for (int jj=0; jj<p; jj++) { ans2[jj]=0; for (j=0; j<p; j++) ans2[jj]+=Ainv_save(jj,j)*C[j]; }            
+    ans2[p+1]=-rss_min;
+    
+  }
+
+
          
   //vectors such as thresholds are defined outside this function since when bootstrapping, we don't want to allocate the memory over and over again
   void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, double * w, bool wAllOne, int * thresholdIdx,
@@ -252,7 +343,6 @@ extern "C" {
 	vector<double> thresholds(nThresholds), Cps(nThresholds), Ycusum(n), Yb(n); 
 	vector<double> Wcusum(n); //double rsses[nThresholds], Wcusum[n];
     double * rsses = (double *) malloc((nThresholds) * sizeof(double));
-
 	
     for (int b=0; b<B; b++) {        
         // create bootstrap dataset, note that index is 1-based

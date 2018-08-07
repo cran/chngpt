@@ -33,7 +33,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     
     # not all variance estimation methods are implemented for all families    
     if(!family %in% c("gaussian","binomial")) {
-        if(!var.type %in% c("bootstrap","none")) stop("no analytical variance estimates are provided for this family: "%+%family)
+        if(!var.type %in% c("bootstrap","none")) stop("no analytical variance estimates are provided for this family: "%.%family)
     }     
     if (var.type %in% c("robust","robusttruth","all") & is.null(aux.fit)) stop("need an aux.fit for robust variance estimate")
     
@@ -58,7 +58,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     p=p.z+p.2.itxn+1 #total number of paramters, including threshold
         
     # formula.new is the model to fit
-    formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%+%chngpt.var.name)) else formula.1
+    formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%.%chngpt.var.name)) else formula.1
     formula.new=update(formula.new, as.formula(get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)))
         
     # set weights
@@ -130,7 +130,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
             # as.double is needed around y.sorted b/c if y.sort is integer, this throws an error b/c the cpp function expects real
             # logliks is actually Y' * H_e * Y here
             if(verbose) myprint(fastgrid.ok, est.method, useC)
-            f.name=est.method%+%"_search" # It is weird but f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+            f.name=est.method%.%"_search" # It is weird but f.name cannot be put inline b/c rcmdcheck throws an error otherwise
             logliks=-.Call(f.name, 
                 cbind(Z.sorted, chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), #the last column is to be (x-e)+
                 as.double(y.sorted), 
@@ -223,9 +223,9 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     
                 # search for better e and slopes associated with x and thresholded x
                 optim.out = try(optim(par=c(beta.init, e.init), 
-                      fn = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"f"), 
+                      fn = get("dev."%.%type%.%"."%.%ifelse(has.itxn,"itxn.","")%.%"f"), 
                       gr = NULL,
-                      #gr = get("dev."%+%type%+%"."%+%ifelse(has.itxn,"itxn.","")%+%"deriv.f"), 
+                      #gr = get("dev."%.%type%.%"."%.%ifelse(has.itxn,"itxn.","")%.%"deriv.f"), 
     #                  # if we use analytical gradient function by deriv3 in optim, we can get situations like exp(100), which will be Inf, and Inf/Inf will be NaN
     #                  fn = function(theta,...) sum(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...)), 
     #                  gr = function(theta,...) colSums(attr(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...), "gradient")), 
@@ -274,15 +274,15 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     
     names(coef.hat)[length((coef.hat))]="chngpt"
     if (type=="stegmented") {
-        replacement="I("%+%chngpt.var.name%+%">chngpt)"
-        replacement.2="("%+%chngpt.var.name%+%"-chngpt)+"
+        replacement="I("%.%chngpt.var.name%.%">chngpt)"
+        replacement.2="("%.%chngpt.var.name%.%"-chngpt)+"
         new.names=sub("x.mod.e.2", replacement.2, names(coef.hat))    
         new.names=sub("x.mod.e", replacement, new.names)    
     } else {
         if(type=="step") {
-            replacement="I("%+%chngpt.var.name%+%">chngpt)"
+            replacement="I("%.%chngpt.var.name%.%">chngpt)"
         } else if (type %in% c("hinge","segmented","segmented2")) {
-            replacement="("%+%chngpt.var.name%+%"-chngpt)+"
+            replacement="("%.%chngpt.var.name%.%"-chngpt)+"
         } 
         new.names=sub("x.mod.e", replacement, names(coef.hat))    
     }
@@ -312,31 +312,31 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                 if(verbose) cat("in var.est.smooth\n")
     
                 # expressions for use with optim with deriv3, they are different from the set of expressions, dev.step etc, b/c each alpha has to be separate
-                alpha.z.s="("%+% concatList("alpha"%+%1:p.z%+%"*z"%+%1:p.z%+%"","+") %+%")"
+                alpha.z.s="("%.% concatList("alpha"%.%1:p.z%.%"*z"%.%1:p.z%.%"","+") %.%")"
                 if (family=="binomial") {
                     if (type=="hinge") {
-                        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + (x-e)*beta/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - (x-e)*beta/(1+exp(-b*(x-e))) ) ) "
-                        params=c("alpha"%+%1:p.z, "beta", "e")
+                        deviance.s <- " (1-y) * ( "%.% alpha.z.s %.%" + (x-e)*beta/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%.% alpha.z.s %.%" - (x-e)*beta/(1+exp(-b*(x-e))) ) ) "
+                        params=c("alpha"%.%1:p.z, "beta", "e")
                     } else if (type=="segmented") {
-                        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - beta1*x - (x-e)*beta2/(1+exp(-b*(x-e))) ) ) "
-                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                        deviance.s <- " (1-y) * ( "%.% alpha.z.s %.%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%.% alpha.z.s %.%" - beta1*x - (x-e)*beta2/(1+exp(-b*(x-e))) ) ) "
+                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
                     } else if (type=="segmented2") {
-                        deviance.s <- " (1-y) * ( "%+% alpha.z.s %+%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%+% alpha.z.s %+%" - beta1*x - x*beta2/(1+exp(-b*(x-e))) ) ) "
-                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                        deviance.s <- " (1-y) * ( "%.% alpha.z.s %.%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%.% alpha.z.s %.%" - beta1*x - x*beta2/(1+exp(-b*(x-e))) ) ) "
+                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
                     }
                 } else if (family=="gaussian") {
                     if (type=="hinge") {
-                        deviance.s <- " (y- ( "%+% alpha.z.s %+%" + (x-e)*beta/(1+exp(-b*(x-e))) ))**2"
-                        params=c("alpha"%+%1:p.z, "beta", "e")
+                        deviance.s <- " (y- ( "%.% alpha.z.s %.%" + (x-e)*beta/(1+exp(-b*(x-e))) ))**2"
+                        params=c("alpha"%.%1:p.z, "beta", "e")
                     } else if (type=="segmented") {
-                        deviance.s <- " (y- ( "%+% alpha.z.s %+%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) ))**2"
-                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                        deviance.s <- " (y- ( "%.% alpha.z.s %.%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) ))**2"
+                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
                     } else if (type=="segmented2") {
-                        deviance.s <- " (y- ( "%+% alpha.z.s %+%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) ))**2"
-                        params=c("alpha"%+%1:p.z, "beta1", "beta2", "e")
+                        deviance.s <- " (y- ( "%.% alpha.z.s %.%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) ))**2"
+                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
                     }
                 }
-                params.long=c(params,"x","y","b","z"%+%1:p.z,"z.1")
+                params.long=c(params,"x","y","b","z"%.%1:p.z,"z.1")
                 if (verbose) print(deviance.s)
                 if (verbose) myprint(params)
                 loss.f=deriv3(parse(text=deviance.s), params, params.long)    
@@ -364,7 +364,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                 # set up some variables
                 e=coef.hat["chngpt"]
                 x.gt.e=chngpt.var>e
-                beta.4=coef.hat["("%+%chngpt.var.name%+%"-chngpt)+"]
+                beta.4=coef.hat["("%.%chngpt.var.name%.%"-chngpt)+"]
                 
                 # x.tilda
                 if(type %in% c("hinge","segmented")) {
@@ -434,7 +434,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                 # set up some variables
                 e=coef.hat["chngpt"]
                 x.gt.e=chngpt.var>e
-                beta.4=coef.hat["("%+%chngpt.var.name%+%"-chngpt)+"]
+                beta.4=coef.hat["("%.%chngpt.var.name%.%"-chngpt)+"]
                 
                 # x.tilda
                 x.tilda=cbind(Z, if (type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
@@ -651,7 +651,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                     boot.out$fake=TRUE
                     
                     # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
-                    f.name="boot_"%+%est.method%+%"_search"
+                    f.name="boot_"%.%est.method%.%"_search"
                     boot.out$t=.Call(f.name, 
                         cbind(Z.sorted, chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), 
                         as.double(y.sorted), 
@@ -734,7 +734,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                     coef.hat[i]+c(-q.1, q.1)
                 })                
                 colnames(outs$symm)<-names(coef.hat) 
-                rownames(outs$symm)<-c((alpha/2*100)%+%"%",(100-alpha/2*100)%+%"%") 
+                rownames(outs$symm)<-c((alpha/2*100)%.%"%",(100-alpha/2*100)%.%"%") 
                 
                 # compute test inversion CI for threshold based on bootstrap critical value
                 if(boot.test.inv.ci) {
@@ -834,12 +834,17 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     }
     if (!is.null(warn.var)) res[["warning"]]=warn.var
     if(keep.best.fit) res$best.fit=best.fit 
-    names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %+% "%"     
+    names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %.% "%"     
     
     class(res)=c("chngptm", class(res))
     res    
 }
 
+# for linear only
+chngptm.xy = function(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),  ...)  {
+    tmp.dat=data.frame(x=x, y=y)
+    chngptm(y~1, ~x, family="gaussian", tmp.dat, type=type, ...)
+}
 
 ## make.chngpt.var is needed in both testing and estimation
 ## in estimation by grid search, b.transition is set to null when this function is called
@@ -893,11 +898,11 @@ make.chngpt.var=function(x, e, type, data=NULL, b.transition=Inf) {
 
 get.f.alt=function(type, has.itxn, z.1.name, chngpt.var.name) {
     if (type=="stegmented") {
-        f.alt=if(has.itxn) "~.+(x.mod.e+x.mod.e.2)*"%+%z.1.name%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name else "~.+x.mod.e+x.mod.e.2"
+        f.alt=if(has.itxn) "~.+(x.mod.e+x.mod.e.2)*"%.%z.1.name%.%"+"%.%chngpt.var.name%.%":"%.%z.1.name else "~.+x.mod.e+x.mod.e.2"
     } else if (type %in% c("segmented","segmented2")) {
-        f.alt=if(has.itxn) "~."%+%"+"%+%chngpt.var.name%+%":"%+%z.1.name%+%"+x.mod.e*"%+%z.1.name else "~.+x.mod.e"
+        f.alt=if(has.itxn) "~."%.%"+"%.%chngpt.var.name%.%":"%.%z.1.name%.%"+x.mod.e*"%.%z.1.name else "~.+x.mod.e"
     } else if (type %in% c("step","hinge")) {
-        f.alt=if(has.itxn) "~.+x.mod.e*"%+%z.1.name else "~.+x.mod.e"
+        f.alt=if(has.itxn) "~.+x.mod.e*"%.%z.1.name else "~.+x.mod.e"
     }
     f.alt
 }
@@ -970,7 +975,7 @@ lincomb=function(object, comb, alpha=0.05){
 }
 
 # which=1: scatterplot with fitted line, only works for simple regression
-plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="darkgray", add=FALSE, add.points=TRUE, add.ci=TRUE, breaks=20, ...) {
+plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", add=FALSE, add.points=TRUE, add.ci=TRUE, breaks=20, ...) {
     
     has.boot.samples=FALSE
     if(is.list(x$vcov)) if(!is.null(x$vcov$boot.samples)) has.boot.samples=TRUE 
@@ -995,7 +1000,7 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="darkgray", add=FALS
         chngpt.est=fit$chngpt        
         intercept=coef(fit)[1]
         if (!is.na(coef(fit)[fit$chngpt.var]))  pre.slope=coef(fit)[fit$chngpt.var] else pre.slope=0
-        delta.slope=coef(fit)["("%+%fit$chngpt.var%+%"-chngpt)+"]
+        delta.slope=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)+"]
         
         xx=seq(xlim[1],chngpt.est,length=100)
         lines(xx,  linkinv(intercept+pre.slope*xx), lwd=lwd, col=lcol)
@@ -1083,7 +1088,7 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) 
     })
     rownames(res$coefficients)=names(fit$coefficients)[-p.z]
     colnames(res$coefficients)[1]=if(fit$family=="binomial" & expo) "OR" else "est"
-    if(boot.conf) colnames(res$coefficients)[2]=colnames(res$coefficients)[2]%+%"*"
+    if(boot.conf) colnames(res$coefficients)[2]=colnames(res$coefficients)[2]%.%"*"
     
     # change point
     i=p.z

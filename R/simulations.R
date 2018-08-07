@@ -38,7 +38,7 @@ sim.my = function (n, seed, label, alpha, beta, e.=NULL, b.=NULL, tr.=NULL) {
     } else if (startsWith(label, "sigmoid")) {
         x.star.expit = expit.2pl(x.star, e=e., b=b.)        
         X=cbind(1, x.star.expit)
-    } else stop ("label not supported: "%+%label)
+    } else stop ("label not supported: "%.%label)
     
     y=rbern(n, expit (X %*% c(alpha, beta)))
     
@@ -76,7 +76,7 @@ sim.my = function (n, seed, label, alpha, beta, e.=NULL, b.=NULL, tr.=NULL) {
         dat[["x.star.tr"]]=x.star.tr
     } else if (startsWith(label, "sigmoid")) {
         dat[["x.star.expit"]]=x.star.expit
-    } else stop ("label not supported: "%+%label)
+    } else stop ("label not supported: "%.%label)
     
     dat
 }

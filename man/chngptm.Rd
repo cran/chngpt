@@ -1,5 +1,6 @@
 \name{chngptm}
 \alias{chngptm}
+\alias{chngptm.xy}
 \alias{coef.chngptm}
 \alias{residuals.chngptm}
 \alias{vcov.chngptm}
@@ -34,13 +35,16 @@ chngptm (formula.1, formula.2, family, data,
   keep.best.fit=TRUE, # best.fit is needed for making prediction and plotting
   verbose=FALSE, ...) 
 
+chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
+    ...)
 
 \method{coef}{chngptm} (object, ...)
 \method{residuals}{chngptm} (object, ...)
 \method{vcov}{chngptm} (object, var.type=NULL, ...)
 \method{print}{chngptm} (x, ...)
-\method{plot}{chngptm} (x, which=NULL, xlim=NULL, lwd=2, lcol="darkgray", add=FALSE, 
-    add.points=TRUE, add.ci=TRUE, breaks=20, ...) 
+\method{plot}{chngptm} (x, which = NULL, xlim = NULL, lwd = 2, lcol = "red",
+ add = FALSE, add.points = TRUE, add.ci = TRUE, breaks
+ = 20, ...) 
 \method{summary}{chngptm} (object, var.type=NULL, expo=FALSE, verbose=FALSE, ...)
 
 lincomb(object, comb, alpha=0.05)
@@ -75,6 +79,7 @@ lincomb(object, comb, alpha=0.05)
   \item{add}{Boolean.}
   \item{breaks}{integer.}
   \item{keep.best.fit}{Boolean.}
+  \item{y}{outcome}
 
   \item{x}{chngptm fit object.}
   \item{object}{chngptm fit object.}

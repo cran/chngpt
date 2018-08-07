@@ -7,7 +7,7 @@ hinge.test <- function(formula, cov.interest, family=c("binomial","gaussian"), d
     
     # keep only records that have no missing data for the null model and the change point model
     subset.1 = complete.cases(model.frame(formula, data, na.action=na.pass))
-    subset.2 = complete.cases(model.frame(as.formula("~"%+%cov.interest), data, na.action=na.pass))
+    subset.2 = complete.cases(model.frame(as.formula("~"%.%cov.interest), data, na.action=na.pass))
     if(!all(subset.1 & subset.2)) warning("Missing data are being exluded.")
     data=data[subset.1 & subset.2,,drop=FALSE]
     
@@ -190,7 +190,7 @@ hinge.test <- function(formula, cov.interest, family=c("binomial","gaussian"), d
     # restore rng state 
     assign(".Random.seed", save.seed, .GlobalEnv) 
     
-    res=list(family=family,method="Maximal likelihood ratio test by "%+%method,p.value=p.value, statistic=statistic, data.name=DNAME)
+    res=list(family=family,method="Maximal likelihood ratio test by "%.%method,p.value=p.value, statistic=statistic, data.name=DNAME)
     names(res$statistic)="Maximal likelihood ratio statistic"
     
     class(res)=c('htest',class(res))

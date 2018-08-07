@@ -62,10 +62,28 @@
 	approximation. now chngptm uses chngptm to initialize in that situation.
 	This way chngptm does not depend on chngpt.test anymore
 
-2018-04-23  Youyi Fong
+2018-05-02  Youyi Fong
 	* Add support for cbind() on the lhs for the binomial family. Both grid
 	and smoothapprox are supported.
+	* Add support for Poisson family
 
-2018-05-17
+2018-06-02
 	* Implement fastgrid for thinned thresholds. 
 	* Deprecate useC for grid search
+	* Revamp vignette
+	* Add approximate p value when var.method is bootstrap
+	* Change summary chngptm output to remove empirical percentile of the
+	estimated threshold
+
+2018-07-02
+	* Add chngptm.xy (x,y,...) to provide an alternative way of fitting
+	chngptm without data frame and formula
+
+2018-07-16
+	* Replace %+% by %.% throughout	
+
+2018-07-25
+	* Change robust testing implementation
+	* RDR is changed to R.h %*% D.h when not robust. This requires a change of
+	values in the unit testing function
+

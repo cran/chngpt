@@ -51,7 +51,7 @@ chngpt.test.2 = function(formula.null, formula.chngpt, data, type=c("step","hing
         interaction.method=""
     }
     
-    if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%+%type)
+    if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%.%type)
         
     z.1 = Z[,z.1.name] # if the intersection is a null set, z.1 is a matrix of n x 0 dimension
     # only standardize the covariate involved in the interaction term when interaction.method=="weighted.two.sided"
@@ -191,7 +191,7 @@ chngpt.test.2 = function(formula.null, formula.chngpt, data, type=c("step","hing
             W = matrix(0, nrow=n, ncol=2*M)
             for (m in 1:M) {
                 data$x.gt.e  = make.chngpt.var(chngpt.var, chngpts[m], type)
-                formula.1=update(formula.null, as.formula("~.+"%+%z.1.name%+%"*x.gt.e"))
+                formula.1=update(formula.null, as.formula("~.+"%.%z.1.name%.%"*x.gt.e"))
                 X = model.matrix(formula.1, data) # make sure column order is the same as the coefficient order
                 # fit semi-alternative model to compute D.h.a and information matrix
                 # if test statistics is likelihood ratio, it does not matter if we had used D.h when computing I, but the type I1 error rate is increased from 5.9 to 6.4
@@ -232,7 +232,7 @@ chngpt.test.2 = function(formula.null, formula.chngpt, data, type=c("step","hing
 #            for (m in 1:M) {            
 #                # fit semi-alternative model to compute beta.h.a
 #                data$x.gt.e  = make.chngpt.var(chngpt.var, chngpts[m], type)
-#                formula.1=update(formula.null, as.formula("~.+"%+%z.1.name%+%"*x.gt.e"))
+#                formula.1=update(formula.null, as.formula("~.+"%.%z.1.name%.%"*x.gt.e"))
 #                fit.a=keepWarnings(glm(formula.1,  data=data, family="binomial"))
 #                if(length(fit.a$warning)!=0) return (NA) else fit.a=fit.a$value
 #                beta.h.a = coef(fit.a)[p.z+1:2]                
@@ -251,7 +251,7 @@ chngpt.test.2 = function(formula.null, formula.chngpt, data, type=c("step","hing
             W.null = matrix(0, nrow=n, ncol=2*M)
             for (m in 1:M) {
                 data$x.gt.e  = make.chngpt.var(chngpt.var, chngpts[m], type)
-                formula.1=update(formula.null, as.formula("~.+"%+%z.1.name%+%"*x.gt.e"))
+                formula.1=update(formula.null, as.formula("~.+"%.%z.1.name%.%"*x.gt.e"))
                 X = model.matrix(formula.1, data) # make sure column order is the same as the coefficient order
                 # fisher information for the full model, estimated under null
                 I.a = t(X) %*% D.h %*% X 
@@ -291,8 +291,8 @@ chngpt.test.2 = function(formula.null, formula.chngpt, data, type=c("step","hing
         for (m in 1:M) {
             data$x.gt.e = make.chngpt.var(chngpt.var, chngpts[m], type)
             # fit alternative model, but at a fixed threshold
-            #f.alt=as.formula("~.+x.gt.e*"%+%z.1.name
-            f.alt=if(has.itxn) as.formula("~.+x.gt.e*"%+%z.1.name) else as.formula("~.+x.gt.e") # this may be useful later when we implement LR test for main effect only
+            #f.alt=as.formula("~.+x.gt.e*"%.%z.1.name
+            f.alt=if(has.itxn) as.formula("~.+x.gt.e*"%.%z.1.name) else as.formula("~.+x.gt.e") # this may be useful later when we implement LR test for main effect only
             fit.a=keepWarnings(glm(update(formula.null, f.alt),  data=data, family="binomial", weights=prob.weights))
             # not whether it is better to ignore warning 
             #if(length(fit.a$warning)!=0) return (list(p.value=NA)) else fit.a=fit.a$value

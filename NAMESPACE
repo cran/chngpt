@@ -1,9 +1,9 @@
 useDynLib(chngpt, .registration = TRUE)
 
-export(chngpt.test, plot.chngpt.test, chngptm, print.chngptm,  antoch.test, performance.unit.test, plot.chngptm)
+export(chngpt.test, plot.chngpt.test, chngptm, chngptm.xy, print.chngptm,  antoch.test, performance.unit.test, plot.chngptm)
 export(sim.pastor, sim.my, sim.chngpt, lincomb, sim.hinge, hinge.test ) 
 
-importFrom(kyotil, '%+%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope)
+importFrom(kyotil, '%.%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope)
 importFrom(MASS, mvrnorm)
 import(survival)
 importFrom("graphics", "abline", "plot", "axis", "lines", "par", "points", "hist")

@@ -4,8 +4,8 @@ sim.chngpt = function (
     threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),# segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
     b.transition=Inf,
     family=c("binomial","gaussian"), 
-    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm", "fixnorm3", "fixnorm6"), # gam1 is a hack to allow e. be different
-    e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, 
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm"), # gam1 is a hack to allow e. be different
+    e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, mu.z=0, 
     alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
     n, seed, 
     weighted=FALSE, # sampling weights
@@ -25,11 +25,7 @@ sim.chngpt = function (
     
     if(is.null(sd.x)) sd.x=if (mean.model=="quadratic") sd.x=1.4 else 1.6
     
-    if(startsWith(x.distr,"fix")) {
-        set.seed(1) # "seed" will be set before simulation of y
-    } else {
-        set.seed(seed)
-    }
+    set.seed(seed)
     
     #######################################################################################
     # generate covariates
@@ -39,13 +35,13 @@ sim.chngpt = function (
         z=rep(1,n)
     } else if(x.distr=="lin") { # unif
         x=runif(n)*4*sd.x + mu.x-2*sd.x
-        z=rnorm(n, mean=0, 1)
+        z=rnorm(n, mean=mu.z, 1)
     } else if(x.distr=="mix") { # mixture
         x=c(rnorm(n*.6, mu.x, sd.x), rep(mu.x-2*sd.x, n*.4))
         z=rep(1,n)
     } else if(x.distr %in% c("gam","gam1","gam2")) { # gamma
         x=1.4*scale(rgamma(n=n, 2.5, 1))+mu.x/2
-        z=rnorm(n, mean=0, 1)
+        z=rnorm(n, mean=mu.z, 1)
         if(x.distr=="gam") e.=2.2 else if(x.distr=="gam1") e.=1.5 else if(x.distr=="gam2") e.=1 
         # for thresholded, override input
         if (mean.model=="thresholded") {
@@ -59,23 +55,32 @@ sim.chngpt = function (
         }            
         x.distr="gam" # the number trailing gam is only used to change e.
         
-    } else if(startsWith(x.distr,"norm") | startsWith(x.distr,"fixnorm")) { # normal, fixnorm means design matrix is not random
-        if (x.distr=="norm" | x.distr=="fixnorm") {
+    } else if(startsWith(x.distr,"norm")) { 
+        if (x.distr=="norm") {
              rho=0
-        } else if (x.distr=="norm3" | x.distr=="fixnorm3") {
+        } else if (x.distr=="norm3") {
             rho=0.3 
-        } else if (x.distr=="norm6" | x.distr=="fixnorm6") {
+        } else if (x.distr=="norm6") {
             rho=0.6
         } else {
-            stop("x.distr not supported: "%+%x.distr)
+            stop("x.distr not supported: "%.%x.distr)
         }        
-        tmp=mvtnorm::rmvnorm(n, mean = c(mu.x,0), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use mvtnorm
+        tmp=mvtnorm::rmvnorm(n, mean = c(mu.x,mu.z), sigma = matrix(c(sd.x^2,sd.x*rho,sd.x*rho,1),2)) # use mvtnorm
         x=tmp[,1]
         z=tmp[,2]    
+        
+    } else if(x.distr=="fixnorm") { 
+    # z is not random, x is
+        set.seed(999999) # this is chosen to minize the probability that it equals seed, which would create a problem
+        z=rnorm(n, mean = mu.z, sd = 1)    
+        set.seed(seed)
+        x=rnorm(n, mean = mu.x, sd = sd.x)
+        
     } else if(startsWith(x.distr,"zbinary")) { 
         x=rnorm(n, mu.x, sd.x)
         z=rbern(n, 1/2)-0.5
-    } else stop("x.distr not supported: "%+%x.distr)    
+        
+    } else stop("x.distr not supported: "%.%x.distr)    
     
     if (is.null(e.) | !startsWith(mean.model,"thresholded")) e.=4.7 # hard code e. for mean models other than thresholded
     if (verbose) {print(e.); print(mean(x<e.))}
@@ -92,7 +97,7 @@ sim.chngpt = function (
         # but if mean.model is NULL, an error is thrown
         if(!is.null(alpha.candidate)) alpha=alpha.candidate # used to determine sim.alphas
         #cat(e., beta, "\n")
-        if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[mean.model%+%"_"%+%sub("fix","",x.distr)]][e.%+%"", ifelse(mean.model=="thresholdedItxn",beta.itxn,beta)%+%""], silent=TRUE)
+        if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[mean.model%.%"_"%.%sub("fix","",x.distr)]][e.%.%"", ifelse(mean.model=="thresholdedItxn",beta.itxn,beta)%.%""], silent=TRUE)
         if(is.null(alpha) | inherits(alpha, "try-error")) stop("alpha not found, please check beta or provide a null") 
         
         X=cbind(1,     z,        x,   x.star,   if(threshold.type=="segmented2") x.star*x else x.star*(x-e.),     z*x,   z*x.star,   z*x.star*(x-e.))
@@ -117,11 +122,11 @@ sim.chngpt = function (
         # used to be "sigmoid3","sigmoid4","sigmoid5"
     #        beta.var.name=switch(threshold.type,step="x.star",hinge="x.hinge",segmented="x.hinge",stegmented="x.hinge")
     #        coef.[beta.var.name]=switch(mean.model,sigmoid3=log(.67),sigmoid4=-log(.67),sigmoid5=0)
-    #        coef.["z."%+%beta.var.name]=beta
+    #        coef.["z."%.%beta.var.name]=beta
     #        if (threshold.type=="segmented") {coef.["x"]=tmp; coef.["z.x"]=log(.67) } 
             beta.var.name=switch(threshold.type,step="x.star",hinge="x.hinge",segmented="x.hinge",stegmented="x.hinge")
             coef.[beta.var.name]=beta
-            coef.["z."%+%beta.var.name]=beta.itxn
+            coef.["z."%.%beta.var.name]=beta.itxn
             if (threshold.type=="segmented") {coef.["x"]=tmp; coef.["z.x"]=log(.67) }    
         }
     #    else if (mean.model=="sigmoid1") { 
@@ -186,12 +191,12 @@ sim.chngpt = function (
         X=cbind(1,     z,        z*z,     x,    x.star*(x-e.))
         coef.=c(alpha=alpha, z=coef.z, z.quad=0.3, -log(.67), beta)
     
-    } else stop("mean.model not supported: "%+%mean.model)     
+    } else stop("mean.model not supported: "%.%mean.model)     
     if (verbose) myprint(coef., digits=10)
     
     linear.predictors=drop(X %*% coef.)
+    
     # simulate y
-    if(startsWith(x.distr,"fix")) set.seed(seed)
     y=if(family=="binomial") {
         rbern(n, expit(linear.predictors)) 
     } else if(family=="gaussian") {

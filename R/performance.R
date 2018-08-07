@@ -23,7 +23,7 @@ performance.unit.test=function(formula.1, formula.2, family, data, B, I){
     p=p.z+p.2.itxn+1 #total number of paramters, including threshold
     
     # make formula that includes all parameters but threshold
-    formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%+%chngpt.var.name)) else formula.1
+    formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%.%chngpt.var.name)) else formula.1
     f.alt=get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)
     formula.new=update(formula.new, as.formula(f.alt))
     

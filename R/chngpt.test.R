@@ -31,11 +31,12 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     chngpt.var = tmp[,chngpt.var.name]
     has.itxn = length(z.1.name)>0   
     
+    ## It is pre-mature to use chngptm to do this because the fastgrid mode does not yet support coarse grids
     # fastgrid and C version of grid is implemented only for the following scenarios
     fastgrid.ok = family=="gaussian" & type %in% c("hinge","segmented") & !has.itxn
     
     # make formula. Note that f.null includes chngptvar if type is segmented or stegmented
-    f.null=if(type %in% c("segmented","stegmented")) update(formula.null, as.formula("~.+"%+%chngpt.var.name)) else formula.null    
+    f.null=if(type %in% c("segmented","stegmented")) update(formula.null, as.formula("~.+"%.%chngpt.var.name)) else formula.null    
     f.alt=update(f.null, as.formula(get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)))
     
     # extract data
@@ -65,7 +66,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     if (is.null(chngpts)) chngpts=get.chngpts(chngpt.var.sorted,nLower,nUpper,chngpts.cnt)
     M <- length(chngpts)  
     
-    if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%+%type)
+    if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%.%type)
     if(verbose) {
         cat("Null: "); print(f.null)
         cat("Alt:  "); print(f.alt)
@@ -103,7 +104,6 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     # compute LR statistics (score statistic is computed in a later section)
     
     if(!do.score) {       
-## It is pre-mature to use chngptm to do this because the fastgrid mode does not yet support coarse grids
 #        if(fastgrid.ok) {
 #            if (verbose) print("chgnpt.test: do fastgrid search")
 #            tmpfit=chngptm (formula.null, formula.chngpt, family, data=data, type=type, est.method="grid", var.type="none", grid.search.max=Inf, verbose=verbose>1, keep.best.fit=TRUE, weights=prec.weights) 
@@ -156,25 +156,30 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     mu.h = fit.null$fitted.values
     
     # D.h is the inverse of the variance of working response variable
-    if(!robust) {
-        D.h = if (family=="binomial") {
-            diag(c(mu.h*(1-mu.h))) 
-        } else if (family=="gaussian") {
-            diag(length(mu.h)) * summary(fit.null)$dispersion # dispersion is variance estimate under gaussian family
-        }
-    } else {
-        D.h = diag(resid(fit.null, type="response")**2)
+    D.h = if (family=="binomial") {
+        diag(c(mu.h*(1-mu.h))) 
+    } else if (family=="gaussian") {
+        diag(length(mu.h)) * summary(fit.null)$dispersion # dispersion is variance estimate under gaussian family
     }
     
     DW = if(prec.w.all.one) D.h else diag(diag(D.h) * prec.weights)
     
-    V.beta.h = solve(t(Z) %*% DW %*% Z)
-    V.eta.h = Z %*% V.beta.h %*% t(Z)
-    A.h = diag(n) - D.h %*% V.eta.h %*% diag(prec.weights) 
+    # compute R := I - DZ(Z'DWZ)^{-1}Z'W is the residual operator
+    V.eta.h = Z %*% solve(t(Z) %*% DW %*% Z) %*% t(Z)
+    R.h = diag(n) - D.h %*% V.eta.h %*% diag(prec.weights) # if we inline V.eta.h, numerically we get different results
     
-    # V.y is the variance of response variable
-    V.y = if (family=="binomial") diag(c(mu.h*(1-mu.h))) else if (family=="gaussian") diag(length(mu.h)) * summary(fit.null)$dispersion 
-    ADA = A.h %*% V.y %*% t(A.h)     
+    if(robust) {
+        V.y = diag(resid(fit.null, type="response")**2)
+        RDR = R.h %*% V.y %*% t(R.h)     
+    } else {
+        if (prec.w.all.one) {
+            RDR = R.h %*% D.h
+            # R.h %*% D.h %*% t(R.h) should simplify to  R.h %*% D.h, but numerically we get very slightly different results:
+            # print((c(R.h %*% V.y)-c(R.h %*% D.h %*% t(R.h))))
+        } else {
+            RDR = R.h %*% D.h %*% t(R.h)      
+        }
+    }
     
     if(do.score) {
         W.null = matrix(0, nrow=n, ncol=p.alt*M)
@@ -194,11 +199,12 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
         }       
     }    
     p = ncol(W.null)
-
-    B=W.null; if(!prec.w.all.one) B=diag(prec.weights) %*% B # following the notation from "logistic regression.pdf"
-    V.S.hat = t(B) %*% ADA %*% B
+    B=W.null
+    if(!prec.w.all.one) B=diag(prec.weights) %*% B # following the notation from "logistic regression.pdf"
+    
+    V.S.hat = t(B) %*% RDR %*% B
 #    qr(V.S.hat, tol = 1e-8)$rank
-#    isSymmetric(A.h)
+#    isSymmetric(R.h)
     
     
     #####################################################################################
@@ -314,14 +320,14 @@ plot.chngpt.test <- function(x, by.percentile=TRUE, both=FALSE, main=NULL, ...) 
     idx=seq(1, length(x$chngpts), length.out=5)
     
     # the primary x axis is change point
-    plot(x$chngpts, x$QQ, xlab=ifelse(both,"","threshold"), ylab="statistic", type="b", main=ifelse(is.null(main), "Test by "%+%x$method, main), xaxt="n", ...)
+    plot(x$chngpts, x$QQ, xlab=ifelse(both,"","threshold"), ylab="statistic", type="b", main=ifelse(is.null(main), "Test by "%.%x$method, main), xaxt="n", ...)
     axis(side=1, at=x$chngpts[idx], labels=signif(x$chngpts[idx],2))
     abline(v=x$parameter, lty=2)
     
 #    perc=as.numeric(strtrim(names(x$chngpts),nchar(names(x$chngpts))-1))  
 #    if(by.percentile) {
 #        # the primary x axis is percentile
-#        plot(perc, x$QQ, xlab=ifelse(both,"","change point (%)"), ylab="statistic", type="b", main=ifelse(is.null(main), "Test by "%+%x$method, main), xaxt="n", ...)
+#        plot(perc, x$QQ, xlab=ifelse(both,"","change point (%)"), ylab="statistic", type="b", main=ifelse(is.null(main), "Test by "%.%x$method, main), xaxt="n", ...)
 #        axis(side=1, at=perc[idx], labels=round(perc[idx]))
 #        abline(v=(0:(fold-1))*100+as.numeric(strtrim(names(x$chngpt),nchar(names(x$chngpt))-1))  , lty=2)
 #        if (both) {

@@ -9,21 +9,19 @@ Generate simulation datasets for change point Monte Carlo studies.
 }
 \usage{
 
-sim.chngpt (
-    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b",
-        "exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear"), 
-    threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),
-#segmented2 differs from segmented in parameterization, it is studied in Cheng 2008
-    b.transition=Inf,
-    family=c("binomial","gaussian"), 
-    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2",
-        "fixnorm", "fixnorm3", "fixnorm6"), # gam1 is a hack to allow e. be different
-    e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, 
-    alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
-    n, seed, 
-    weighted=FALSE, # sampling weights
-    heteroscedastic=FALSE,
-    verbose=FALSE) 
+sim.chngpt (mean.model = c("thresholded", "thresholdedItxn",
+ "quadratic", "quadratic2b", "cubic2b", "exp",
+ "flatHyperbolic", "z2", "z2hinge", "z2segmented",
+ "z2linear"), threshold.type = c("NA", "step", "hinge",
+ "segmented", "segmented2", "stegmented"), b.transition
+ = Inf, family = c("binomial", "gaussian"), x.distr =
+ c("norm", "norm3", "norm6", "imb", "lin", "mix",
+ "gam", "zbinary", "gam1", "gam2", "fixnorm"), e. =
+ NULL, mu.x = 4.7, sd.x = NULL, sd = 0.3, mu.z = 0,
+ alpha = NULL, alpha.candidate = NULL, coef.z =
+ log(1.4), beta = NULL, beta.itxn = NULL, n, seed,
+ weighted = FALSE, heteroscedastic = FALSE, verbose =
+ FALSE)
 
 }
 %- maybe also 'usage' for other objects documented here.
@@ -35,6 +33,9 @@ string. Types of threshold effect to simulate, only applicable when label does n
 string. Glm family.
 }
   \item{n}{
+%%     ~~Describe \code{n} here~~
+}
+  \item{mu.z}{
 %%     ~~Describe \code{n} here~~
 }
   \item{seed}{

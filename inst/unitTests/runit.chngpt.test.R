@@ -16,18 +16,18 @@ test.chngpt.test <- function() {
     test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr"); # test; plot(test)
     checkEqualsNumeric(test$p.value, c(1e-04), tolerance=tolerance) 
     test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="score")
-    checkEqualsNumeric(test$p.value, c(0.0017), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(0.0016), tolerance=tolerance) 
     test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="score", robust=TRUE)
-    checkEqualsNumeric(test$p.value, c(0.0107), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(0.0364), tolerance=tolerance) 
     # param.boot    
     #formula.null=Volume~1; formula.chngpt=~Girth; family="gaussian"; data=trees; type="segmented"; mc.n=1e4; verbose=verbose; chngpts.cnt=100; test.statistic="lr"; p.val.method="param.boot"
     test = chngpt.test (formula.null=Volume~1, formula.chngpt=~Girth, family="gaussian", data=trees, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr", p.val.method="param.boot")
     
     data=sim.chngpt(mean.model="thresholded", family="gaussian", threshold.type="step", n=250, seed=1, beta=0, x.distr="norm", e.=3.4, b.=Inf, alpha=0)
     test = chngpt.test (formula.null=y~1, formula.chngpt=~z, family="gaussian", data=data, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr")
-    checkEqualsNumeric(test$p.value, 0.1745, tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, 0.1739, tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z+I(z^2), formula.chngpt=~x, family="gaussian", data=data, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr")
-    checkEqualsNumeric(test$p.value, 0.5628, tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, 0.5625, tolerance=tolerance) 
     test = chngpt.test (formula.null=y~1, formula.chngpt=~z, family="gaussian", data=data, type="segmented", boot.B=1e3, verbose=verbose, chngpts.cnt=100, test.statistic="lr", p.val.method="param.boot")
     checkEqualsNumeric(test$p.value, 0.178, tolerance=tolerance) 
 #    test = chngpt.test (formula.null=y~1, formula.chngpt=~z, family="gaussian", data=data, type="hinge", mc.n=1e4, verbose=verbose, chngpts.cnt=100, test.statistic="lr")
@@ -43,20 +43,20 @@ test.chngpt.test <- function() {
     data=sim.chngpt(mean.model="thresholded", family="binomial", threshold.type="step", n=250, seed=1, beta=-log(.67), x.distr="norm", e.=3.4, b.=Inf, alpha=chngpt::sim.alphas$thresholded_gam[1,1])
     
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="hinge", mc.n=1e4, verbose=verbose, chngpts.cnt=10, test.statistic="lr"); test
-    checkEqualsNumeric(test$p.value, c(.3474), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(.3481), tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="step", mc.n=1e4, verbose=verbose, chngpts.cnt=10, test.statistic="lr"); test
-    checkEqualsNumeric(test$p.value, c(.689), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(.6915), tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=10, test.statistic="lr"); test
     checkEqualsNumeric(test$p.value, c(0.7706), tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="stegmented", mc.n=1e4, verbose=verbose, chngpts.cnt=10, test.statistic="lr"); test
-    checkEqualsNumeric(test$p.value, c(0.8799), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(0.8804), tolerance=tolerance) 
     
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="hinge", mc.n=1e4, verbose=verbose, chngpts.cnt=10, test.statistic="score"); test
-    checkEqualsNumeric(test$p.value, c(.3355), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(.3333), tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="step", mc.n=1e4, verbose=verbose, chngpts.cnt=10, test.statistic="score"); test
-    checkEqualsNumeric(test$p.value, c(.6921), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(.6931), tolerance=tolerance) 
     test = chngpt.test (formula.null=y~z, formula.chngpt=~x, family="binomial", data, type="segmented", mc.n=1e4, verbose=verbose, chngpts.cnt=10, test.statistic="score"); test
-    checkEqualsNumeric(test$p.value, c(0.7765), tolerance=tolerance) 
+    checkEqualsNumeric(test$p.value, c(0.7768), tolerance=tolerance) 
 
 
 #    test = chngpt.test.2 (formula.null=y~z, formula.chngpt=~x, data, type="step", mc.n=1e3, interaction.method="lr.mc", verbose=verbose, chngpts.cnt=10); test
