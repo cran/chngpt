@@ -18,22 +18,19 @@ Estimate change point logistic model
 
 \usage{
 
-chngptm (formula.1, formula.2, family, data, 
-  type=c("step","hinge","segmented","segmented2","stegmented"), 
-  # segmented2 is the model studied in Cheng 2008
-  weights=NULL, # this arg is kept here due to historical reasons
-  est.method=c("default","smoothapprox","grid","fastgrid"), 
-  var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), 
-  aux.fit=NULL, 
-  lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
-  test.inv.ci=TRUE, boot.test.inv.ci=FALSE, 
-  # test.inv.ci is passed to local functions, boot.test.inv.ci is global in this function
-  ci.bootstrap.size=1000, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, 
-  # grid.search.max is the maximum number of grid points used in grid search
-  b.transition=Inf,# controls whether threshold model or smooth transition model
-  tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
-  keep.best.fit=TRUE, # best.fit is needed for making prediction and plotting
-  verbose=FALSE, ...) 
+chngptm (formula.1, formula.2, family, data, type = c("step",
+         "hinge", "upperhinge", "segmented", "segmented2",
+         "stegmented"), formula.strat = NULL, weights = NULL,
+         est.method = c("default", "smoothapprox", "grid",
+         "fastgrid", "fastgrid2", "gridC"), var.type =
+         c("none", "robust", "model", "robusttruth",
+         "bootstrap", "all"), aux.fit = NULL, lb.quantile =
+         0.1, ub.quantile = 0.9, grid.search.max = 5000,
+         test.inv.ci = TRUE, boot.test.inv.ci = FALSE,
+         ci.bootstrap.size = 1000, alpha = 0.05, save.boot =
+         FALSE, m.out.of.n = FALSE, b.transition = Inf, tol =
+         1e-04, maxit = 100, chngpt.init = NULL, search.bound =
+         10, keep.best.fit = TRUE, verbose = FALSE, ...)
 
 chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
     ...)
@@ -45,7 +42,9 @@ chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
 \method{plot}{chngptm} (x, which = NULL, xlim = NULL, lwd = 2, lcol = "red",
  add = FALSE, add.points = TRUE, add.ci = TRUE, breaks
  = 20, ...) 
-\method{summary}{chngptm} (object, var.type=NULL, expo=FALSE, verbose=FALSE, ...)
+\method{summary}{chngptm} (object, var.type = NULL, expo = FALSE,
+         show.slope.post.threshold = FALSE, verbose = FALSE,
+         ...)
 
 lincomb(object, comb, alpha=0.05)
 
@@ -55,6 +54,7 @@ lincomb(object, comb, alpha=0.05)
 \arguments{
   \item{formula.1}{The part of formula that is free of terms involving thresholded variables}
   \item{formula.2}{The part of formula that is only composed of thresholded variables}
+  \item{formula.strat}{stratification formula}
   \item{family}{string. coxph or any valid argument that can be passed to glm. But variance estimate is only available for binomial and gaussian (only model-based for latter)}
   \item{data}{data frame.}
   \item{type}{types of threshold effects. segmented2 differs from segmented in parameterization. }
@@ -80,6 +80,7 @@ lincomb(object, comb, alpha=0.05)
   \item{breaks}{integer.}
   \item{keep.best.fit}{Boolean.}
   \item{y}{outcome}
+  \item{show.slope.post.threshold}{boolean}
 
   \item{x}{chngptm fit object.}
   \item{object}{chngptm fit object.}

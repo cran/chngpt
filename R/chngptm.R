@@ -1,9 +1,10 @@
 # tol=1e-4; maxit=1e2; verbose=TRUE; est.method="fastgrid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=F; aux.fit=NULL        
 #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
-chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
+chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","upperhinge","segmented","segmented2","stegmented"), # segmented2 is the model studied in Cheng 2008
+  formula.strat=NULL,
   weights=NULL, # this arg is kept here due to historical reasons
-  est.method=c("default","smoothapprox","grid","fastgrid"), 
-  var.type=c("none","robust","model","smooth","robusttruth","bootstrap","all"), aux.fit=NULL, 
+  est.method=c("default","smoothapprox","grid","fastgrid","fastgrid2","gridC"), # gridC is for development use only 
+  var.type=c("none","robust","model","robusttruth","bootstrap","all"), aux.fit=NULL, 
   lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
   test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
   ci.bootstrap.size=1000, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, # grid.search.max is the maximum number of grid points used in grid search
@@ -13,15 +14,11 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
   verbose=FALSE, ...) 
 {
     
-    if (missing(type)) stop("type mssing")
-    type<-match.arg(type)    
+    if (missing(type)) stop("type missing")
+    threshold.type<-match.arg(type)  
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
-    
-    # useC used to be a parameter, but has been deprecated. 
-    # We may further remove useC from this function later. 
-    useC=FALSE
-    
+        
     # remove missing observations
     subset. = complete.cases(model.frame(update(formula.1, formula.2), data, na.action=na.pass))
     data=data[subset.,,drop=FALSE]
@@ -29,7 +26,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     # set b.search
     stopifnot(b.transition>0)
     b.search=if(b.transition==Inf) 30 else b.transition
-    if(type=="segmented2" & b.transition==Inf) stop("for segmented2, b.transition should not be Inf") # limited implementation for segmented2
+    if(threshold.type=="segmented2" & b.transition==Inf) stop("for segmented2, b.transition should not be Inf") # limited implementation for segmented2
     
     # not all variance estimation methods are implemented for all families    
     if(!family %in% c("gaussian","binomial")) {
@@ -37,31 +34,54 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     }     
     if (var.type %in% c("robust","robusttruth","all") & is.null(aux.fit)) stop("need an aux.fit for robust variance estimate")
     
-    # note that in chngpt.test, Z may already include chngptvar if type is segmented
+    # extract design matrix, x, and y
     y=model.frame(formula.1, data)[,1] #if lhs of formula.1 is cbind(,), y is a matrix
     Z=model.matrix(formula.1, data)
     tmpdat=model.matrix(formula.2, data)[,-1,drop=F]
-    chngpt.var.name=setdiff(colnames(tmpdat), colnames(Z))[1];     if(verbose>=2) myprint(chngpt.var.name)
+    chngpt.var.name=setdiff(colnames(tmpdat), colnames(Z))[1];     
+    if(verbose) cat("variable to be thresholded: ", chngpt.var.name, "\n")
     if(is.na(chngpt.var.name)) stop("Something is wrong. Check the formula.")
     chngpt.var = tmpdat[,chngpt.var.name]
+    # note that in chngpt.test, Z may already include chngptvar if threshold.type is segmented
     
     # interaction
     z.1.name=intersect(colnames(tmpdat), colnames(Z))
     has.itxn = length(z.1.name)>0
     z.1 = tmpdat[,z.1.name] # if the intersection is a null set, z.1 is a matrix of n x 0 dimension
     
-    # covariate dimensions
+    # stratification, a.k.a. covariate-dependent threshold regression
+    if (is.null(formula.strat)) {
+        stratified.by=NULL
+        stratified=FALSE
+    } else {
+        if(!threshold.type %in% c("hinge","segmented")) stop("stratification only implemented for hinge and segmented threshold effects")
+        if(class(formula.strat)!="formula") stop("formula.strat needs to be a formula")
+        strat.dat=model.matrix(formula.strat, data)[,-1,drop=F]
+        if (ncol(strat.dat)!=1) {str(strat.dat); stop("something is wrong with formula.strat") }
+        stratified.by=strat.dat[,1]
+        if (!all(sort(unique(stratified.by))==c(0,1))) {stop("Only 0/1 or T/F stratification variables are supported for now.") }
+        stratified=TRUE
+        if(!est.method %in% c("default","fastgrid2","grid")) stop("est.method not supported for stratified")
+        if(!family %in% c("gaussian")) stop("family not supported for stratified")
+        n.0=sum(stratified.by==0)
+        n.1=sum(stratified.by==1)
+    }
+    
+    # dimensions
     n=nrow(Z)
     p.z=ncol(Z)
-    p.2=switch(type, step=1, hinge=1, segmented=2, segmented2=2, stegmented=3)
+    p.2=switch(threshold.type, step=1, hinge=1, upperhinge=1, segmented=2, segmented2=2, stegmented=3)
     p.2.itxn=p.2*ifelse(has.itxn,2,1)
     p=p.z+p.2.itxn+1 #total number of paramters, including threshold
+    if(stratified) {
+        # if these dimensions are needed, e.g. in smoothapprox, they need to be updated
+    }
         
-    # formula.new is the model to fit
-    formula.new = if (type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%.%chngpt.var.name)) else formula.1
-    formula.new=update(formula.new, as.formula(get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)))
-        
-    # set weights
+    # formula.new is the model to fit if threshold is known
+    formula.new = if (threshold.type %in% c("segmented","segmented2","stegmented")) update(formula.1, as.formula("~.+"%.%chngpt.var.name)) else formula.1
+    formula.new=update(formula.new, get.f.alt(threshold.type, chngpt.var.name, modified.by=if(has.itxn) z.1.name else NULL, stratified=stratified))
+    
+    # weights
     # w.all.one is needed in the next block. 
     # chngpt.glm.weights goes with the data because glm() is incredible that if the weights arg does not have global scope, it needs to be a variable name in the data frame
     # chngpt.glm.weights and does not get updated in the next block while weights are updated
@@ -70,7 +90,6 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     w.all.one=all(weights==1)     
     # create a copy of chngpt.glm.weights in the function scope so that do.regression works
     chngpt.glm.weights=data$chngpt.glm.weights  
-    
     do.regression=function(formula.new, data, family){
         if (family=="coxph") {
             fit = keepWarnings(survival::coxph(formula.new, data=data, weights=chngpt.glm.weights)) # interestingly and I don't understand why weights=data$chngpt.glm.weights fails
@@ -90,91 +109,167 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
         w.all.one=FALSE
     }
     
-    # set est.method
-    # for now, fastgrid and C version of grid is implemented only for the following scenarios
+    # est.method
     # smoothapprox cannot work when lhs of formula.1 is cbind() 
-    fastgrid.ok = family=="gaussian" & type %in% c("hinge","segmented") & !has.itxn
+    # for now, fastgrid and C version of grid is implemented only for the following scenarios
+    fastgrid.ok = family=="gaussian" & threshold.type %in% c("hinge","upperhinge","segmented") & !has.itxn
     if ((!family%in%c("binomial","gaussian")) & est.method=="smoothapprox") stop ("smoothapprox only implemented for binomial and guassian families and when lhs of formula is not cbind()")
-    if(est.method=="fastgrid" & !fastgrid.ok) {
-        warning ("Fastgrid only implemented for guassian family and hinge/segmented models without interaction. Switching to grid search ...")
+    if(est.method%in%c("fastgrid","fastgrid2") & !fastgrid.ok) {
+        warning ("Fast grid search only implemented for guassian family and hinge/upperhinge/segmented models without interaction. Switching to grid search ...")
         est.method="grid"
     }
-    #if(est.method=="grid" & useC & (!fastgrid.ok | !w.all.one)) useC=FALSE # useC for grid only supports a subset of scenario that supports fastgrid, namely no weight support
     if (est.method=="default") {
-        if(fastgrid.ok) { est.method="fastgrid" 
+        if(fastgrid.ok) { est.method="fastgrid2" 
         } else if(family=="binomial") { est.method="smoothapprox"
-        } else { est.method="grid"; useC=FALSE
+        } else { est.method="grid"
         }        
     }
-    if (fastgrid.ok & est.method!="fastgrid" & var.type!="none") cat("Note that for linear models, fastgrid is the best est.method.\n") # var.type condition is added so that this is not printed during bootstrap
+    if (fastgrid.ok & !est.method%in%c("fastgrid","fastgrid2") & var.type!="none") cat("Note that for linear models, fastgrid2 is the best est.method.\n") # var.type condition is added so that this is not printed during bootstrap
     
-    # sorted data
-    chngpt.var.sorted=sort(chngpt.var)
-    Z.sorted=Z[order(chngpt.var),,drop=FALSE]
-    y.sorted=y[order(chngpt.var)]
-    w.sorted=weights[order(chngpt.var)]
-    data.sorted=data[order(chngpt.var),]    
+    # sort data
+    if(!stratified) {
+        order.=order(chngpt.var)
+        chngpt.var.sorted=chngpt.var[order.]
+        Z.sorted=Z[order.,,drop=FALSE]
+        y.sorted=y[order.]
+        w.sorted=weights[order.]
+        data.sorted=data[order.,]
+        stratified.by.sorted=NULL
+    } else {
+        order.=order(stratified.by, chngpt.var)
+        chngpt.var.sorted=chngpt.var[order.]
+        Z.sorted=Z[order.,,drop=FALSE]
+        y.sorted=y[order.]
+        w.sorted=weights[order.]
+        data.sorted=data[order.,]
+        stratified.by.sorted=stratified.by[order.]
+    }
     
-    if (verbose) {myprint(family, type, est.method, var.type); myprint(has.itxn, p.z, p.2.itxn, p); print(formula.new)}
+    if (verbose) {myprint(family, threshold.type, est.method, var.type); myprint(has.itxn, p.z, p.2.itxn, p); print(formula.new)}
         
-    # choose chngpts - threshold candidates
-    nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile)
-    # an alternative and equivalent way to define nLower/nUpper: nLower=sum(chngpt.var.sorted<quantile(chngpt.var.sorted, lb.quantile))+1; nUpper=sum(chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile));myprint(nLower, nUpper)
-    chngpts=get.chngpts(chngpt.var.sorted,nLower,nUpper,n.chngpts=grid.search.max)
-#    msg="If there are more data between lower and upper bound than grid.search.max, fastgrid.search cannot be used yet. One could try increasing grid.search.max."
-#    if (nUpper-nLower+1>grid.search.max & est.method=="fastgrid") stop(msg)
+    # threshold candidates
+    chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,n.chngpts=grid.search.max, stratified.by.sorted=stratified.by.sorted)
+    
     
     grid.search=function(){
-        if(fastgrid.ok & (est.method=="fastgrid")) {
-            # putting as.double around a matrix changes the matrix into a vector, which affects 
-            # as.double is needed around y.sorted b/c if y.sort is integer, this throws an error b/c the cpp function expects real
-            # logliks is actually Y' * H_e * Y here
-            if(verbose) myprint(fastgrid.ok, est.method, useC)
-            f.name=est.method%.%"_search" # It is weird but f.name cannot be put inline b/c rcmdcheck throws an error otherwise
-            logliks=-.Call(f.name, 
-                cbind(Z.sorted, chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), #the last column is to be (x-e)+
-                as.double(y.sorted), 
-                as.double(w.sorted), w.all.one, 
-                attr(chngpts,"index")) 
-            #print(sum(y.sorted**2)-logliks) 
-                
+        if(verbose) myprint(fastgrid.ok, est.method)
+        
+        if(fastgrid.ok & est.method%in%c("gridC", "fastgrid", "fastgrid2")) {
+#            # gridC:     Only used for a fair comparison of speed with fastgrid. It is not as robust as grid, which is an R implementation that handles weights more easily
+#            # for upperhinge fastgrid2, there is an R implementation for a simple case: linear, without weights. It is even slower than grid search, 
+#            # but it implements a good algorithm and can be used to debug fastgrid2
+#            logliks=get.liks.upperhinge (y.sorted,Z.sorted,chngpt.var.sorted,chngpts)   
+        
+#            # for fastgrid2 development
+#            A <- solve(t(Z.sorted) %*% Z.sorted)
+#            H <- Z.sorted %*% A %*% t(Z.sorted)
+#            r <- as.numeric((diag(n)-H) %*% y.sorted)
+#            # find sqrt of A
+#            a.eig <- eigen(A)   
+#            A.sqrt <- a.eig$vectors %*% diag(sqrt(a.eig$values)) %*% t(a.eig$vectors) # solve can be replaced by t b/c A is symmetrical
+#            B = Z.sorted %*% A.sqrt
+                                    
+#                # for fastgrid2 development, the first two argments may be replaced by:
+#                cbind(B, chngpt.var.sorted), #design matrix, the last column is to be used as (x-e)+ in the C program
+#                as.double(r), 
+            
+            # computes Y' H_e Y
+            if(!stratified) {
+                f.name=est.method%.%"_search" # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+                logliks = .Call(f.name, 
+                    cbind(Z.sorted, chngpt.var.sorted, if(threshold.type=="segmented") chngpt.var.sorted), #design matrix, the last column is to be used as (x-e)+ in the C program
+                    as.double(y.sorted), 
+                    as.double(w.sorted), 
+                    w.all.one, 
+                    as.integer(attr(chngpts,"index")), # potential thresholds
+                    0,# bootstrap size
+                    threshold.type=="upperhinge"
+                )             
+            } else {
+                #cbind(chngpt.var.sorted*c(rep.int(0,n.0),rep.int(1,n.1)), chngpt.var.sorted*c(rep.int(1,n.0),rep.int(0,n.1))), # added col
+                logliks = .Call("twoD_search", 
+                    cbind(Z.sorted, if(threshold.type=="segmented") chngpt.var.sorted), # X
+                    as.double(chngpt.var.sorted), # threshold variable
+                    as.double(y.sorted), 
+                    as.double(w.sorted), 
+                    w.all.one, 
+                    as.integer(stratified.by.sorted),
+                    as.double(lb.quantile),
+                    as.double(ub.quantile),
+                    0,# bootstrap size
+                    threshold.type=="upperhinge"
+                )
+                logliks=matrix(logliks, nrow=length(chngpts[[1]]), ncol=length(chngpts[[2]]))
+            }
+            # remember to to put as.double around y.sorted since if y.sort is integer, this throws an error b/c the cpp function expects real 
+            # don't put as.double around a matrix since changes the matrix into a vector, which affects the ordering of elements
+            
         } else {
-            if(verbose) myprint(fastgrid.ok, est.method, useC)
-            logliks=sapply (chngpts, function(e) {
-                data=make.chngpt.var(chngpt.var, e, type, data, b.transition)
-                fit = do.regression (formula.new, data, family)            
-                if(length(fit$warning)!=0) {
-                    if(verbose>=3) {
-                        myprint(e)
-                        print(fit$warning)
-                        print(coef(fit$value))
-                        print((logLik(fit$value)))
-                    }
-                    as.numeric(logLik(fit$value))
-                } else as.numeric(logLik(fit$value))            
-                # to compare with fastgrid, uncomment the next line
-                #sum(resid(fit$value)**2)
-            } )
-            #print(logliks)
+        
+            # call glm repeatedly
+            logliks = if(!stratified) {
+                sapply (chngpts, function(e) {
+                    data=make.chngpt.var(chngpt.var, e, threshold.type, data, b.transition, stratified.by)
+                    fit = do.regression (formula.new, data, family)            
+                    if(length(fit$warning)!=0 & verbose>=3) {myprint(e); print(fit$warning); print(coef(fit$value)); print((logLik(fit$value)))}                 
+                    #cat(sum(resid(fit$value)**2), " ") # to compare with fastgrid, uncomment the next line
+                    if(family=="gaussian") sum(w.sorted*y.sorted**2)-sum(resid(fit$value)**2) else as.numeric(logLik(fit$value))            
+                })
+            } else {
+                sapply (chngpts[[2]], simplify="array", function(f) {
+                sapply (chngpts[[1]], simplify="array", function(e) {
+                    data=make.chngpt.var(chngpt.var, c(e,f), threshold.type, data, b.transition, stratified.by)
+#                    myprint(e,f)
+#                    print(formula.new)
+#                    print(chngpts)
+#                    print(data[order.,c("z","x","x.mod.e","x.mod.f")])
+#                    stop("rest")
+                    fit = do.regression (formula.new, data, family)            
+                    if(length(fit$warning)!=0 & verbose>=3) {myprint(e); print(fit$warning); print(coef(fit$value)); print((logLik(fit$value)))}                 
+                    #cat(sum(resid(fit$value)**2), " ") # to compare with fastgrid, uncomment the next line
+                    if(family=="gaussian") sum(w.sorted*y.sorted**2)-sum(resid(fit$value)**2) else as.numeric(logLik(fit$value))            
+                })
+                })
+            }
+            
         }
-    
-        e=chngpts[which.max(logliks)]
-#        print(logliks)
-#        myprint(which.max(logliks))
-#        myprint(e)
-        attr(e, "glm.warn")=any(is.na(logliks))
-        attr(e, "logliks")=logliks
+
+        if(!stratified) {
+            e.final=chngpts[which.max(logliks)]
+        } else {
+            e.final=arrayInd(which.max(logliks), .dim=dim(logliks))
+            e.final=c(chngpts[[1]][e.final[1]], chngpts[[2]][e.final[2]])
+        }
+        #print(chngpts); print(logliks); myprint(which.max(logliks)); myprint(e.final)
+        #attr(e.final, "glm.warn")=any(is.na(logliks))
         if(verbose>=2) {
-            plot(chngpts, logliks, type="b", xlab="threshold", ...)
-            abline(v=e)
+            if(!stratified) {
+                plot(chngpts, logliks, type="b", xlab="threshold")
+                abline(v=e.final)
+            } else {
+                # cannot use points3d to add a red point after plot
+                col=0*logliks; col[which.max(logliks)]=1; col=col+1
+                plot3d(cbind(expand.grid(chngpts[[1]],chngpts[[2]]), c(logliks)), xlab="f", ylab="e", zlab="loglik", type="p", col=c(col))
+            }
         }
-        e        
+        
+        # fit glm using e.final
+        data = make.chngpt.var(chngpt.var, e.final, threshold.type, data, b.transition, stratified.by) # note that b.transition is used here instead of b.search
+        fit = do.regression (formula.new, data, family)$value
+        # return e.final and logliks through attr. If we return them as elements of fit, upon removing these elements, the type of fit changes to a list, not glm anymore
+        attr(fit,"e.final")=e.final
+        attr(fit,"logliks")=logliks
+        fit
     }
     
     # find e.final
-    if (est.method %in% c("grid","fastgrid")) {
+    if (est.method %in% c("grid","gridC","fastgrid","fastgrid2")) {
     #### grid search
-        e.final=grid.search()           
+        best.fit=grid.search()   
+        e.final=attr(best.fit,"e.final")        
+        logliks=attr(best.fit,"logliks")
+        attr(best.fit,"logliks")<-attr(best.fit,"e.final")<-NULL
+        coef.hat=c(coef(best.fit), e.final)
         glm.warn=attr(e.final,"glm.warn")  
         
     } else if (est.method=="smoothapprox") {
@@ -185,14 +280,14 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
         if (is.null(e.init)) {
             if(verbose) cat("initializing through coarse grid search\n")
             # est.method has to be grid in the following, otherwise it will create an infinite loop
-            tmp=chngptm (formula.1, formula.2, family=family, data, type=type, weights=weights, est.method="grid", lb.quantile=lb.quantile, ub.quantile=ub.quantile, grid.search.max=50, 
+            tmp=chngptm (formula.1, formula.2, family=family, data, type=threshold.type, weights=weights, est.method="grid", lb.quantile=lb.quantile, ub.quantile=ub.quantile, grid.search.max=50, 
                         b.transition=b.transition, search.bound=search.bound, keep.best.fit=FALSE, verbose=ifelse(verbose>3,verbose-3,0))# pass verbose-3 directly seems to fail to do the job 
             e.init=tmp$chngpt
         } 
         
         if(length(e.init)==0) {
             # if there are no initial values for some reason, just do grid search
-            e.final=grid.search()
+            e.final=attr(grid.search(), "e.final")
             glm.warn=attr(e.final,"glm.warn")
             
         } else {
@@ -212,7 +307,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                 if (verbose) cat("iter ", n.iter, "\t")
                 
                 # remake the binary change point variable in every iteration based on the change point estimate from last iteration
-                data = make.chngpt.var(chngpt.var, e.init, type, data, b.search) # b.search is used here to be consistent with optim which uses b.search as well
+                data = make.chngpt.var(chngpt.var, e.init, threshold.type, data, b.search) # b.search is used here to be consistent with optim which uses b.search as well
                 fit.0 = do.regression(formula.new, data, family)$value
                 
                 # update threshold and associated coefficients
@@ -223,9 +318,9 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     
                 # search for better e and slopes associated with x and thresholded x
                 optim.out = try(optim(par=c(beta.init, e.init), 
-                      fn = get("dev."%.%type%.%"."%.%ifelse(has.itxn,"itxn.","")%.%"f"), 
+                      fn = get("dev."%.%threshold.type%.%"."%.%ifelse(has.itxn,"itxn.","")%.%"f"), 
                       gr = NULL,
-                      #gr = get("dev."%.%type%.%"."%.%ifelse(has.itxn,"itxn.","")%.%"deriv.f"), 
+                      #gr = get("dev."%.%threshold.type%.%"."%.%ifelse(has.itxn,"itxn.","")%.%"deriv.f"), 
     #                  # if we use analytical gradient function by deriv3 in optim, we can get situations like exp(100), which will be Inf, and Inf/Inf will be NaN
     #                  fn = function(theta,...) sum(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...)), 
     #                  gr = function(theta,...) colSums(attr(dev.step.itxn.deriv(theta[1],theta[2],theta[3],...), "gradient")), 
@@ -236,7 +331,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                       
                 if(class(optim.out)=="try-error") {
                     if (verbose) cat("error doing smoothapprox search, switch to grid search\n")
-                    e.final=grid.search()
+                    e.final=attr(grid.search(), "e.final")
                     glm.warn=attr(e.final,"glm.warn")
                     break;
                 }
@@ -265,26 +360,36 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
             } # end while 
         } # end if else
     
+        # fit glm using e.final
+        data = make.chngpt.var(chngpt.var, e.final, threshold.type, data, b.transition) # note that b.transition is used here instead of b.search
+        best.fit = do.regression (formula.new, data, family)$value
+        coef.hat=c(coef(best.fit), "chngpt"=e.final)
+        
     } else stop("wrong est.method") # end if grid/smoothapprox
-    # fit glm using e.final
-    data = make.chngpt.var(chngpt.var, e.final, type, data, b.transition) # note that b.transition is used here instead of b.search
-    fit = do.regression (formula.new, data, family)$value
-    coef.hat=c(coef(fit), "chngpt"=e.final)
-    best.fit=fit
     
-    names(coef.hat)[length((coef.hat))]="chngpt"
-    if (type=="stegmented") {
-        replacement="I("%.%chngpt.var.name%.%">chngpt)"
-        replacement.2="("%.%chngpt.var.name%.%"-chngpt)+"
-        new.names=sub("x.mod.e.2", replacement.2, names(coef.hat))    
-        new.names=sub("x.mod.e", replacement, new.names)    
-    } else {
-        if(type=="step") {
+    if(!stratified) {
+        names(coef.hat)[length(coef.hat)]="chngpt"
+        if (threshold.type=="stegmented") {
             replacement="I("%.%chngpt.var.name%.%">chngpt)"
-        } else if (type %in% c("hinge","segmented","segmented2")) {
-            replacement="("%.%chngpt.var.name%.%"-chngpt)+"
+            replacement.2="("%.%chngpt.var.name%.%"-chngpt)+"
+            new.names=sub("x.mod.e.2", replacement.2, names(coef.hat))    
+            new.names=sub("x.mod.e", replacement, new.names)    
+        } else {
+            if(threshold.type=="step") {
+                replacement="I("%.%chngpt.var.name%.%">chngpt)"
+            } else if (threshold.type %in% c("hinge","segmented","segmented2")) {
+                replacement="("%.%chngpt.var.name%.%"-chngpt)+"
+            } else if (threshold.type %in% c("upperhinge")) {
+                replacement="("%.%chngpt.var.name%.%"-chngpt)-"
+            } 
+            new.names=sub("x.mod.e", replacement, names(coef.hat))    
+        }
+    } else {
+        names(coef.hat)[length(coef.hat)-1:0]=c("chngpt.0","chngpt.1")
+        if (threshold.type %in% c("hinge","segmented","segmented2")) {
+            new.names=sub("x.mod.e", "("%.%chngpt.var.name%.%".0-chngpt.0)+", names(coef.hat))    
+            new.names=sub("x.mod.f", "("%.%chngpt.var.name%.%".1-chngpt.1)+", new.names)    
         } 
-        new.names=sub("x.mod.e", replacement, names(coef.hat))    
     }
     if (verbose) cat(new.names,"\n")
     names(coef.hat)=new.names
@@ -302,81 +407,41 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     if (var.type!="bootstrap" & (has.itxn | !family %in% c("binomial","gaussian"))) {
         var.est=NULL
     } else {
-        if (type %in% c("step","stegmented")) {
+        if (threshold.type %in% c("step","stegmented")) {
             # discontinous models
             var.est=NULL
             
-        } else if (type %in% c("hinge","segmented","segmented2")) { # continuous change point models
+        } else if (threshold.type %in% c("hinge","upperhinge","segmented","segmented2")) { # continuous change point models
             
-            var.est.smooth=function(){
-                if(verbose) cat("in var.est.smooth\n")
-    
-                # expressions for use with optim with deriv3, they are different from the set of expressions, dev.step etc, b/c each alpha has to be separate
-                alpha.z.s="("%.% concatList("alpha"%.%1:p.z%.%"*z"%.%1:p.z%.%"","+") %.%")"
-                if (family=="binomial") {
-                    if (type=="hinge") {
-                        deviance.s <- " (1-y) * ( "%.% alpha.z.s %.%" + (x-e)*beta/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%.% alpha.z.s %.%" - (x-e)*beta/(1+exp(-b*(x-e))) ) ) "
-                        params=c("alpha"%.%1:p.z, "beta", "e")
-                    } else if (type=="segmented") {
-                        deviance.s <- " (1-y) * ( "%.% alpha.z.s %.%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%.% alpha.z.s %.%" - beta1*x - (x-e)*beta2/(1+exp(-b*(x-e))) ) ) "
-                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
-                    } else if (type=="segmented2") {
-                        deviance.s <- " (1-y) * ( "%.% alpha.z.s %.%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -"%.% alpha.z.s %.%" - beta1*x - x*beta2/(1+exp(-b*(x-e))) ) ) "
-                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
-                    }
-                } else if (family=="gaussian") {
-                    if (type=="hinge") {
-                        deviance.s <- " (y- ( "%.% alpha.z.s %.%" + (x-e)*beta/(1+exp(-b*(x-e))) ))**2"
-                        params=c("alpha"%.%1:p.z, "beta", "e")
-                    } else if (type=="segmented") {
-                        deviance.s <- " (y- ( "%.% alpha.z.s %.%" + beta1*x + (x-e)*beta2/(1+exp(-b*(x-e))) ))**2"
-                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
-                    } else if (type=="segmented2") {
-                        deviance.s <- " (y- ( "%.% alpha.z.s %.%" + beta1*x + x*beta2/(1+exp(-b*(x-e))) ))**2"
-                        params=c("alpha"%.%1:p.z, "beta1", "beta2", "e")
-                    }
-                }
-                params.long=c(params,"x","y","b","z"%.%1:p.z,"z.1")
-                if (verbose) print(deviance.s)
-                if (verbose) myprint(params)
-                loss.f=deriv3(parse(text=deviance.s), params, params.long)    
-                # b.search instead of b.transition needs to be used below, otherwise hess is singular
-                param.list = c(as.list(coef.hat), list(chngpt.var), list(y), list(b.search), lapply(1:ncol(Z), function (i) Z[,i]), list(z.1))
-                names(param.list)=params.long    
-                tmp=do.call(loss.f, param.list)
-                hess=apply(attr(tmp,"h"), 2:3, sum, na.rm=T)       
-                #print(hess)
-                #print(eigen(hess))         
-                var.est = try(solve(hess)) # should keep change point in, and not do hess[-ncol(hess), -ncol(hess)], otherwise lead to over estimation of sd
-                
-                if (family=="gaussian") {
-                    var.est=var.est*2*sigma(best.fit)^2
-                }
-                
-                rownames(var.est) <- colnames(var.est) <- names(coef.hat)
-                var.est
-            }
             
             # model-based
             var.est.model=function(test.inv.ci, robust=FALSE){
                 if(verbose) cat("in var.est.model\n")
-                                
+    
                 # set up some variables
                 e=coef.hat["chngpt"]
-                x.gt.e=chngpt.var>e
-                beta.4=coef.hat["("%.%chngpt.var.name%.%"-chngpt)+"]
-                
+                beta.4=coef.hat["("%.%chngpt.var.name%.%"-chngpt)"%.%ifelse(threshold.type=="upperhinge","-","+")]
+    
                 # x.tilda
-                if(type %in% c("hinge","segmented")) {
+                if(threshold.type %in% c("hinge","segmented")) {
+                    x.gt.e=chngpt.var>e
                     if (b.transition==Inf) {
-                        x.tilda=cbind(Z, if(type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
+                        x.tilda=cbind(Z, if(threshold.type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
                     } else {
-                        x.tilda=cbind(Z, if(type=="segmented") chngpt.var, (chngpt.var-e)*expit(b.transition*(chngpt.var-e)), -beta.4*expit(b.transition*(chngpt.var-e))*(1+b.transition*(chngpt.var-e)*(1-expit(b.transition*(chngpt.var-e)))))
+                        x.tilda=cbind(Z, if(threshold.type=="segmented") chngpt.var, (chngpt.var-e)*expit(b.transition*(chngpt.var-e)), -beta.4*expit(b.transition*(chngpt.var-e))*(1+b.transition*(chngpt.var-e)*(1-expit(b.transition*(chngpt.var-e)))))
                     }               
-                } else if (type=="segmented2") {
+                } else if(threshold.type %in% c("upperhinge")) {
+                    x.lt.e=chngpt.var<e
+                    if (b.transition==Inf) {
+                        x.tilda=cbind(Z, (chngpt.var-e)*x.lt.e, -beta.4*x.lt.e)
+                    } else {
+                        stop("var.est.model: not yet implemented")
+                        #x.tilda=cbind(Z, (chngpt.var-e)*expit(b.transition*(chngpt.var-e)), -beta.4*expit(b.transition*(chngpt.var-e))*(1+b.transition*(chngpt.var-e)*(1-expit(b.transition*(chngpt.var-e)))))
+                    }               
+                } else if (threshold.type=="segmented2") {
                     # earlier we checked that b.transition should not be Inf
                     x.tilda=cbind(Z, chngpt.var, chngpt.var*expit(b.transition*(chngpt.var-e)),                               -beta.4*expit(b.transition*(chngpt.var-e))        *b.transition*chngpt.var*(1-expit(b.transition*(chngpt.var-e))) )
-                }
+                } else stop("threshold.type not recognized in var.est.model")
                 
                 if (family=="binomial") {
                     p.est=drop(expit(x.tilda[,-p] %*% coef.hat[-p]))                                                  
@@ -433,32 +498,40 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                 
                 # set up some variables
                 e=coef.hat["chngpt"]
-                x.gt.e=chngpt.var>e
-                beta.4=coef.hat["("%.%chngpt.var.name%.%"-chngpt)+"]
-                
-                # x.tilda
-                x.tilda=cbind(Z, if (type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
+                if (threshold.type=="upperhinge") {
+                    x.lt.e=chngpt.var<e
+                    beta.4=coef.hat["("%.%chngpt.var.name%.%"-chngpt)-"]                    
+                    # x.tilda
+                    x.tilda=cbind(Z, (chngpt.var-e)*x.lt.e, -beta.4*x.lt.e)
+                } else {
+                    x.gt.e=chngpt.var>e
+                    beta.4=coef.hat["("%.%chngpt.var.name%.%"-chngpt)+"]                    
+                    # x.tilda
+                    x.tilda=cbind(Z, if (threshold.type=="segmented") chngpt.var, (chngpt.var-e)*x.gt.e, -beta.4*x.gt.e)
+                }
                 
                 antilink=get(family)()$linkinv
                 mu.est=drop(antilink(x.tilda[,-p] %*% coef.hat[-p]))        
-                M=tXDX(x.tilda, resid(best.fit,"response")^2)/n # has to use the robust, sandwich estimation version. Note the type needs to be response for glm
+                M=tXDX(x.tilda, resid(best.fit,"response")^2)/n # has to use the robust, sandwich estimation version. Note the threshold.type needs to be response for glm
                 # non-robust version is not justified because it depends on the assumption that mean model is correct
                 #M=t(x.tilda)%*%x.tilda *sigma(best.fit)^2 /n 
+                
                 if (family=="binomial") {
                     V.1=-tXDX(x.tilda, mu.est*(1-mu.est))/n    
                 } else if (family=="gaussian") {
                     V.1=-t(x.tilda) %*% (x.tilda)/n                    
                 }
+                
                 # V.2 is the same between binomial and gaussian families
                 V.2=matrix(0,nrow=p,ncol=p)
                 # there are two ways to compute the off-diagonal element. when use true coefficients, it works better to use predicted response by true model; when use estimated, using y works better
                 #V.2[p,p-1]<-V.2[p-1,p]<- if(is.null(attr(aux.fit,"truemodel"))) -mean((y-mu.est)*x.gt.e) else -mean((predict(aux.fit, data, "response")-mu.est)*x.gt.e)
-                V.2[p,p-1]<-V.2[p-1,p]<- -mean((y-mu.est)*x.gt.e) 
+                V.2[p,p-1]<-V.2[p-1,p]<- -mean((y-mu.est)*if(threshold.type=="upperhinge") x.lt.e else x.gt.e) 
                 # compute V.2[p, p]
                 newdata=data; newdata[[chngpt.var.name]]=e
                 m.0=mean(predict(aux.fit, newdata, "response"))
-                p.e.z.0=mean(antilink(cbind(Z, if (type=="segmented") e) %*% coef.hat[1:(p-2)]))                
-                V.2[p, p]= beta.4 * f.x.e * (m.0-p.e.z.0)
+                p.e.z.0=mean(antilink(cbind(Z, if (threshold.type=="segmented") e) %*% coef.hat[1:(p-2)]))                
+                V.2[p, p]= ifelse(threshold.type=="upperhinge",-1,1)* beta.4 * f.x.e * (m.0-p.e.z.0)
                 V=V.1+V.2    
                 V.inv=solve(V) 
                 
@@ -505,12 +578,13 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
             ci.test.inv=function(c.alpha){
                 if (verbose) cat("in ci.test.inv\n")
                 
-                if (est.method %in% c("grid","fastgrid")) {
-                    c(NA,NA)# todo
-                } else if (est.method=="smoothapprox") {
+                # TODO: we do a better job when it is grid-based search since we have already computed the profile likelihood 
+#                if (est.method %in% c("grid","fastgrid","fastgrid2")) {
+#                    c(NA,NA)# todo
+#                } else if (est.method=="smoothapprox") {
                     
                     idx.chngpt=which(chngpt.var.sorted>=coef.hat["chngpt"])[1]
-                    data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], type, data, b.transition)
+                    data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], threshold.type, data, b.transition)
                     fit=do.regression (formula.new, data, family)
                     lik.max = as.numeric(logLik(fit$value))
                     
@@ -527,7 +601,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                             #if (verbose) warning("no more data on the left")
                             lik=NA; break
                         }
-                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], threshold.type, data, b.transition)
                         fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
@@ -547,7 +621,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                             #if (verbose) warning("no more data on the right")
                             lik=NA; break
                         }
-                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], threshold.type, data, b.transition)
                         fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
@@ -562,7 +636,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                     }
                     
                     c(lb,ub)
-                } else stop("wrong est.method")
+#                } else stop("wrong est.method")
                 
             } 
     
@@ -570,12 +644,12 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
             ci.test.inv.F=function(c.alpha){
                 if (verbose) cat("in ci.test.inv.F\n")
                 
-                if (est.method %in% c("grid","fastgrid")) {
+                if (est.method %in% c("grid","fastgrid","fastgrid2")) {
                     c(NA,NA)# todo
                 } else if (est.method=="smoothapprox") {
                     
                     idx.chngpt=which(chngpt.var.sorted>=coef.hat["chngpt"])[1]
-                    data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], type, data, b.transition)# it is ok that data is assigned to b/c the function adds columns
+                    data = make.chngpt.var(chngpt.var, chngpt.var.sorted[idx.chngpt], threshold.type, data, b.transition)# it is ok that data is assigned to b/c the function adds columns
                     fit=do.regression (formula.new, data, family)
                     sigsq.max = (sigma(fit$value))**2; #myprint(sigsq.max)
                     #sigsq.max = (sigma(best.fit))**2; myprint(sigsq.max)
@@ -593,7 +667,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                             if (verbose) warning("no more data on the left")
                             sigsq=NA; break
                         }
-                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], threshold.type, data, b.transition)
                         fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
@@ -614,7 +688,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                             if (verbose) warning("no more data on the right")
                             sigsq=NA; break
                         }
-                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], type, data, b.transition)
+                        data=make.chngpt.var(chngpt.var, chngpt.var.sorted[idx], threshold.type, data, b.transition)
                         fit = do.regression (formula.new, data, family)
                         if(length(fit$warning)!=0) {
                             #if(verbose) print(fit$warning)
@@ -640,7 +714,9 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                 if (class(save.seed)=="try-error") {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
                 set.seed(1)     # this is only added on 7/30/2017, well after biometrics paper is published. should not change the results qualitatively
                 
-                if (fastgrid.ok & (est.method=="fastgrid")) {                    
+                #if (fastgrid.ok & est.method%in%c("fastgrid","fastgrid2")) {                    
+                # for the upperhinge2 manuscript, we add grid here
+                if (fastgrid.ok & est.method%in%c("fastgrid","fastgrid2","gridC")) {      
                     boot.out=list()
                     class(boot.out)="boot"
                     boot.out$t0=coef.hat
@@ -650,23 +726,45 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                     boot.out$stype="i"
                     boot.out$fake=TRUE
                     
-                    # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
-                    f.name="boot_"%.%est.method%.%"_search"
-                    boot.out$t=.Call(f.name, 
-                        cbind(Z.sorted, chngpt.var.sorted, if(type=="segmented") chngpt.var.sorted), 
-                        as.double(y.sorted), 
-                        as.double(w.sorted), w.all.one, 
-                        attr(chngpts,"index"),
-                        ci.bootstrap.size) 
+                    if(!stratified) {
+                        f.name=est.method%.%"_search" # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+                        boot.out$t = .Call(f.name, 
+                            cbind(Z.sorted, chngpt.var.sorted, if(threshold.type=="segmented") chngpt.var.sorted), #design matrix, the last column is to be used as (x-e)+ in the C program
+                            as.double(y.sorted), 
+                            as.double(w.sorted), 
+                            w.all.one, 
+                            as.integer(attr(chngpts,"index")), # potential thresholds
+                            ci.bootstrap.size,# bootstrap size
+                            threshold.type=="upperhinge"
+                        )             
+                    } else {
+                        boot.out$t = .Call("twoD_search", 
+                            cbind(Z.sorted, if(threshold.type=="segmented") chngpt.var.sorted), # X
+                            as.double(chngpt.var.sorted), # threshold variable
+                            as.double(y.sorted), 
+                            as.double(w.sorted), 
+                            w.all.one, 
+                            as.integer(stratified.by.sorted),
+        #                    as.integer(attr(chngpts[[1]],"index")), # potential thresholds 
+        #                    as.integer(attr(chngpts[[2]],"index")), # potential thresholds
+                            as.double(lb.quantile),
+                            as.double(ub.quantile),
+                            ci.bootstrap.size,# bootstrap size
+                            threshold.type=="upperhinge"
+                        )
+                    }
                     boot.out$t=t(matrix(boot.out$t, ncol=ci.bootstrap.size))
                     
                 } else {
-                    boot.out=boot(data.sorted, R=ci.bootstrap.size, sim = "ordinary", stype = "i", statistic=function(dat, ii){
-                        #print(ii)
+                    boot.out=boot::boot(data.sorted, R=ci.bootstrap.size, sim = "ordinary", stype = "i", statistic=function(dat, ii){
                         if (m.out.of.n) ii=ii[1:(4*sqrt(n))] # m out of n bootstrap
                         # use chngpt.init so that the mle will be less likely to be inferior to the model conditional on e.hat, but it does not always work
                         # for studentized bootstrap interval, need variance estimates as well, however, stud performs pretty badly
-                        fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type, est.method=est.method, var.type="none", b.transition=b.transition, chngpt.init=coef.hat["chngpt"], useC=useC, verbose=verbose>=3, keep.best.fit=TRUE, lb.quantile=lb.quantile, ub.quantile=ub.quantile, grid.search.max=grid.search.max))
+                        fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type=threshold.type, 
+                            formula.strat=formula.strat,
+                            weights=w.sorted[ii], threshold.type, est.method=est.method, var.type="none", 
+                            b.transition=b.transition, chngpt.init=coef.hat["chngpt"], verbose=verbose>=3, keep.best.fit=TRUE, lb.quantile=lb.quantile, ub.quantile=ub.quantile, 
+                            grid.search.max=grid.search.max))
                         tmp=length(coef.hat)*1+ifelse(!boot.test.inv.ci, 0, ifelse(family=="gaussian",2,1)) # need to adjust depending on the last else clause
                         out = if(inherits(fit.ii,"try-error")) {
                             rep(NA,tmp) 
@@ -682,7 +780,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                                 # compute profile likelihood ratio
                                 # pl can be negative even when grid search is used in both point estimate and bootstrap
                                 # this is because the estimated chngpt may not be in the {x} of the bootstrapped dataset, and a value in between can be better than {x}
-                                dat.tmp=make.chngpt.var(chngpt.var[ii], coef.hat["chngpt"], type, data[ii,], b.transition) # don't forget to do chngpt.var[ii]!
+                                dat.tmp=make.chngpt.var(chngpt.var[ii], coef.hat["chngpt"], threshold.type, data[ii,], b.transition) # don't forget to do chngpt.var[ii]!
                                 fit.ii.ehat=do.regression (formula.new, data=dat.tmp, family); if(length(fit.ii.ehat$warning)!=0 & verbose) print(fit.ii.ehat$warning)
                                 pl= 2*(as.numeric(logLik(fit.ii$best.fit)) - as.numeric(logLik(fit.ii.ehat$value)))
                                 Fs=n*(sigma(fit.ii.ehat$value)^2/sigma(fit.ii$best.fit)^2-1) # F statistic, an approximation of pl, but may work better for linear regression
@@ -757,7 +855,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                                 
 #                # this takes a long time and returns non-sensible result
 #                ci.abc=abc.ci(data, statistic=function(dat, ww){
-#                        fit.ii=try(chngptm (formula.1, formula.2, family, dat, type, est.method="smoothapprox", var.type="none"))
+#                        fit.ii=try(chngptm (formula.1, formula.2, family, dat, threshold.type, est.method="smoothapprox", var.type="none"))
 #                        # note that we cannot use | in the following line
 #                        if(inherits(fit.ii,"try-error")) 
 #                            rep(NA,length(coef.hat)) 
@@ -787,18 +885,18 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
                     var.est=ci.bootstrap()
                 } else {                
                     var.est=switch(var.type, 
-                        smooth=var.est.smooth(), 
+#                        smooth=var.est.smooth(), 
                         model=var.est.model(test.inv.ci), 
                         robust=     var.est.robust(aux.fit, test.inv.ci), 
                         robusttruth=var.est.robust(aux.fit, test.inv.ci, true.param=TRUE), 
-                        all=list("smooth"=var.est.smooth(), 
+                        all=list(#"smooth"=var.est.smooth(), 
                                   "model"=var.est.model(test.inv.ci), 
                                  "robust"=var.est.robust(aux.fit, test.inv.ci), 
                                "sandwich"=var.est.model(test.inv.ci=FALSE,robust=TRUE) )
                     ) 
                 }
             }
-        } else stop("type incorrect")
+        } else stop("threshold.type incorrect")
         
     } # end if (has.itxn | !family %in% c("binomial","gaussian"))  else 
     
@@ -810,10 +908,10 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
 #        , formula.2=formula.2
         , formula.new=formula.new
         , chngpt.var=chngpt.var.name
-        , chngpt=coef.hat["chngpt"]
+        , chngpt=e.final
         , est.method = est.method
         , b.transition=b.transition
-        , type = type
+        , threshold.type = threshold.type
         , glm.warn = glm.warn
         , family=family    
         , var.type=var.type
@@ -823,10 +921,10 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
         res=c(res, list(
             converged=converged, 
             iter=n.iter))
-    } else if (est.method %in% c("grid","fastgrid")) {
+    } else if (est.method %in% c("grid","fastgrid","fastgrid2","gridC")) {
         res=c(res, list(
             chngpts=chngpts, 
-            logliks=attr(e.final,"logliks")))
+            logliks=logliks))
 #        # good.soln needs to take as input a chngptm object that has chngpts etc
 #        class(res)=c("chngptm", class(res)) 
 #        tmp=good.soln(res, plot=verbose==3)
@@ -834,77 +932,151 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","se
     }
     if (!is.null(warn.var)) res[["warning"]]=warn.var
     if(keep.best.fit) res$best.fit=best.fit 
-    names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %.% "%"     
+    if (!stratified) names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %.% "%" else res$chngpt=unname(res$chngpt)
     
     class(res)=c("chngptm", class(res))
     res    
 }
-
 # for linear only
 chngptm.xy = function(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),  ...)  {
     tmp.dat=data.frame(x=x, y=y)
     chngptm(y~1, ~x, family="gaussian", tmp.dat, type=type, ...)
 }
 
+
+get.chngpts=function (chngpt.var.sorted, lb.quantile, ub.quantile, n.chngpts, stratified.by.sorted=NULL) {    
+    if (is.null(stratified.by.sorted)) {
+        n=length(chngpt.var.sorted)
+        nLower=round(n*lb.quantile)+1; nUpper=round(n*ub.quantile)
+        chngpts=chngpt.var.sorted[nLower:nUpper]
+        attr(chngpts, "index")=nLower:nUpper
+        
+        # subset chngpts if needed
+        if (length(chngpts)>n.chngpts) {
+            ind=round(seq(1,length(chngpts),length=n.chngpts))
+            chngpts=chngpts[ind]
+            attr(chngpts, "index")=(nLower:nUpper)[ind]
+        } 
+        
+    } else {
+        # stratified
+        chngpts = lapply (0:1, function(v) {
+            n=sum(stratified.by.sorted==v)
+            nLower=round(n*lb.quantile)+1; nUpper=round(n*ub.quantile)
+            chngpts=chngpt.var.sorted[stratified.by.sorted==v][nLower:nUpper]
+            attr(chngpts, "index")=nLower:nUpper + if (v==1) sum(stratified.by.sorted==0) else 0 # when v is 1, add a base so that the index correspond to the chngpt.var.sorted
+            chngpts
+        })
+        
+        if (length(chngpts)>n.chngpts) {
+            stop("subsetting chngpts not supported for now for stratified")
+        } 
+    }
+    
+    chngpts
+}
+# an alternative and equivalent way to define nLower/nUpper: nLower=sum(chngpt.var.sorted<quantile(chngpt.var.sorted, lb.quantile))+1; nUpper=sum(chngpt.var.sorted<=quantile(chngpt.var.sorted, ub.quantile));myprint(nLower, nUpper)
+#    # old from chngptm, take the mid points between data points as change point candidates. For step models, use any point in between does not change likelihood, but it does change likelihood for segmented model
+#    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
+#    # old from chngpt.test, chngpts are mostly between observed values
+#    chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt)) 
+
+
 ## make.chngpt.var is needed in both testing and estimation
 ## in estimation by grid search, b.transition is set to null when this function is called
 ## in estimation by smooth approx, b.transition value is saved to object
 ## New on May 13, 2017 this function is modified to fit smooth transition model
-make.chngpt.var=function(x, e, type, data=NULL, b.transition=Inf) {    
-    transition=expit(b.transition*(x-e))
-    if(b.transition==Inf) transition[is.nan(transition)]=1 # if this is not here, there will be NaN and that messes up things
-    if(type=="step") {
-        out=transition
-    } else if (type=="hinge") {
-        out=transition*(x-e)
-    } else if (type=="segmented") {
-        out=transition*(x-e) # x also becomes part of the null model
-    } else if (type=="segmented2") {
-        out=transition*x # x by itself also becomes part of the null model
-    } else if (type=="stegmented") {
-        out=cbind(transition, transition*(x-e))  # x also becomes part of the null model
+make.chngpt.var=function(x, e, threshold.type, data=NULL, b.transition=Inf, stratified.by=NULL) {    
+    if (is.null(stratified.by)) {
+        transition=expit(b.transition*(x-e))
+        if(b.transition==Inf) transition[is.nan(transition)]=1 # if this is not here, there will be NaN and that messes up things
+        
+        if(threshold.type=="step") {
+            out=transition
+        } else if (threshold.type %in% c("hinge","segmented")) {
+            out=transition*(x-e)
+             # for segmented, x also becomes part of the null model
+        } else if (threshold.type=="upperhinge") {
+            out=(1-transition)*(x-e)
+        } else if (threshold.type=="segmented2") {
+            out=transition*x # x by itself also becomes part of the null model
+        } else if (threshold.type=="stegmented") {
+            out=cbind(transition, transition*(x-e))  # x also becomes part of the null model
+        } else stop("wrong threshold.type")
+        
+        #str(out)    
+        # unchanged on May 13, 2017
+        if (is.null(data)) {
+            out    
+        } else {
+            if (threshold.type=="stegmented") {
+                data$x.mod.e = out[,1]
+                data$x.mod.e.2 = out[,2]
+            } else {
+                data$x.mod.e = out
+            }
+            data
+        }
+        
+    } else {
+        if (length(e)!=2) stop("make.chngpt.var needs a vector of length two for the argument e when stratified.by is not null")
+        if (length(stratified.by)!=length(x)) stop("make.chngpt.var: stratified.by needs to be a vector of 0/1 of the same length as x")
+        # create thresholded var within each stratum
+        # first col of out is for stratified.by==0, second for stratified.by==1
+        out = cbind(1-stratified.by, stratified.by)
+        out[stratified.by==0,1] = make.chngpt.var (x[stratified.by==0], e[1], threshold.type, b.transition=b.transition) 
+        out[stratified.by==1,2] = make.chngpt.var (x[stratified.by==1], e[2], threshold.type, b.transition=b.transition)
+        if (is.null(data)) {
+            colnames(out)=c("x.mod.e","x.mod.f")
+            out    
+        } else {
+            # assuming only segmented/hinge are supported
+            data$x.mod.e = out[,1]
+            data$x.mod.f = out[,2]
+            data
+        }
+        
     }    
     
-    #str(out)    
-    # unchanged on May 13, 2017
-    if (is.null(data)) {
-        out    
-    } else {
-        if (type=="stegmented") {
-            data$x.mod.e = out[,1]
-            data$x.mod.e.2 = out[,2]
-        } else {
-            data$x.mod.e = out
-        }
-        data
-    }
 }
 #
 # The difference between the next two versions is that when b.transition is not infinity, if x<e, x is 0 in the older version but only close to 0 in the newer version
 ## before May 13, 2017
-#make.chngpt.var=function(x, e, type, data=NULL, b.transition=NULL) {    
-#    if(type=="step") {
+#make.chngpt.var=function(x, e, threshold.type, data=NULL, b.transition=NULL) {    
+#    if(threshold.type=="step") {
 #        out=ifelse(x>=e, 1, 0)
-#    } else if (type=="hinge") {
+#    } else if (threshold.type=="hinge") {
 #        out=ifelse(x>=e, x-e, 0)
-#    } else if (type=="segmented") {
+#    } else if (threshold.type=="segmented") {
 #        out=ifelse(x>=e, x-e, 0) # x also becomes part of the null model
-#    } else if (type=="stegmented") {
+#    } else if (threshold.type=="stegmented") {
 #        out=cbind(ifelse(x>=e, 1, 0), ifelse(x>=e, x-e, 0))  # x also becomes part of the null model
 #    }    
 #    if (!is.null(b.transition)) out=out * 1/(1+exp(b.transition*(x-e))) 
 #
 
 
-get.f.alt=function(type, has.itxn, z.1.name, chngpt.var.name) {
-    if (type=="stegmented") {
-        f.alt=if(has.itxn) "~.+(x.mod.e+x.mod.e.2)*"%.%z.1.name%.%"+"%.%chngpt.var.name%.%":"%.%z.1.name else "~.+x.mod.e+x.mod.e.2"
-    } else if (type %in% c("segmented","segmented2")) {
-        f.alt=if(has.itxn) "~."%.%"+"%.%chngpt.var.name%.%":"%.%z.1.name%.%"+x.mod.e*"%.%z.1.name else "~.+x.mod.e"
-    } else if (type %in% c("step","hinge")) {
-        f.alt=if(has.itxn) "~.+x.mod.e*"%.%z.1.name else "~.+x.mod.e"
-    }
-    f.alt
+# the added terms will be named as, say x.mod.e. these variables will be created by make.chngpt.var
+get.f.alt=function(threshold.type, chngpt.var.name, modified.by=NULL, stratified=FALSE) {
+    if (is.null(modified.by) & !stratified) {
+        f.alt = if (threshold.type=="stegmented") "~.+x.mod.e+x.mod.e.2" else "~.+x.mod.e"
+        
+    } else if (!is.null(modified.by) & !stratified) {
+        f.alt = if (threshold.type=="stegmented") {
+            "~.+(x.mod.e+x.mod.e.2)*"%.%modified.by%.%"+"%.%chngpt.var.name%.%":"%.%modified.by 
+        } else if (threshold.type %in% c("segmented","segmented2")) {
+            "~."%.%"+"%.%chngpt.var.name%.%":"%.%modified.by%.%"+x.mod.e*"%.%modified.by
+        } else if (threshold.type %in% c("step","hinge","upperhinge")) {
+            "~.+x.mod.e*"%.%modified.by
+        } else stop("wrong threshold.type within get.f.alt")
+         
+    } else if (stratified & is.null(modified.by)) {
+        f.alt = if (threshold.type %in% c("segmented","hinge")) {
+            "~.+x.mod.e+x.mod.f"
+        } else stop("wrong threshold.type within get.f.alt")
+        
+    } else stop("modified.by and stratified.by cannot both be there")
+    as.formula(f.alt)
 }
         
 #deviance.3pl <- expression( (1-y) * ( c + (d-c)/(1+exp(b*(t-e))) )  +  log( 1 + exp( -c - (d-c)/(1+exp(b*(t-e))) ) ) )
@@ -913,7 +1085,7 @@ get.f.alt=function(type, has.itxn, z.1.name, chngpt.var.name) {
 
 predict.chngptm=function (object, newdata = NULL, type = c("link", "response", "terms"), ...){    
     if (is.null(object$best.fit)) stop("To make predictions, chngptm fit needs to have keep.best.fit=TRUE in the option.")
-    newdata = make.chngpt.var(newdata[[object$chngpt.var]], object$chngpt, object$type, newdata, object$b.transition)            
+    newdata = make.chngpt.var(newdata[[object$chngpt.var]], object$chngpt, object$threshold.type, newdata, object$b.transition)            
     predict(object$best.fit, newdata, type, ...)
 }
 print.chngptm=function(x, ...) {
@@ -929,7 +1101,7 @@ residuals.chngptm=function(object, ...) {
     residuals(object$best.fit, ...)
 }
 vcov.chngptm=function(object, var.type=NULL, ...) {
-#    if(object$type %in% c("hinge","segmented")) {
+#    if(object$threshold.type %in% c("hinge","segmented")) {
 #        object$vcov[-length(object$coefficients),-length(object$coefficients)] # not return the chngpoint estimate
 #    } else  {
 #        object$vcov
@@ -958,20 +1130,32 @@ vcov.chngptm=function(object, var.type=NULL, ...) {
     attr(vcov, "boot.conf")=boot.conf
     vcov
 }
-getFixedEf.chngptm=function(object, ...) {
+getFixedEf.chngptm=function(object, exp=FALSE, show.slope.post.threshold=FALSE, ...) {
     capture.output({
-        res=summary(object)
+        res=summary(object, expo=exp, show.slope.post.threshold=show.slope.post.threshold, ...)
     })
     rbind(res$coefficients, chngpt=c(res$chngpt[1], NA, res$chngpt[2:3]))
 }
 lincomb=function(object, comb, alpha=0.05){
+    if(!is.matrix(comb)) comb=matrix(comb, ncol=1)
     est=c(coef(object)%*%comb)
-    samples=object$vcov$boot.samples[,1:length(comb)] %*% comb
     
-    # symmetrical bootstrap CI
-    q.1=quantile(abs(samples-est), 1-alpha, na.rm=TRUE)
-    ci=est+c(-q.1, q.1)
-    c(est, ci)    
+    if (is.matrix(object$vcov)) {
+        # analytical
+        if(length(comb)==ncol(object$vcov)-1) {
+            # vcov has chngpt
+            comb=c(comb, 0)
+        }
+        se=sqrt(comb%*%object$vcov%*%comb)
+        c(est, est-1.96*se, est+1.96*se)
+    } else {
+        # bootstrap
+        samples=object$vcov$boot.samples[,1:length(comb)] %*% comb        
+        # symmetrical bootstrap CI
+        q.1=quantile(abs(samples-est), 1-alpha, na.rm=TRUE)
+        ci=est+c(-q.1, q.1)
+        c(est, ci)    
+    }
 }
 
 # which=1: scatterplot with fitted line, only works for simple regression
@@ -994,19 +1178,42 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", add=FALSE, ad
     linkinv=get(fit$family)()$linkinv
     if(is.null(xlim)) xlim=range(fit$best.fit$data[[fit$chngpt.var]])
     
+    out=list()
     if(which==1) {
     # scatterplot with lines
         if(!add) plot(fit$best.fit$data[[fit$chngpt.var]], fit$best.fit$y, xlim=xlim, xlab=fit$chngpt.var, ylab=names(fit$best.fit$model)[1], type="n", ...)
         chngpt.est=fit$chngpt        
         intercept=coef(fit)[1]
-        if (!is.na(coef(fit)[fit$chngpt.var]))  pre.slope=coef(fit)[fit$chngpt.var] else pre.slope=0
-        delta.slope=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)+"]
         
-        xx=seq(xlim[1],chngpt.est,length=100)
-        lines(xx,  linkinv(intercept+pre.slope*xx), lwd=lwd, col=lcol)
+        if(x$threshold.type=="upperhinge") {
+            pre.slope=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)-"]
+            myprint(chngpt.est)
+            
+            xx=seq(xlim[1],chngpt.est,length=100)
+            yy=linkinv(intercept+pre.slope*(xx-chngpt.est))
+            out[[1]]=cbind(xx,yy)
+            lines(xx, yy, lwd=lwd, col=lcol)
+            
+            xx1=seq(chngpt.est, xlim[2], length=100)
+            yy=rep(intercept, length(xx1))
+            out[[1]]=rbind(out[[1]], cbind(xx1,yy))
+            lines(xx1, yy, lwd=lwd, col=lcol)
+            
+        } else {
+            if (!is.na(coef(fit)[fit$chngpt.var]))  pre.slope=coef(fit)[fit$chngpt.var] else pre.slope=0
+            delta.slope=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)+"]            
+            
+            xx=seq(xlim[1],chngpt.est,length=100)
+            yy=linkinv(intercept+pre.slope*xx)
+            out[[1]]=cbind(xx,yy)
+            lines(xx, yy, lwd=lwd, col=lcol)
+            
+            xx1=seq(chngpt.est, xlim[2], length=100)
+            yy=linkinv(intercept+pre.slope*xx1+delta.slope*(xx1-chngpt.est))
+            out[[1]]=rbind(out[[1]], cbind(xx,yy))
+            lines(xx1, yy, lwd=lwd, col=lcol)
+        }
         
-        xx1=seq(chngpt.est, xlim[2], length=100)
-        lines(xx1,  linkinv(intercept+pre.slope*xx1+delta.slope*(xx1-chngpt.est)), lwd=lwd, col=lcol)
         
         # add points again on top
         if(add.points) points(fit$best.fit$data[[fit$chngpt.var]], fit$best.fit$y)
@@ -1025,14 +1232,15 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", add=FALSE, ad
         
     } else stop("wrong which")
     
+    invisible(out)
 }
 
-summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) {    
+summary.chngptm=function(object, var.type=NULL, expo=FALSE, show.slope.post.threshold=FALSE, verbose=FALSE, ...) {    
     # "Estimate" "Std. Error" "t value" "Pr(>|t|)"        
     fit=object
-    p.z=length(fit$coefficients)
+    p.z=length(fit$coefficients) # this count includes threshold parameter
     n=fit$n
-    type=fit$type
+    threshold.type=fit$threshold.type
     
     if (is.null(fit$vcov)) {
         cat("No variance estimate available.\n\n")
@@ -1047,7 +1255,7 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) 
             return (invisible())
         }             
     }    
-    if(object$type %in% c("hinge","segmented") & !boot.conf) {
+    if(object$threshold.type %in% c("hinge","segmented","upperhinge") & !boot.conf) {
         vcov.t=vcov[p.z,p.z]
         tmp=vcov[-p.z,-p.z] # not return the chngpoint estimate
         # the last line lost the attr chngpt.ci, need to make a copy
@@ -1090,9 +1298,18 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) 
     colnames(res$coefficients)[1]=if(fit$family=="binomial" & expo) "OR" else "est"
     if(boot.conf) colnames(res$coefficients)[2]=colnames(res$coefficients)[2]%.%"*"
     
+    # may need to find linear combination
+    if(show.slope.post.threshold){
+        comb=rep(0,length=p.z-1)
+        comb[p.z-2:1]=1
+        tmp=lincomb(object, comb, alpha=0.05)
+        res$coefficients[p.z-1,]=c(tmp[1],NA,tmp[2],tmp[3])
+        rownames(res$coefficients)[p.z-1]=sub("\\+",">",rownames(res$coefficients)[p.z-1])
+    }
+    
     # change point
     i=p.z
-    if (type %in% c("hinge","segmented")) {
+    if (threshold.type %in% c("hinge","segmented","upperhinge")) {
         if (boot.conf){
             lb=vcov[1,p.z]
             ub=vcov[2,p.z]
@@ -1110,17 +1327,17 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, verbose=FALSE, ...) 
             , "(lower" = lb
             , "upper)" = ub
         )
-    } else if (type %in% c("step","stegmented")) {
+    } else if (threshold.type %in% c("step","stegmented")) {
         res$chngpt=c(fit$chngpt)
-    } else stop("incorrect type")
+    } else stop("incorrect threshold.type")
     
-    res$type=fit$type
+    res$threshold.type=fit$threshold.type
     
     class(res) <- "summary.chngptm"
     res
 }
 print.summary.chngptm=function(x,...) {
-    cat("Change point model type: ",x$type,"\n\n")
+    cat("Change point model threshold.type: ",x$threshold.type,"\n\n")
     cat("Coefficients:\n")
     print(x$coefficients)
     cat("\nThreshold:\n")
@@ -1155,6 +1372,13 @@ dev.step.itxn.f <- function(theta,x,y,b,alpha.z,z.1,family,weights)  {
 dev.hinge.f <- function(theta,x,y,b,alpha.z,z.1,family,weights) {
     beta=theta[1]; e=theta[2]
     eta=(x-e)*beta/(1+exp(-b*(x-e)))
+    linear=alpha.z+eta
+    .lik.f(linear,y,family,weights)
+} 
+# upperhinge model
+dev.upperhinge.f <- function(theta,x,y,b,alpha.z,z.1,family,weights) {
+    beta=theta[1]; e=theta[2]
+    eta=(x-e)*beta*(1-1/(1+exp(-b*(x-e))))
     linear=alpha.z+eta
     .lik.f(linear,y,family,weights)
 } 
@@ -1223,6 +1447,9 @@ dev.hinge <- expression( (1-y) * ( alpha.z + (x-e)*beta/(1+exp(-b*(x-e))) )  +  
 dev.hinge.deriv=deriv3(dev.hinge, c("beta","e"), c("beta","e","x","y","b","alpha.z"))
 dev.hinge.itxn <- expression( (1-y) * ( alpha.z + (x-e)*(beta1+beta2*z.1)/(1+exp(-b*(x-e))) )  +  log( 1 + exp( -alpha.z - (x-e)*(beta1+beta2*z.1)/(1+exp(-b*(x-e))) ) ) )
 dev.hinge.itxn.deriv=deriv3(dev.hinge.itxn, c("beta1","beta2","e"), c("beta1","beta2","e","x","y","b","alpha.z","z.1"))
+# upper hinge model
+dev.upperhinge <- expression( (1-y) * ( alpha.z + (x-e)*beta*(1-1/(1+exp(-b*(x-e)))) )  +  log( 1 + exp( -alpha.z - (x-e)*beta * (1-1/(1+exp(-b*(x-e)))) ) ) )
+
 
 # check whether the MLE is considered good, return Boolean
 good.soln=function(fit, df=7, plot=FALSE) {
@@ -1257,24 +1484,65 @@ good.soln=function(fit, df=7, plot=FALSE) {
 }
 
 
-get.chngpts=function (chngpt.var.sorted, nLower, nUpper, n.chngpts) {
+# Adam Elder
+# assum input are sorted
+# was useful for debugging C implementation
+get.liks.upperhinge=function(y,Z,x,cand_e){    
+    n=length(y)
     
-#    # old from chngptm, take the mid points between data points as change point candidates. For step models, use any point in between does not change likelihood, but it does change likelihood for segmented model
-#    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
+    ## Solving for the quantities that only need to be found once
+    A <- solve(t(Z) %*% Z)
+    H <- Z %*% A %*% t(Z)
+    U <- as.numeric(t(y) %*% (H - diag(n)))
+    M <- diag(n) - H
     
-    chngpts=chngpt.var.sorted[nLower:nUpper]
-    ind=round(seq(1,length(chngpts),length=n.chngpts))
-    if (length(chngpts)>n.chngpts) {
-        # get a subset of chngpts 
-        chngpts=chngpts[ind]
-        attr(chngpts, "index")=(nLower:nUpper)[ind]
-    } else {
-        # use all chngpts
-        attr(chngpts, "index")=nLower:nUpper
+    ## change to pass this info in
+#    ## Selecting the possible cutoff values
+#    cand_e <- x[floor(n * 0.05):ceiling(n*0.95)]
+    sudo_liks = rep(NA,length(cand_e))
+    
+    ## Creating a variable that stores the best cuttoff point, as
+    ## a proxy for the maximum likelihood conditional on this cuttoff
+    best_e <- c(cand_e[1], 0)
+    for(i in 1:length(cand_e)){
+        e=cand_e[i]
+        nu_e <- pmax(e - x, 0) #the last row vector of our design matrix for a given cuttoff value
+        #if(sum(nu_e) != 0){
+        sudo_liks[i] <- as.numeric((t(U) %*% nu_e))**2/as.numeric((t(nu_e) %*% M %*% nu_e))
+      #}
     }
     
-#    # old from chngpt.test, chngpts are mostly between observed values
-#    chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt)) 
-    
-    chngpts
+    sudo_liks
 }
+
+## R code for validating 2D search
+#X=cbind(1, dat$z, dat$x)
+#A <- solve(t(X) %*% X)
+#H <- X %*% A %*% t(X)
+#dat$y %*% H %*% dat$y
+#Y=dat$y
+#r=Y-H%*%Y
+#
+#chngpt.var=dat$x
+#stratified.by=dat$z>0
+#order.=order(stratified.by, chngpt.var)
+#chngpt.var.sorted=chngpt.var[order.]
+#r=r[order.]
+#v=cbind(chngpt.var.sorted,chngpt.var.sorted)
+#v[12:20,1]=0
+#v[1:11,1]=v[1:11,1]-v[2,1]
+#v[1:2,1]=0
+#v[1:11,2]=0
+#v[12:20,2]=v[12:20,2]-v[13,2]
+#v[11+1,2]=0
+#v
+#
+#X1=X[order.,]
+#
+#t(v)%*%r
+#t(v)%*%v
+#t(t(v)%*%r) %*% solve(t(v)%*%v-t(v)%*%X1 %*% solve(t(X1) %*% X1) %*% t(X1)%*%v) %*% t(v)%*%r + dat$y %*% H %*% dat$y
+#
+#
+#Xe=cbind(X[order.,],v)
+#Y[order.] %*% Xe %*% solve(t(Xe) %*% Xe) %*% t(Xe) %*% Y[order.]

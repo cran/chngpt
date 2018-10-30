@@ -87,3 +87,14 @@
 	* RDR is changed to R.h %*% D.h when not robust. This requires a change of
 	values in the unit testing function
 
+2018-08-07
+	* Add upper hinge model implementation
+	* Remove smooth as a var.type, comment out var.est.smooth and remove
+	smooth from unit testing
+	* Implement superfastgrid
+	* Merge fastgrid_search and boot_fastgrid_search into one C function
+	* Implement grid search in C for upperhinge2
+
+2018-10-08
+	* A naive implementation of the test inversion CI is added when search method is grid
+	

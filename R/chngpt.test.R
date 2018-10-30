@@ -37,7 +37,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     
     # make formula. Note that f.null includes chngptvar if type is segmented or stegmented
     f.null=if(type %in% c("segmented","stegmented")) update(formula.null, as.formula("~.+"%.%chngpt.var.name)) else formula.null    
-    f.alt=update(f.null, as.formula(get.f.alt(type, has.itxn, z.1.name, chngpt.var.name)))
+    f.alt=update(f.null, get.f.alt(type, chngpt.var.name, modified.by=if(has.itxn) z.1.name else NULL))
     
     # extract data
     y=model.frame(f.null, data)[,1]
@@ -62,8 +62,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     data.sorted=data[order(chngpt.var),]    
     
     # change point candidates
-    nLower=round(nrow(data)*lb.quantile)+1; nUpper=round(nrow(data)*ub.quantile)
-    if (is.null(chngpts)) chngpts=get.chngpts(chngpt.var.sorted,nLower,nUpper,chngpts.cnt)
+    if (is.null(chngpts)) chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,chngpts.cnt)
     M <- length(chngpts)  
     
     if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%.%type)
@@ -230,7 +229,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     set.seed(1)    
     
     if(p.val.method=="MC") {
-        # simulate samples from mvrnorm
+        # simulate samples from MASS::mvrnorm
         sam=mvrnorm (mc.n, rep(0,p), cov2cor(V.S.hat)) # mvtnorm::rmvnorm can fail 
         
         if(p.alt.2==1 & test.statistic=="score") {            
@@ -264,15 +263,22 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     
     } else if (p.val.method=="param.boot") {    
         if (!fastgrid.ok | test.statistic=="score") stop("only /lr method and fastgrid.ok is supported for parametric bootstrap for now")
-        
         sd.null=sqrt(summary(fit.null)$dispersion)
         linear.predictors.null.sorted=linear.predictors.null[order(chngpt.var)]
         Q.max.boot=sapply (1:boot.B, function(b) {
             # simulate from fit.null
             y.b=rnorm(n, linear.predictors.null.sorted, sd.null) 
             llik.null.b=-n/2*log(mean(lm.fit(Z.sorted, y.b)$residuals**2)) # #tmpfit=lm(y~Girth, data.frame(y=y.b, Z)); logLik(tmpfit) + n/2*(1+log(2*pi)) # same as llik.null.b
-            rss = sum(y.b**2) + .Call("fastgrid_search", cbind(Z.sorted,chngpt.var.sorted), as.double(y.b), as.double(w.sorted), prec.w.all.one, attr(chngpts,"index")) 
-            2 * (max(-n/2*log(rss/n)) - llik.null.b)
+            yhy = .Call("fastgrid_search", 
+                            cbind(Z.sorted,chngpt.var.sorted), 
+                            as.double(y.b), 
+                            as.double(w.sorted), 
+                            prec.w.all.one, 
+                            attr(chngpts,"index"),
+                            0,# bootstrap size
+                            type=="upperhinge"
+                    ) 
+            2 * (max(-n/2*log((sum(y.b**2) - yhy)/n)) - llik.null.b)
         })
         p.value = mean(Q.max.boot>Q.max)      
         

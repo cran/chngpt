@@ -1,7 +1,7 @@
 expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 sim.chngpt = function (
     mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear"), 
-    threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"),# segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
+    threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented","upperhinge"),# segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
     b.transition=Inf,
     family=c("binomial","gaussian"), 
     x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm"), # gam1 is a hack to allow e. be different
@@ -85,7 +85,12 @@ sim.chngpt = function (
     if (is.null(e.) | !startsWith(mean.model,"thresholded")) e.=4.7 # hard code e. for mean models other than thresholded
     if (verbose) {print(e.); print(mean(x<e.))}
     
-    x.star = expit.2pl(x, e=e., b=b.transition)  # 0 when x is smaller than e. and 1 otherwise
+    
+    x.gt.e = expit.2pl(x, e=e., b=b.transition)  # 1 if x>e., 0 if x<e.
+    x.lt.e = 1-x.gt.e # 1 if x>e., 0 if x<e.
+#    # test. note that when x==e., returns NaN
+#    expit.2pl(c(.9,1,1.1), e=1, b=Inf)
+    
     
         
     #######################################################################################
@@ -100,43 +105,44 @@ sim.chngpt = function (
         if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[mean.model%.%"_"%.%sub("fix","",x.distr)]][e.%.%"", ifelse(mean.model=="thresholdedItxn",beta.itxn,beta)%.%""], silent=TRUE)
         if(is.null(alpha) | inherits(alpha, "try-error")) stop("alpha not found, please check beta or provide a null") 
         
-        X=cbind(1,     z,        x,   x.star,   if(threshold.type=="segmented2") x.star*x else x.star*(x-e.),     z*x,   z*x.star,   z*x.star*(x-e.))
-        coef.=c(alpha, z=coef.z, x=0, x.star=0, x.hinge=0,                                                        z.x=0, z.x.star=0, z.x.hinge=0)
-        
+        X=cbind(1,     z,        x,   x.gt.e,   if(threshold.type=="segmented2") x.gt.e*x else x.gt.e*(x-e.),     z*x,   z*x.gt.e,   z*x.gt.e*(x-e.), x.lt.e*(x-e.))
+        coef.=c(alpha, z=coef.z, x=0, x.gt.e=0, x.hinge=0,                                                        z.x=0, z.x.gt.e=0, z.x.hinge=0,     x.lt.e=0)
         if (mean.model=="thresholded") { 
             if (threshold.type=="step") {
                 coef.[1:5]=c(alpha, coef.z,          0,    beta,     0) 
             } else if (threshold.type=="hinge") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,  beta) 
+            } else if (threshold.type=="upperhinge") {
+                coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.lt.e"]=beta 
             } else if (threshold.type=="segmented") {
                 coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) 
             } else if (threshold.type=="segmented2") {
                 coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) 
             } else if (threshold.type=="stegmented") {
                 coef.[1:5]=c(2,     coef.z,   log(.67), log(.67), beta) # all effects of x in the same direction, subject to perfect separation, though that does not seem to be the main problem
-                #coef.[1:5]=c(0, coef.z, -log(.67), log(.67), beta) # effects of x and x.star in different direction
+                #coef.[1:5]=c(0, coef.z, -log(.67), log(.67), beta) # effects of x and x.gt.e in different direction
             }            
             
         } else if (mean.model == "thresholdedItxn") { 
         # intercept + main effect + interaction
         # used to be "sigmoid3","sigmoid4","sigmoid5"
-    #        beta.var.name=switch(threshold.type,step="x.star",hinge="x.hinge",segmented="x.hinge",stegmented="x.hinge")
+    #        beta.var.name=switch(threshold.type,step="x.gt.e",hinge="x.hinge",segmented="x.hinge",stegmented="x.hinge")
     #        coef.[beta.var.name]=switch(mean.model,sigmoid3=log(.67),sigmoid4=-log(.67),sigmoid5=0)
     #        coef.["z."%.%beta.var.name]=beta
     #        if (threshold.type=="segmented") {coef.["x"]=tmp; coef.["z.x"]=log(.67) } 
-            beta.var.name=switch(threshold.type,step="x.star",hinge="x.hinge",segmented="x.hinge",stegmented="x.hinge")
+            beta.var.name=switch(threshold.type,step="x.gt.e",hinge="x.hinge",segmented="x.hinge",stegmented="x.hinge")
             coef.[beta.var.name]=beta
             coef.["z."%.%beta.var.name]=beta.itxn
             if (threshold.type=="segmented") {coef.["x"]=tmp; coef.["z.x"]=log(.67) }    
         }
     #    else if (mean.model=="sigmoid1") { 
     #    # intercept only
-    #        coef.["x.star"]=beta
+    #        coef.["x.gt.e"]=beta
     #        coef.["z"]=0
     #    } else if (mean.model=="sigmoid6") { 
     #    # special treatment, model misspecification
     #        coef.=c(alpha, coef.z, log(.67),  beta)
-    #        X=cbind(1, z, x.star, x.star*z^3)    
+    #        X=cbind(1, z, x.gt.e, x.gt.e*z^3)    
         
         
     } else if (mean.model=="quadratic") { 
@@ -180,7 +186,7 @@ sim.chngpt = function (
         coef.=c(alpha=alpha, z=coef.z, z.quad=0.3)    
     } else if (mean.model=="z2hinge") { 
     # z^2 + (x-e)+
-        X=cbind(1,     z,        z*z,     x.star*(x-e.))
+        X=cbind(1,     z,        z*z,     x.gt.e*(x-e.))
         coef.=c(alpha=alpha, z=coef.z, z.quad=0.3, beta)
     } else if (mean.model=="z2linear") { 
     # z^2 + x
@@ -188,7 +194,7 @@ sim.chngpt = function (
         coef.=c(alpha=alpha, z=coef.z, z.quad=0.3, -log(.67))    
     } else if (mean.model=="z2segmented") { 
     # z^2 + x + (x-e)+
-        X=cbind(1,     z,        z*z,     x,    x.star*(x-e.))
+        X=cbind(1,     z,        z*z,     x,    x.gt.e*(x-e.))
         coef.=c(alpha=alpha, z=coef.z, z.quad=0.3, -log(.67), beta)
     
     } else stop("mean.model not supported: "%.%mean.model)     
@@ -213,8 +219,8 @@ sim.chngpt = function (
         
         x=x,
         x.sq=x*x,
-        x.star=x.star,
-        x.hinge=x.star*(x-e.),
+        x.gt.e=x.gt.e,
+        x.hinge=x.gt.e*(x-e.),
         x.bin.med=ifelse(x>median(x), 1, 0),
         x.tri = factor(ifelse(x>quantile(x,2/3),"High",ifelse(x>quantile(x,1/3),"Medium","Low")), levels=c("Low","Medium","High")),
         
