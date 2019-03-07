@@ -4,10 +4,10 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
   formula.strat=NULL,
   weights=NULL, # this arg is kept here due to historical reasons
   est.method=c("default","smoothapprox","grid","fastgrid","fastgrid2","gridC"), # gridC is for development use only 
-  var.type=c("none","robust","model","robusttruth","bootstrap","all"), aux.fit=NULL, 
+  var.type=c("default","none","robust","model","bootstrap","all"), aux.fit=NULL,  # robusttruth is for development only
   lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
   test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
-  ci.bootstrap.size=1000, alpha=0.05, save.boot=FALSE, m.out.of.n=FALSE, # grid.search.max is the maximum number of grid points used in grid search
+  ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, m.out.of.n=FALSE, # grid.search.max is the maximum number of grid points used in grid search
   b.transition=Inf,# controls whether threshold model or smooth transition model
   tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
   keep.best.fit=TRUE, # best.fit is needed for making prediction and plotting
@@ -18,6 +18,9 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
     threshold.type<-match.arg(type)  
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
+    
+    if(!is.character(family)) stop("Please enter a string as family, e.g. \"gaussian\"")
+    family=tolower(family)
         
     # remove missing observations
     subset. = complete.cases(model.frame(update(formula.1, formula.2), data, na.action=na.pass))
@@ -27,6 +30,18 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
     stopifnot(b.transition>0)
     b.search=if(b.transition==Inf) 30 else b.transition
     if(threshold.type=="segmented2" & b.transition==Inf) stop("for segmented2, b.transition should not be Inf") # limited implementation for segmented2
+    
+    if(var.type=="default") {
+        if(family=="gaussian") {
+            var.type="bootstrap"
+        } else if (!is.null(aux.fit)) {
+            var.type="robust"
+        } else if (family %in% c("gaussian","binomial")) {
+            var.type="model"
+        } else  {
+            var.type="none"
+        }
+    }
     
     # not all variance estimation methods are implemented for all families    
     if(!family %in% c("gaussian","binomial")) {
@@ -112,19 +127,20 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
     # est.method
     # smoothapprox cannot work when lhs of formula.1 is cbind() 
     # for now, fastgrid and C version of grid is implemented only for the following scenarios
-    fastgrid.ok = family=="gaussian" & threshold.type %in% c("hinge","upperhinge","segmented") & !has.itxn
+    fastgrid.ok = family %in% c("gaussian","binomial") & threshold.type %in% c("hinge","upperhinge","segmented") & !has.itxn
     if ((!family%in%c("binomial","gaussian")) & est.method=="smoothapprox") stop ("smoothapprox only implemented for binomial and guassian families and when lhs of formula is not cbind()")
-    if(est.method%in%c("fastgrid","fastgrid2") & !fastgrid.ok) {
+    if(!fastgrid.ok & est.method%in%c("fastgrid","fastgrid2")) {
         warning ("Fast grid search only implemented for guassian family and hinge/upperhinge/segmented models without interaction. Switching to grid search ...")
         est.method="grid"
     }
     if (est.method=="default") {
-        if(fastgrid.ok) { est.method="fastgrid2" 
+        if(fastgrid.ok) { 
+            if(family=="binomial") est.method="fastgrid" else est.method="fastgrid2" 
         } else if(family=="binomial") { est.method="smoothapprox"
         } else { est.method="grid"
         }        
     }
-    if (fastgrid.ok & !est.method%in%c("fastgrid","fastgrid2") & var.type!="none") cat("Note that for linear models, fastgrid2 is the best est.method.\n") # var.type condition is added so that this is not printed during bootstrap
+    #if (fastgrid.ok & !est.method%in%c("fastgrid","fastgrid2") & var.type!="none") cat("Note that for linear models, fastgrid2 is the best est.method.\n") # var.type condition is added so that this is not printed during bootstrap
     
     # sort data
     if(!stratified) {
@@ -172,10 +188,11 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
 #                # for fastgrid2 development, the first two argments may be replaced by:
 #                cbind(B, chngpt.var.sorted), #design matrix, the last column is to be used as (x-e)+ in the C program
 #                as.double(r), 
-            
+
             # computes Y' H_e Y
             if(!stratified) {
-                f.name=est.method%.%"_search" # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+                # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+                f.name=est.method %.%  "_" %.% family
                 logliks = .Call(f.name, 
                     cbind(Z.sorted, chngpt.var.sorted, if(threshold.type=="segmented") chngpt.var.sorted), #design matrix, the last column is to be used as (x-e)+ in the C program
                     as.double(y.sorted), 
@@ -187,7 +204,8 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
                 )             
             } else {
                 #cbind(chngpt.var.sorted*c(rep.int(0,n.0),rep.int(1,n.1)), chngpt.var.sorted*c(rep.int(1,n.0),rep.int(0,n.1))), # added col
-                logliks = .Call("twoD_search", 
+                f.name="twoD_"%.%family
+                logliks = .Call(f.name, 
                     cbind(Z.sorted, if(threshold.type=="segmented") chngpt.var.sorted), # X
                     as.double(chngpt.var.sorted), # threshold variable
                     as.double(y.sorted), 
@@ -247,9 +265,10 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
                 plot(chngpts, logliks, type="b", xlab="threshold")
                 abline(v=e.final)
             } else {
-                # cannot use points3d to add a red point after plot
-                col=0*logliks; col[which.max(logliks)]=1; col=col+1
-                plot3d(cbind(expand.grid(chngpts[[1]],chngpts[[2]]), c(logliks)), xlab="f", ylab="e", zlab="loglik", type="p", col=c(col))
+                # comment out, to be moved a function, not good to have to import rgl because of error msg on linux about x11
+#                # cannot use points3d to add a red point after plot
+#                col=0*logliks; col[which.max(logliks)]=1; col=col+1
+#                plot3d(cbind(expand.grid(chngpts[[1]],chngpts[[2]]), c(logliks)), xlab="f", ylab="e", zlab="loglik", type="p", col=c(col)) # from rgl package
             }
         }
         
@@ -727,7 +746,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
                     boot.out$fake=TRUE
                     
                     if(!stratified) {
-                        f.name=est.method%.%"_search" # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
+                        f.name=est.method%.%"_"%.%family # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
                         boot.out$t = .Call(f.name, 
                             cbind(Z.sorted, chngpt.var.sorted, if(threshold.type=="segmented") chngpt.var.sorted), #design matrix, the last column is to be used as (x-e)+ in the C program
                             as.double(y.sorted), 
@@ -738,7 +757,8 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
                             threshold.type=="upperhinge"
                         )             
                     } else {
-                        boot.out$t = .Call("twoD_search", 
+                        f.name="twoD_"%.%family
+                        boot.out$t = .Call(f.name, 
                             cbind(Z.sorted, if(threshold.type=="segmented") chngpt.var.sorted), # X
                             as.double(chngpt.var.sorted), # threshold variable
                             as.double(y.sorted), 
@@ -759,11 +779,13 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
                     boot.out=boot::boot(data.sorted, R=ci.bootstrap.size, sim = "ordinary", stype = "i", statistic=function(dat, ii){
                         if (m.out.of.n) ii=ii[1:(4*sqrt(n))] # m out of n bootstrap
                         # use chngpt.init so that the mle will be less likely to be inferior to the model conditional on e.hat, but it does not always work
+                        # using chngpt.init makes bootstrap much faster though
                         # for studentized bootstrap interval, need variance estimates as well, however, stud performs pretty badly
                         fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type=threshold.type, 
                             formula.strat=formula.strat,
                             weights=w.sorted[ii], threshold.type, est.method=est.method, var.type="none", 
-                            b.transition=b.transition, chngpt.init=coef.hat["chngpt"], verbose=verbose>=3, keep.best.fit=TRUE, lb.quantile=lb.quantile, ub.quantile=ub.quantile, 
+                            b.transition=b.transition, verbose=verbose>=3, keep.best.fit=TRUE, lb.quantile=lb.quantile, ub.quantile=ub.quantile, 
+                            chngpt.init=coef.hat["chngpt"], 
                             grid.search.max=grid.search.max))
                         tmp=length(coef.hat)*1+ifelse(!boot.test.inv.ci, 0, ifelse(family=="gaussian",2,1)) # need to adjust depending on the last else clause
                         out = if(inherits(fit.ii,"try-error")) {
@@ -874,7 +896,7 @@ chngptm = function(formula.1, formula.2, family, data, type=c("step","hinge","up
             
             # if perfect segregation happens, cann't compute variance estimate
             # what to do with glm.warn?
-            if (family=="binomial" & any(abs(coef.hat[-c(1,length(coef.hat))])>=search.bound)) {
+            if (family=="binomial" & any(abs(coef.hat[-c(1,length(coef.hat))])>=search.bound, na.rm=T)) {
                 warn.var="Point estimate over search bound. Not computing variance estimate."
                 cat(warn.var, "\n")
                 var.est=NULL
@@ -1159,7 +1181,7 @@ lincomb=function(object, comb, alpha=0.05){
 }
 
 # which=1: scatterplot with fitted line, only works for simple regression
-plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", add=FALSE, add.points=TRUE, add.ci=TRUE, breaks=20, ...) {
+plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", add=FALSE, add.points=TRUE, add.ci=TRUE, breaks=20, mark.chngpt=FALSE, xlab=NULL, ylab=NULL, ...) {
     
     has.boot.samples=FALSE
     if(is.list(x$vcov)) if(!is.null(x$vcov$boot.samples)) has.boot.samples=TRUE 
@@ -1181,9 +1203,12 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", add=FALSE, ad
     out=list()
     if(which==1) {
     # scatterplot with lines
-        if(!add) plot(fit$best.fit$data[[fit$chngpt.var]], fit$best.fit$y, xlim=xlim, xlab=fit$chngpt.var, ylab=names(fit$best.fit$model)[1], type="n", ...)
+        if(!add) plot(fit$best.fit$data[[fit$chngpt.var]], fit$best.fit$y, xlim=xlim, xlab=ifelse(is.null(xlab),fit$chngpt.var,xlab), ylab=ifelse(is.null(ylab),names(fit$best.fit$model)[1],ylab), type="n", ...)
         chngpt.est=fit$chngpt        
         intercept=coef(fit)[1]
+        
+        # add points 
+        if(add.points) points(fit$best.fit$data[[fit$chngpt.var]], fit$best.fit$y)
         
         if(x$threshold.type=="upperhinge") {
             pre.slope=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)-"]
@@ -1213,10 +1238,8 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", add=FALSE, ad
             out[[1]]=rbind(out[[1]], cbind(xx,yy))
             lines(xx1, yy, lwd=lwd, col=lcol)
         }
-        
-        
-        # add points again on top
-        if(add.points) points(fit$best.fit$data[[fit$chngpt.var]], fit$best.fit$y)
+    
+        if(mark.chngpt) points(chngpt.est, linkinv(intercept+pre.slope*chngpt.est), pch="*", col="yellow", cex=4)
         
     } else if (which==2) {
     # loglik vs threshold
@@ -1240,7 +1263,8 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, show.slope.post.thre
     fit=object
     p.z=length(fit$coefficients) # this count includes threshold parameter
     n=fit$n
-    threshold.type=fit$threshold.type
+    
+    if (!is.null(fit$threshold.type)) threshold.type=fit$threshold.type else threshold.type=fit$type
     
     if (is.null(fit$vcov)) {
         cat("No variance estimate available.\n\n")
@@ -1255,7 +1279,7 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, show.slope.post.thre
             return (invisible())
         }             
     }    
-    if(object$threshold.type %in% c("hinge","segmented","upperhinge") & !boot.conf) {
+    if(threshold.type %in% c("hinge","segmented","upperhinge") & !boot.conf) {
         vcov.t=vcov[p.z,p.z]
         tmp=vcov[-p.z,-p.z] # not return the chngpoint estimate
         # the last line lost the attr chngpt.ci, need to make a copy

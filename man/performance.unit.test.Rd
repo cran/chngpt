@@ -31,6 +31,3 @@ performance.unit.test(formula.1, formula.2, family, data, B, I)
 %%     ~~Describe \code{I} here~~
 }
 }
-
-\keyword{ ~kwd1 }% use one of  RShowDoc("KEYWORDS")
-\keyword{ ~kwd2 }% __ONLY ONE__ keyword per line

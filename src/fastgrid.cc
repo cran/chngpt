@@ -210,7 +210,7 @@ void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, vector<double>& 
   // assume last col of X is chngptvar, which will be updated as move through the grid
   // thresholdIdx are 1-based index, which define the grid of thresholds
   // For fastgrid2, the meaning of the first two variables are B and r instead 
-SEXP fastgrid_search(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_thresholdIdx, SEXP u_nBoot, SEXP u_isUpperHinge)
+SEXP fastgrid_gaussian(SEXP u_X, SEXP u_Y, SEXP u_W, SEXP u_wAllOne, SEXP u_thresholdIdx, SEXP u_nBoot, SEXP u_isUpperHinge)
 {
     double* uX_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y);

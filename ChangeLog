@@ -97,4 +97,7 @@
 
 2018-10-08
 	* A naive implementation of the test inversion CI is added when search method is grid
-	
+
+2019-01-02	
+	* Michal Jurask reported a bug when the glm has a NA coef. Fix at line
+	897.

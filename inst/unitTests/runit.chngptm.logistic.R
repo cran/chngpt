@@ -4,6 +4,7 @@ library("splines")
 
 test.chngptm.logistic <- function() {
 
+  suppressWarnings(RNGversion("3.5.0"))
 RNGkind("Mersenne-Twister", "Inversion")    
 tolerance=1e-1
 # R.Version()$system is needed b/c 32 bit system gives different results from 64 bit system
@@ -11,6 +12,35 @@ if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_c
 print(tolerance)
 verbose = FALSE
 
+
+########################################
+# hinge model
+
+data=sim.chngpt("thresholded", threshold.type="hinge", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="binomial")  
+data$xx=data$x; data$zz=data$z; data$yy=data$y
+
+# fastgrid
+fit.2 = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", est.method="smoothapprox", var.type="none", verbose=verbose); fit.2
+fit.1 = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", est.method="grid", var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose); fit.1$vcov$boot.samples
+fit.3 = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose); fit.3$vcov$boot.samples
+checkEqualsNumeric(coef(fit.1), coef(fit.3), tolerance=tolerance)    
+checkEqualsNumeric(fit.1$vcov$boot.samples, fit.3$vcov$boot.samples, tolerance=tolerance)    
+
+
+fit.0=glm(yy~zz+ns(xx,df=3), data, family="binomial")
+fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", est.method="smoothapprox", var.type="all", verbose=verbose, aux.fit=fit.0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+#    checkEqualsNumeric(sum(diag(fit$vcov[["smooth"]])), 0.399209, tolerance=tolerance)    
+checkEqualsNumeric(sum(diag(fit$vcov[["model"]])), 0.614832, tolerance=tolerance)    
+checkEqualsNumeric(sum(diag(fit$vcov[["robust"]])), 2.311749, tolerance=tolerance)        
+
+#bootstrap
+fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data[1:120,], type="hinge", est.method="smoothapprox", var.type="bootstrap", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=10, boot.test.inv.ci=TRUE)
+checkEqualsNumeric(fit$vcov$symm[1,], c(-0.4888763,0.6802883,-6.0128577,4.4632592), tolerance=tolerance)
+checkEqualsNumeric(fit$vcov$testinv[,4], c(1.043623,6.013954), tolerance=tolerance)
+
+
+
+########################################
 # upperhinge model
 dat=sim.chngpt (mean.model="thresholded", threshold.type="upperhinge", family="binomial", sd=0.3, mu.z=0, alpha=0, coef.z=log(1.4), beta=-1, n=100, seed=1)     
 fit.0 = chngptm (formula.1=y~z, formula.2=~x, family="binomial", dat,  type="upperhinge", est.method="smoothapprox", var.type="model", save.boot=T, ci.bootstrap.size=1, verbose=verbose)
@@ -20,7 +50,6 @@ checkEqualsNumeric(diag(fit.0$vcov), c(0.11440831,0.06818376,0.15998558,0.565026
 checkEqualsNumeric(diag(fit.1$vcov), c(0.16060624,0.05749946,0.24441672,1.06928181), tolerance=tolerance)        
 
 
-# note family is binomial by accident
 data=sim.chngpt("quadratic", n=60, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="binomial")      
 # weighted logistic models fit
 fit.d = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="segmented", est.method="grid",         var.type="none", weights=rep(1:2,each=30), verbose=verbose)
@@ -55,25 +84,6 @@ checkEqualsNumeric(diag(vcov(fit.2b1$best.fit)), c(0.008207570,0.002474872,0.011
 #    dat.2$weights <- n
 #    stats::summary.glm(stats::glm(y.2~z+ I(z^2), family="binomial", dat.2, weights=dat.2$weights))
 #    stats::summary.glm(stats::glm(cbind(success,failure)~z+ I(z^2), family="binomial", dat.2))
-
-
-########################################
-# hinge model
-
-data=sim.chngpt("thresholded", threshold.type="hinge", n=250, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="binomial")  
-data$xx=data$x; data$zz=data$z; data$yy=data$y
-
-fit.0=glm(yy~zz+ns(xx,df=3), data, family="binomial")
-fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", est.method="smoothapprox", var.type="all", verbose=verbose, aux.fit=fit.0, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
-#    checkEqualsNumeric(sum(diag(fit$vcov[["smooth"]])), 0.399209, tolerance=tolerance)    
-checkEqualsNumeric(sum(diag(fit$vcov[["model"]])), 0.614832, tolerance=tolerance)    
-checkEqualsNumeric(sum(diag(fit$vcov[["robust"]])), 2.311749, tolerance=tolerance)        
-
-#bootstrap
-fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data[1:120,], type="hinge", est.method="smoothapprox", var.type="bootstrap", verbose=verbose, lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3, ci.bootstrap.size=10, boot.test.inv.ci=TRUE)
-checkEqualsNumeric(fit$vcov$symm[1,], c(-0.4888763,0.6802883,-6.0128577,4.4632592), tolerance=tolerance)
-checkEqualsNumeric(fit$vcov$testinv[,4], c(1.043623,6.013954), tolerance=tolerance)
-
 
 
 ########################################

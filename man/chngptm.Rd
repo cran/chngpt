@@ -19,18 +19,18 @@ Estimate change point logistic model
 \usage{
 
 chngptm (formula.1, formula.2, family, data, type = c("step",
-         "hinge", "upperhinge", "segmented", "segmented2",
-         "stegmented"), formula.strat = NULL, weights = NULL,
-         est.method = c("default", "smoothapprox", "grid",
-         "fastgrid", "fastgrid2", "gridC"), var.type =
-         c("none", "robust", "model", "robusttruth",
-         "bootstrap", "all"), aux.fit = NULL, lb.quantile =
-         0.1, ub.quantile = 0.9, grid.search.max = 5000,
-         test.inv.ci = TRUE, boot.test.inv.ci = FALSE,
-         ci.bootstrap.size = 1000, alpha = 0.05, save.boot =
-         FALSE, m.out.of.n = FALSE, b.transition = Inf, tol =
-         1e-04, maxit = 100, chngpt.init = NULL, search.bound =
-         10, keep.best.fit = TRUE, verbose = FALSE, ...)
+ "hinge", "upperhinge", "segmented", "segmented2",
+ "stegmented"), formula.strat = NULL, weights = NULL,
+ est.method = c("default", "smoothapprox", "grid",
+ "fastgrid", "fastgrid2", "gridC"), var.type =
+ c("default", "none", "robust", "model", "bootstrap",
+ "all"), aux.fit = NULL, lb.quantile = 0.1, ub.quantile
+ = 0.9, grid.search.max = 5000, test.inv.ci = TRUE,
+ boot.test.inv.ci = FALSE, ci.bootstrap.size = 1000,
+ alpha = 0.05, save.boot = TRUE, m.out.of.n = FALSE,
+ b.transition = Inf, tol = 1e-04, maxit = 100,
+ chngpt.init = NULL, search.bound = 10, keep.best.fit =
+ TRUE, verbose = FALSE, ...)
 
 chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
     ...)
@@ -41,7 +41,8 @@ chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
 \method{print}{chngptm} (x, ...)
 \method{plot}{chngptm} (x, which = NULL, xlim = NULL, lwd = 2, lcol = "red",
  add = FALSE, add.points = TRUE, add.ci = TRUE, breaks
- = 20, ...) 
+ = 20, mark.chngpt = FALSE, xlab = NULL, ylab = NULL,
+ ...) 
 \method{summary}{chngptm} (object, var.type = NULL, expo = FALSE,
          show.slope.post.threshold = FALSE, verbose = FALSE,
          ...)
@@ -93,6 +94,9 @@ lincomb(object, comb, alpha=0.05)
   \item{xlim}{xlim}
   \item{lwd}{lwd}
   \item{lcol}{line col}
+  \item{mark.chngpt}{mark.chngpt}
+  \item{xlab}{xlab}
+  \item{ylab}{ylab}
   
   \item{comb}{a vector of combination coefficients that will be used to form an inner product with the estimated slope}
   \item{expo}{If family is binomial and expo is TRUE, coefficients summary will be shown on the scale of odds ratio instead of slopes}

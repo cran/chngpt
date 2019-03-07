@@ -384,7 +384,7 @@ void _preprocess2(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>& 
   // assume X and Y are sorted 
   // thresholdIdx are 1-based index, which define the grid of thresholds
   // For fastgrid2, the meaning of the first two variables are B and r instead 
-SEXP twoD_search(
+SEXP twoD_gaussian(
      SEXP u_X, 
      SEXP u_x, 
      SEXP u_Y, 

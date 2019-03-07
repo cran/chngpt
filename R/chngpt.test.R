@@ -269,7 +269,8 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
             # simulate from fit.null
             y.b=rnorm(n, linear.predictors.null.sorted, sd.null) 
             llik.null.b=-n/2*log(mean(lm.fit(Z.sorted, y.b)$residuals**2)) # #tmpfit=lm(y~Girth, data.frame(y=y.b, Z)); logLik(tmpfit) + n/2*(1+log(2*pi)) # same as llik.null.b
-            yhy = .Call("fastgrid_search", 
+            f.name="fastgrid_" %.% family
+            yhy = .Call(f.name, 
                             cbind(Z.sorted,chngpt.var.sorted), 
                             as.double(y.b), 
                             as.double(w.sorted), 

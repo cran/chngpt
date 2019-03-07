@@ -3,6 +3,7 @@ test.chngptm.linear <- function() {
 
 library("chngpt")
 library("RUnit")
+  suppressWarnings(RNGversion("3.5.0"))
 RNGkind("Mersenne-Twister", "Inversion")    
 tolerance=1e-1
 # R.Version()$system is needed b/c 32 bit system gives different results from 64 bit system
