@@ -101,3 +101,6 @@
 2019-01-02	
 	* Michal Jurask reported a bug when the glm has a NA coef. Fix at line
 	897.
+
+2019-03-08
+	* Bug fix, delete to delete[]

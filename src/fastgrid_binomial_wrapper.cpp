@@ -82,7 +82,7 @@ BEGIN_RCPP
             coefs.submat(0,b,p-1,b) = beta0;
             coefs(p,b) = e;        
         } 
-        delete index;
+        delete [] index;
         return Rcpp::wrap(coefs);
     }
 END_RCPP
