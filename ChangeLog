@@ -104,3 +104,6 @@
 
 2019-03-08
 	* Bug fix, delete to delete[]
+
+2019-03-12
+	* Bug fix, add   X.col(p-2) = (x-e)%(x>e); in fastgrid_binomial.cpp

@@ -70,6 +70,7 @@ vec _fastgrid_binomial(vec y, mat Z, vec x, vec e_seq){       // fast grid searc
   vec out(p);
   mat X(n,p-1);
   X.cols(0,p-3) = Z;
+  X.col(p-2) = (x-e)%(x>e);
   mat D(n,p-1);
   mat H(p-1,p-1);
 

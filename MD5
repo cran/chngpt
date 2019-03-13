@@ -1,5 +1,5 @@
-70d166577e22b52471390b860ac42fd2 *ChangeLog
-b7b88474d02265a2e97f1555d94ecb7b *DESCRIPTION
+b6a189a9f429be5c6c7d4d09a26747b7 *ChangeLog
+26fbb2cee2b895cf95b72907dba2d65a *DESCRIPTION
 d277dd0250d0590d79aa62d20f9189a4 *NAMESPACE
 298f7e7509911b1e4dddff149d691b3c *R/antoch.test.R
 67c545c7efdf655a1c650fdc0c93e8b4 *R/chngpt.test.2.R
@@ -16,7 +16,7 @@ a09a27d6f7abd342705f8f1c4031bbe0 *R/sim.hinge.R
 ee6e5c17e1479c09ab44d478b43ae080 *data/dat.mtct.rda
 ea25138d0df2c1eada8655acc16886da *data/sim.alphas.rda
 d68fe8e41ea91aabf748f9cb3af44c68 *inst/CITATION
-aa705fa029ecbe874d2cc3fe26eef4df *inst/doc/chngpt-vignette.pdf
+5d8b493e575a75fe51515a39f896f999 *inst/doc/chngpt-vignette.pdf
 82e747aa9aeaf112cb1b9113ff6d881f *inst/doc/chngpt-vignette.pdf.asis
 a616e808bd826e929f56223020649675 *inst/unitTests/Makefile
 0c12c1ada770c9626aae4253db6d4e85 *inst/unitTests/report.html
@@ -48,7 +48,7 @@ e81e510bef803923604735b8bf01c025 *src/Makevars.win
 b3e55dce9080169d7161c8a182f0c70a *src/error.h
 ad976f63d59eb3ba07a22d0c9b911e53 *src/fastgrid.cc
 715cac6ecf1aba413259ac7949f3264f *src/fastgrid2.cc
-424be512d8009c75e1f6a339f338d296 *src/fastgrid_binomial.cpp
+f71f1375ecdcabbdb7675ab5d4a4fe90 *src/fastgrid_binomial.cpp
 9ca2c9bdf227af5ba9773f24698ab09d *src/fastgrid_binomial_wrapper.cpp
 0095d84b57e7e9d9e6a0d9d88eade5b5 *src/grid.cc
 0b1465cd303a39f5bd6ccb327e1e4b1f *src/ide.h
