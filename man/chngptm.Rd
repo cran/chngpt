@@ -19,19 +19,20 @@ Estimate change point logistic model
 \usage{
 
 chngptm (formula.1, formula.2, family, data, type = c("step",
- "hinge", "upperhinge", "segmented", "segmented2",
- "stegmented"), formula.strat = NULL, weights = NULL,
- est.method = c("default", "smoothapprox", "grid",
- "fastgrid", "fastgrid2", "gridC"), var.type =
- c("default", "none", "robust", "model", "bootstrap",
- "all"), aux.fit = NULL, lb.quantile = 0.1, ub.quantile
- = 0.9, grid.search.max = 5000, test.inv.ci = TRUE,
- boot.test.inv.ci = FALSE, ci.bootstrap.size = 1000,
- alpha = 0.05, save.boot = TRUE, m.out.of.n = FALSE,
- b.transition = Inf, tol = 1e-04, maxit = 100,
- chngpt.init = NULL, search.bound = 10, keep.best.fit =
- TRUE, verbose = FALSE, ...)
-
+         "hinge", "upperhinge", "segmented", "segmented2",
+         "stegmented", "upperhingequad"), formula.strat = NULL,
+         weights = NULL, est.method = c("default",
+         "smoothapprox", "grid", "fastgrid", "fastgrid2",
+         "gridC"), var.type = c("default", "none", "robust",
+         "model", "bootstrap", "all"), aux.fit = NULL,
+         lb.quantile = 0.1, ub.quantile = 0.9, grid.search.max
+         = 5000, test.inv.ci = TRUE, boot.test.inv.ci = FALSE,
+         ci.bootstrap.size = 1000, alpha = 0.05, save.boot =
+         TRUE, m.out.of.n = FALSE, b.transition = Inf, tol =
+         1e-04, maxit = 100, chngpt.init = NULL, search.bound =
+         10, keep.best.fit = TRUE, ncpus = 1, verbose = FALSE,
+    ...)
+         
 chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
     ...)
 
@@ -79,6 +80,7 @@ lincomb(object, comb, alpha=0.05)
   \item{add.ci}{Boolean.}
   \item{add}{Boolean.}
   \item{breaks}{integer.}
+  \item{ncpus}{Number of cores to use if the OS is not Windows.}
   \item{keep.best.fit}{Boolean.}
   \item{y}{outcome}
   \item{show.slope.post.threshold}{boolean}
@@ -107,6 +109,8 @@ Without lb.quantile and ub.quantile, finite sample performance of estimator drop
 When est.method is smoothapprox, Newton-Raphson is done with initial values chosen by change point hypothesis testing. The testing procedure may be less subjective to finite sample volatility. 
 
 If var.method is bootstrap, summary of fitted model contains p values for each estimated slope. These p values are approximate p-values, obtained assuming that the bootstrap distributions are normal. 
+
+When var.method is bootstrap and the OS is not Windows, the boot package we use under the hood takes advantage of \code{ncpus} cores through parallel::mclapply. 
 
 }
 \value{
@@ -162,11 +166,14 @@ fit.2a=chngptm(formula.1=cbind(success,failure)~z, formula.2=~x, family="binomia
     type="step")
 
 
-# threshold Cox regression, no variance estimates available
+# coxph example
 library(survival)
 dat.3 <- data.frame(time=c(4,3,1,1,2,2,3), status=c(1,1,1,0,1,1,0), x=c(0,2,1,1,1,0,0), 
     sex=c(0,0,0,0,1,1,1)) 
-fit.3=chngptm(formula.1=Surv(time, status)~1, formula.2=~x, data=dat.3, family="coxph",type="step")
+system.time({
+fit.3=chngptm(formula.1=Surv(time, status)~1, formula.2=~x, data=dat.3, family="coxph",
+    type="segmented", var.type="bootstrap", ci.bootstrap.size=10, ncpus=1)
+})
 summary(fit.3)
 
 
@@ -185,9 +192,24 @@ summary(fit.4)
 \dontrun{
 # not run because otherwise the examples take >5s and that is a problem for R CMD check
 
+
 # an interaction model. est.method will be set to grid inside the function. fastgrid not
 # available for models with interaction terms yet
-fit=chngptm(formula.1=mpg~cyl + disp + hp, formula.2=~hp*drat, mtcars, type="segmented", 
+
+# mtcars is a built-in dataset in R
+fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="segmented", 
+    family="gaussian", var.type="bootstrap", ci.bootstrap.size=100)
+summary(fit)
+
+# more than one interaction term
+# subsampling bootstrap confidence interval for step model
+fit=chngptm(formula.1=mpg~hp+wt, formula.2=~hp*drat+wt*drat, mtcars, type="step",
+    family="gaussian", var.type="bootstrap", ci.bootstrap.size=100)
+summary(fit)
+
+
+# a simple step model
+fit=chngptm(formula.1=mpg~hp, formula.2=~drat, mtcars, type="step",
     family="gaussian", var.type="bootstrap", ci.bootstrap.size=100)
 summary(fit)
 

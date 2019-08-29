@@ -1,7 +1,9 @@
 expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 sim.chngpt = function (
     mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear"), 
-    threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented","upperhinge"),# segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
+    # segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
+    # upperhingequad differs from upperhinge in that it has a quadratic term
+    threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented","upperhinge","upperhingequad"),
     b.transition=Inf,
     family=c("binomial","gaussian"), 
     x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm"), # gam1 is a hack to allow e. be different
@@ -105,8 +107,8 @@ sim.chngpt = function (
         if(is.null(alpha)) alpha=try(chngpt::sim.alphas[[mean.model%.%"_"%.%sub("fix","",x.distr)]][e.%.%"", ifelse(mean.model=="thresholdedItxn",beta.itxn,beta)%.%""], silent=TRUE)
         if(is.null(alpha) | inherits(alpha, "try-error")) stop("alpha not found, please check beta or provide a null") 
         
-        X=cbind(1,     z,        x,   x.gt.e,   if(threshold.type=="segmented2") x.gt.e*x else x.gt.e*(x-e.),     z*x,   z*x.gt.e,   z*x.gt.e*(x-e.), x.lt.e*(x-e.))
-        coef.=c(alpha, z=coef.z, x=0, x.gt.e=0, x.hinge=0,                                                        z.x=0, z.x.gt.e=0, z.x.hinge=0,     x.lt.e=0)
+        X=cbind(1,     z,        x,   x.gt.e,   if(threshold.type=="segmented2") x.gt.e*x else x.gt.e*(x-e.),     z*x,   z*x.gt.e,   z*x.gt.e*(x-e.), x.lt.e*(x-e.), (x.lt.e*(x-e.))^2)
+        coef.=c(alpha, z=coef.z, x=0, x.gt.e=0, x.hinge=0,                                                        z.x=0, z.x.gt.e=0, z.x.hinge=0,     x.lt.e=0,       x.lt.e.quad=0)
         if (mean.model=="thresholded") { 
             if (threshold.type=="step") {
                 coef.[1:5]=c(alpha, coef.z,          0,    beta,     0) 
@@ -114,6 +116,8 @@ sim.chngpt = function (
                 coef.[1:5]=c(alpha, coef.z,          0,       0,  beta) 
             } else if (threshold.type=="upperhinge") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.lt.e"]=beta 
+            } else if (threshold.type=="upperhingequad") {
+                coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.lt.e"]=beta[1]; coef.["x.lt.e.quad"]=beta[2]
             } else if (threshold.type=="segmented") {
                 coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) 
             } else if (threshold.type=="segmented2") {

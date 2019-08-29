@@ -96,11 +96,11 @@ namespace scythe {
     if (A.size() == 1) {                                              \
       res.resize2Match(B);                                            \
       std::transform(B.template begin_f<RO>(), B.template end_f<RO>(),\
-          res.begin_f(), std::bind1st(std::ptr_fun((T (*) (T, S))OP), A(0)));                     \
+          res.begin_f(), std::bind1st(std::cref   ((T (*) (T, S))OP), A(0)));                     \
     } else if (B.size() == 1) {                                       \
       res.resize2Match(A);                                            \
       std::transform(A.template begin_f<RO>(), A.template end_f<RO>(),\
-                     res.begin_f(), std::bind2nd(std::ptr_fun((T (*) (T, S))OP), B(0)));          \
+                     res.begin_f(), std::bind2nd(std::cref((T (*) (T, S))OP), B(0)));          \
     } else {                                                          \
       res.resize2Match(A);                                            \
       std::transform(A.template begin_f<RO>(), A.template end_f<RO>(),\
@@ -109,6 +109,7 @@ namespace scythe {
                                                                       \
     return res;                                                       \
   }                                                                   \
+
                                                                       \
   template <typename T, matrix_order PO1, matrix_style PS1,           \
                         matrix_order PO2, matrix_style PS2,           \

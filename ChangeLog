@@ -52,58 +52,95 @@
 2017-10-27  Youyi Fong
 
     * a major cleanup of sim.chngpt
-	* weighted estimation now works
+    * weighted estimation now works
 
 2018-03-30  Youyi Fong
 
     * change how chngpts are defined in chngpt.test
-	* weighted estimation now works
-	* chngptm used to use chngpt.test to initialize when doing smooth
-	approximation. now chngptm uses chngptm to initialize in that situation.
-	This way chngptm does not depend on chngpt.test anymore
+    * weighted estimation now works
+    * chngptm used to use chngpt.test to initialize when doing smooth
+    approximation. now chngptm uses chngptm to initialize in that situation.
+    This way chngptm does not depend on chngpt.test anymore
 
 2018-05-02  Youyi Fong
-	* Add support for cbind() on the lhs for the binomial family. Both grid
-	and smoothapprox are supported.
-	* Add support for Poisson family
+    * Add support for cbind() on the lhs for the binomial family. Both grid
+    and smoothapprox are supported.
+    * Add support for Poisson family
 
 2018-06-02
-	* Implement fastgrid for thinned thresholds. 
-	* Deprecate useC for grid search
-	* Revamp vignette
-	* Add approximate p value when var.method is bootstrap
-	* Change summary chngptm output to remove empirical percentile of the
-	estimated threshold
+    * Implement fastgrid for thinned thresholds. 
+    * Deprecate useC for grid search
+    * Revamp vignette
+    * Add approximate p value when var.method is bootstrap
+    * Change summary chngptm output to remove empirical percentile of the
+    estimated threshold
 
 2018-07-02
-	* Add chngptm.xy (x,y,...) to provide an alternative way of fitting
-	chngptm without data frame and formula
+    * Add chngptm.xy (x,y,...) to provide an alternative way of fitting
+    chngptm without data frame and formula
 
 2018-07-16
-	* Replace %+% by %.% throughout	
+    * Replace %+% by %.% throughout 
 
 2018-07-25
-	* Change robust testing implementation
-	* RDR is changed to R.h %*% D.h when not robust. This requires a change of
-	values in the unit testing function
+    * Change robust testing implementation
+    * RDR is changed to R.h %*% D.h when not robust. This requires a change of
+    values in the unit testing function
 
 2018-08-07
-	* Add upper hinge model implementation
-	* Remove smooth as a var.type, comment out var.est.smooth and remove
-	smooth from unit testing
-	* Implement superfastgrid
-	* Merge fastgrid_search and boot_fastgrid_search into one C function
-	* Implement grid search in C for upperhinge2
+    * Add upper hinge model implementation
+    * Remove smooth as a var.type, comment out var.est.smooth and remove
+    smooth from unit testing
+    * Implement superfastgrid
+    * Merge fastgrid_search and boot_fastgrid_search into one C function
+    * Implement grid search in C for upperhinge2
 
 2018-10-08
-	* A naive implementation of the test inversion CI is added when search method is grid
+    * A naive implementation of the test inversion CI is added when search method is grid
 
-2019-01-02	
-	* Michal Jurask reported a bug when the glm has a NA coef. Fix at line
-	897.
+2019-01-02  
+    * Michal Jurask reported a bug when the glm has a NA coef. Fix at line
+    897.
 
 2019-03-08
-	* Bug fix, delete to delete[]
+    * Bug fix, delete to delete[]
 
 2019-03-12
-	* Bug fix, add   X.col(p-2) = (x-e)%(x>e); in fastgrid_binomial.cpp
+    * Bug fix, add   X.col(p-2) = (x-e)%(x>e); in fastgrid_binomial.cpp
+
+2019-04
+    * Fix vcov implementation when var.type is bootstrap
+    * Add multicore parallel support for bootstrap. ncpus controls the number of cores. Thanks to JDS for the question resulting in this change
+
+2019-04-21
+    * Discovered that adding support for thinned thresholds back in 2018-10-2
+    (compared to 2018-10-1) slows things down by two fold. Fixed it.
+
+2019-06-17
+    * This version has an unsuccesful attempt to add upper hinge quadratic
+    model   
+
+2019-06-17
+    * Revert back to before 6.17
+
+2019-06-30
+    * Revert back to 6.17 and work from there
+    * Change the implementation of upperhingequad in chngptm from based on formula.2 to type
+
+2019-07-23
+    * Bug fix in SEXP fastgrid2quad_gaussian so that bootstrap for upperhingequad works too
+
+2019-08-16
+    * Allow subsampling bootstrap m-out-of-n for discontinuous threshold effects in chngptm(). Thanks to Jeremy Nguyen for the question resulting in this change
+
+2019-08-17
+    * Allow more than one variables to be interacting with the threshold variable. chngptm updated, unit testing code added. A quick test for consistency performed (test_multi_itxn.R). Thanks to Jeremy Nguyen for the question resulting in this change
+
+2019-08-26
+    * chngpt.test throws an exception. Modify chngpt.test() to check if the min and max are part of the candidate change points and if yes, remove them. Thanks to Eric Scott for the question resulting in this change
+    * Add CXX_STD = CXX11 to Makevars and Makevars.win. Replace ptr_fun by cref in smath.h. Thanks Prof Brian Ripley
+    * Change ncpus default to 1 to avoid an error on debian
+
+2019-08-28
+    * Remove fastgrid_binomial_wrapper.cpp and fastgrid_binomial.cpp for now. They lead to check errors on CRAN. Namespace and description file also changed accordingly
+    * Vignette updated

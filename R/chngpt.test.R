@@ -63,6 +63,17 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     
     # change point candidates
     if (is.null(chngpts)) chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,chngpts.cnt)
+    # avoid having chngpts starting at the ends
+    if(chngpts[1]==chngpt.var.sorted[1]) {
+        chngpts.new=chngpts[-1]
+        attr(chngpts.new,"index")=attr(chngpts,"index")[-1]
+        chngpts=chngpts.new
+    }
+    if(chngpts[length(chngpts)]==chngpt.var.sorted[length(chngpt.var.sorted)]) {
+        chngpts.new=chngpts[-length(chngpts)]
+        attr(chngpts.new,"index")=attr(chngpts,"index")[-length(chngpts)]
+        chngpts=chngpts.new
+    }
     M <- length(chngpts)  
     
     if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%.%type)
@@ -276,6 +287,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
                             as.double(w.sorted), 
                             prec.w.all.one, 
                             attr(chngpts,"index"),
+                            attr(chngpts,"skipping"),
                             0,# bootstrap size
                             type=="upperhinge"
                     ) 

@@ -12,13 +12,37 @@ print(tolerance)
 verbose = FALSE
 
 
-est.methods=c("grid","fastgrid2")
+
+
+
+for (type in c("upperhingequad")) {
+#type="upperhingequad"    
+    print(type)
+    dat=sim.chngpt(mean.model="thresholded", threshold.type=type, n=250, seed=1, beta=c(32,2), x.distr="norm", e.=6, b.transition=Inf, family="gaussian", alpha=0)
+    est.methods=c("grid","fastgrid2")
+    out=sapply(est.methods, function(est.method){
+        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type=type, est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, grid.search.max=1e5, verbose=verbose)
+        plot(fit.0$logliks)
+        c(
+          fit.0$logliks[1],
+          diff(fit.0$logliks),
+          fit.0$coefficients,
+          fit.0$vcov$boot.samples[1,]
+        )
+    })    
+    print(head(out))
+    for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
+}
+
+
+
 for (type in c("segmented","hinge")) {
 #type="hinge"    
     print(type)
     dat=sim.chngpt("quadratic", n=20, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="gaussian")
+    est.methods=c("grid","fastgrid2")
     out=sapply(est.methods, function(est.method){
-        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type="segmented", formula.strat=~I(z>0), est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, grid.search.max=1e5, verbose=verbose)
+        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type=type, formula.strat=~I(z>0), est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, grid.search.max=1e5, verbose=verbose)
         c(
           fit.0$logliks[1],
           diff(fit.0$logliks),

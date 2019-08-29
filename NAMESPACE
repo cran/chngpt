@@ -3,7 +3,7 @@ useDynLib(chngpt, .registration = TRUE)
 export(chngpt.test, plot.chngpt.test, chngptm, chngptm.xy, print.chngptm,  antoch.test, performance.unit.test, plot.chngptm)
 export(sim.pastor, sim.my, sim.chngpt, lincomb, sim.hinge, hinge.test) 
 
-importFrom(Rcpp, evalCpp)
+importFrom("methods", "hasArg")
 importFrom(kyotil, '%.%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope)
 importFrom(MASS, mvrnorm)
 import(survival)
@@ -11,7 +11,7 @@ importFrom("graphics", "abline", "plot", "axis", "lines", "par", "points", "hist
 importFrom("utils", "str", "capture.output")
 importFrom("boot", "boot.ci", "boot")
 importFrom("splines", "ns")
-importFrom("stats", "as.formula", "coef", "complete.cases", "cov2cor",
+importFrom("stats", "as.formula", "coef", "complete.cases", "cov2cor", "cov",
              "deriv3", "glm", "logLik", "median", "model.frame",
              "model.matrix", "na.pass", "optim", "pchisq", "pnorm",
              "predict", "pt", "qt", "quantile", "rbeta", "rgamma",
@@ -29,4 +29,3 @@ S3method(getFixedEf,chngptm)
 
 S3method(plot,chngpt.test)
 S3method(plot,chngptm)
-

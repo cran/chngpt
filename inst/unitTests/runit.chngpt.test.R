@@ -10,6 +10,30 @@ tolerance=1e-1
 if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_checkReproducibility")) & R.Version()$system %in% c("x86_64, mingw32","x86_64, linux-gnu")) tolerance=1e-6 
 verbose=0
 
+
+#################################
+# examples contributed by Eric Scott, datasets with duplicate x's caused errors, fixed
+
+x <- sort(c(runif(20, 0, 1)))
+x1 <- x2 <- x
+x1[1:3] <- 0
+x2[1:3] <- 0.1
+y <- c(abs(rnorm(10, 1)), abs(rnorm(10, 5)))
+
+df <- data.frame(x,y)
+df1 <- data.frame(x = x1, y)
+df2 <- data.frame(x = x2, y)
+
+m1 <- chngptm(y~1, ~x, data = df, type = "step", family = "gaussian")
+m2 <- chngptm(y~1, ~x, data = df1, type = "step", family = "gaussian")
+m3 <- chngptm(y~1, ~x, data = df2, type = "step", family = "gaussian")
+
+test1 <- chngpt.test(y~1, ~x, data = df, type = "step", family = "gaussian")
+test2 <- chngpt.test(y~1, ~x, data = df1, type = "step", family = "gaussian")
+test3 <- chngpt.test(y~1, ~x, data = df2, type = "step", family = "gaussian")
+checkEqualsNumeric(c(test2$p.value,test3$p.value), c(0,0), tolerance=tolerance) 
+
+
 #################################
 # linear regression
 

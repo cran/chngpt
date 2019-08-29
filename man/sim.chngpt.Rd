@@ -13,8 +13,8 @@ sim.chngpt (mean.model = c("thresholded", "thresholdedItxn",
          "quadratic", "quadratic2b", "cubic2b", "exp",
          "flatHyperbolic", "z2", "z2hinge", "z2segmented",
          "z2linear"), threshold.type = c("NA", "step", "hinge",
-         "segmented", "segmented2", "stegmented",
-         "upperhinge"), b.transition = Inf, family =
+         "segmented", "segmented2", "stegmented", "upperhinge",
+         "upperhingequad"), b.transition = Inf, family =
          c("binomial", "gaussian"), x.distr = c("norm",
          "norm3", "norm6", "imb", "lin", "mix", "gam",
          "zbinary", "gam1", "gam2", "fixnorm"), e. = NULL, mu.x
