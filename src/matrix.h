@@ -2177,10 +2177,10 @@ namespace scythe {
 					T_type tmp = (*this)(0);
 					resize2Match(M);
           std::transform(M.template begin_f<ORDER>(), M.template end_f<ORDER>(),
-              begin_f(), std::bind1st(op, tmp));
+              begin_f(), std::bind1st(op, tmp, std::placeholders::_1));
 				} else if (M.size() == 1) { // nXm += 1x1
 					std::transform(begin_f(), end_f(), begin_f(),
-							std::bind2nd(op, M(0)));
+							std::bind(op, std::placeholders::_1, M(0)));
 				} else { // nXm += nXm
             std::transform(begin_f(), end_f(), M.template begin_f<ORDER>(),
                 begin_f(), op);
@@ -2881,7 +2881,7 @@ namespace scythe {
       {
         const_forward_iterator last = end_f();
         return (last == std::find_if(begin_f(), last,
-          std::bind1st(std::not_equal_to<T_type> (), 0)));
+          std::bind(std::not_equal_to<T_type> (), 0, std::placeholders::_1)));
       }
 
       /* M(i,j) == 0 when i != j */
@@ -3129,7 +3129,7 @@ namespace scythe {
       {
         const_forward_iterator last = end_f();
         return (last == std::find_if(begin_f(), last,
-          std::bind1st(std::not_equal_to<T_type> (), x)));
+          std::bind(std::not_equal_to<T_type> (), x, std::placeholders::_1)));
       }
 
 
@@ -4275,7 +4275,7 @@ namespace scythe {
       Matrix<T_type,ORDER,Concrete> res(rhs.rows(),rhs.cols(),false); \
       std::transform(rhs.begin_f(), rhs.end_f(),                      \
           res.template begin_f<R_ORDER>(),                            \
-          std::bind1st(FUNCTOR <T_type>(), lhs(0)));                  \
+          std::bind(FUNCTOR <T_type>(), lhs(0), std::placeholders::_1));                  \
       SCYTHE_VIEW_RETURN(T_type, ORDER, STYLE, res)                   \
     }                                                                 \
                                                                       \
@@ -4284,7 +4284,7 @@ namespace scythe {
     if (rhs.size() == 1) {                                            \
       std::transform(lhs.begin_f(), lhs.end_f(),                      \
           res.template begin_f<L_ORDER> (),                           \
-          std::bind2nd(FUNCTOR <T_type>(), rhs(0)));                  \
+          std::bind(FUNCTOR <T_type>(), std::placeholders::_1, rhs(0)));                  \
     } else {                                                          \
       std::transform(lhs.begin_f(), lhs.end_f(),                      \
           rhs.template begin_f<L_ORDER>(),                            \
@@ -4572,7 +4572,7 @@ namespace scythe {
       Matrix<bool,ORDER,Concrete> res(rhs.rows(),rhs.cols(),false);   \
       std::transform(rhs.begin_f(), rhs.end_f(),                      \
           res.template begin_f<R_ORDER>(),                            \
-          std::bind1st(FUNCTOR <T_type>(), lhs(0)));                  \
+          std::bind(FUNCTOR <T_type>(), lhs(0), std::placeholders::_1));                  \
       SCYTHE_VIEW_RETURN(T_type, ORDER, STYLE, res)                   \
     }                                                                 \
                                                                       \
@@ -4581,7 +4581,7 @@ namespace scythe {
     if (rhs.size() == 1) {                                            \
       std::transform(lhs.begin_f(), lhs.end_f(),                      \
           res.template begin_f<L_ORDER> (),                           \
-          std::bind2nd(FUNCTOR <T_type>(), rhs(0)));                  \
+          std::bind(FUNCTOR <T_type>(), std::placeholders::_1, rhs(0)));                  \
     } else {                                                          \
       std::transform(lhs.begin_f(), lhs.end_f(),                      \
           rhs.template begin_f<L_ORDER>(),                            \

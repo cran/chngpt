@@ -1,5 +1,5 @@
-007d8424ae8b841d556b1ffa455ecddd *ChangeLog
-66b7aacfb29203bcd5e9e74c0486732d *DESCRIPTION
+8fd0d457446c3cd628cb98bda5aca9f7 *ChangeLog
+736defbe7e98da99e1ab7c43109a5743 *DESCRIPTION
 0e2d3fd4cfdeeb4e84ef5b1a73d91e39 *NAMESPACE
 298f7e7509911b1e4dddff149d691b3c *R/antoch.test.R
 67c545c7efdf655a1c650fdc0c93e8b4 *R/chngpt.test.2.R
@@ -16,7 +16,7 @@ f7475ce54feb6cea48a7977cfc7ec034 *build/vignette.rds
 ee6e5c17e1479c09ab44d478b43ae080 *data/dat.mtct.rda
 ea25138d0df2c1eada8655acc16886da *data/sim.alphas.rda
 d68fe8e41ea91aabf748f9cb3af44c68 *inst/CITATION
-8b21e90ab93f02a210e747d9f18d9d5f *inst/doc/chngpt-vignette.pdf
+b4420c18a246dd771113f42671d3d179 *inst/doc/chngpt-vignette.pdf
 82e747aa9aeaf112cb1b9113ff6d881f *inst/doc/chngpt-vignette.pdf.asis
 a616e808bd826e929f56223020649675 *inst/unitTests/Makefile
 0c12c1ada770c9626aae4253db6d4e85 *inst/unitTests/report.html
@@ -52,14 +52,14 @@ de5264073f5f0e66d36e83798cf20ffc *src/grid.cc
 0b1465cd303a39f5bd6ccb327e1e4b1f *src/ide.h
 822c244edb53be2f4f8b1e831abe16fb *src/la.h
 41a6caea698666bf78dda6d4d8b923e8 *src/lapack.h
-0e84b5d3b0cd6c3d61f9ae9ab4bf3f64 *src/matrix.h
+9027236ee9d4fe0225b785f0776ebed2 *src/matrix.h
 7ab16dbb6757a5de37dc7de9867a3c10 *src/matrix_bidirectional_iterator.h
 f924b218cd6eaed80846ed0cba534b03 *src/matrix_forward_iterator.h
 3dc8b8e303daa7ffdf3e2d29b2fa43d9 *src/matrix_random_access_iterator.h
 d89d7155854053f8842b5ef3767a7f0e *src/performance.cc
 ccc4f8e1c281a0148946bf412ca9adb2 *src/registerDynamicSymbol.c
 d0cf994cd4c6886f8bd348c351a00ecf *src/rng.h
-ef37f8674068dafd026bdedda939d8cf *src/smath.h
+7fec446712064aa53f2e4350067f48fa *src/smath.h
 a5574b5829f3cab30cd73eb26725ae68 *src/stat.h
 559eb8c7e73216d31eb2590377b99a09 *src/twoD.cc
 c223277d8ce6e79156a723b274abdf5e *tests/doRUnit.R
