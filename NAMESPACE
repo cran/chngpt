@@ -1,10 +1,10 @@
 useDynLib(chngpt, .registration = TRUE)
 
 export(chngpt.test, plot.chngpt.test, chngptm, chngptm.xy, print.chngptm,  antoch.test, performance.unit.test, plot.chngptm)
-export(sim.pastor, sim.my, sim.chngpt, lincomb, sim.hinge, hinge.test) 
+export(sim.pastor, sim.my, sim.chngpt, lincomb, sim.hinge, hinge.test, double.hinge, plot.double.hinge) 
 
 importFrom("methods", "hasArg")
-importFrom(kyotil, '%.%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope)
+importFrom(kyotil, '%.%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope, contain)
 importFrom(MASS, mvrnorm)
 import(survival)
 importFrom("graphics", "abline", "plot", "axis", "lines", "par", "points", "hist")
@@ -29,3 +29,4 @@ S3method(getFixedEf,chngptm)
 
 S3method(plot,chngpt.test)
 S3method(plot,chngptm)
+S3method(plot,double.hinge)

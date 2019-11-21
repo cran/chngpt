@@ -93,7 +93,7 @@ extern "C" {
 
 double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>& w, bool wAllOne, 
     int * thresholdIdx, vector<double>& thresholds, 
-    int n, int p, int nThresholds, bool isUpperHinge,
+    int n, int p, int nThresholds,
     double* logliks)
 {
 
@@ -106,7 +106,7 @@ double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>
     
     vector<double> x(n), x_cpy(n); // x_cpy is needed for upperHinge b/c as we progress from left to right, the original vals of x's are lost
     for(i=0; i<n; i++) x[i] = X(i,p-1);
-    if (isUpperHinge) for(i=0; i<n; i++) x_cpy[i] = x[i];
+//    if (isUpperHinge) for(i=0; i<n; i++) x_cpy[i] = x[i];
     
     // multiply X and Y with sqrt(w), but first save x
     if (!wAllOne) {
@@ -118,15 +118,15 @@ double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>
 
     // compute X_e, which is the last column of X
     //PRINTF("X[,p-1]\n"); for (int ii=0; ii<n; ii++) PRINTF("%f ", X(ii,p-1)); PRINTF("\n");
-    if (!isUpperHinge) {
-        // (x-e)+
-        for(i=0; i<thresholdIdx[0]; i++) x[i]=0;  
-        for(i=thresholdIdx[0]; i<n; i++) x[i]=x[i]-thresholds[0]; 
-    } else {
+//    if (!isUpperHinge) {
+//        // (x-e)+
+//        for(i=0; i<thresholdIdx[0]; i++) x[i]=0;  
+//        for(i=thresholdIdx[0]; i<n; i++) x[i]=x[i]-thresholds[0]; 
+//    } else {
         // (x-e)-
         for(i=0; i<thresholdIdx[0]; i++) x[i]=x[i]-thresholds[0];  
         for(i=thresholdIdx[0]; i<n; i++) x[i]=0; 
-    }
+//    }
     //PRINTF("X[,p-1]\n"); for (int ii=0; ii<n; ii++) PRINTF("%f ", X(ii,p-1)); PRINTF("\n");
     
     //PRINTF("nThresholds %i\n", nThresholds); 
@@ -135,15 +135,15 @@ double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>
         if(i>0) {
             delta=thresholds[i]-thresholds[i-1]; 
             //PRINTF("delta %f\n", delta); 
-            if (!isUpperHinge) {
-                // (x-e)+
-                for (k=thresholdIdx[i-1]; k<thresholdIdx[i]-1; k++) x[k]=0; //needed for thinned threshold
-                for (k=thresholdIdx[i]-1; k<n; k++) x[k]=x[k]-delta;
-            } else {
+//            if (!isUpperHinge) {
+//                // (x-e)+
+//                for (k=thresholdIdx[i-1]; k<thresholdIdx[i]-1; k++) x[k]=0; //needed for thinned threshold
+//                for (k=thresholdIdx[i]-1; k<n; k++) x[k]=x[k]-delta;
+//            } else {
                 // (x-e)-
                 for (k=0; k<thresholdIdx[i-1]; k++) x[k]=x[k]-delta;
                 for (k=thresholdIdx[i-1]; k<thresholdIdx[i]-1; k++) x[k]=x_cpy[k]-thresholds[i]; // needed for thinned threshold
-            }
+//            }
             //PRINTF("x\n"); for (int ii=0; ii<n; ii++) PRINTF("%f ", x[ii]); PRINTF("\n");
         }
         
@@ -178,8 +178,7 @@ SEXP gridC_gaussian(
      SEXP u_X, SEXP u_Y, 
      SEXP u_W, SEXP u_wAllOne, 
      SEXP u_thresholdIdx, SEXP u_skipping,
-     SEXP u_nBoot, 
-     SEXP u_isUpperHinge)
+     SEXP u_nBoot, SEXP u_nSub)
 {
     double* X_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y); 
@@ -187,7 +186,7 @@ SEXP gridC_gaussian(
     bool wAllOne=asLogical(u_wAllOne)==1;
     int *thresholdIdx=INTEGER(u_thresholdIdx);
     int nBoot = asInteger(u_nBoot);
-    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
+//    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
     
 	int i,j;
 
@@ -215,7 +214,7 @@ SEXP gridC_gaussian(
 
         _grid_search(X, Y, W, wAllOne, 
                              thresholdIdx, thresholds, 
-                             n, p, nThresholds, isUpperHinge,
+                             n, p, nThresholds,
                              logliks); 
         //PRINTF("logliks : \n");  for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");  
             
@@ -256,7 +255,7 @@ SEXP gridC_gaussian(
             
             e_hat = _grid_search(Xb, Yb, Wb, wAllOne, 
                                  thresholdIdx, thresholds, 
-                                 n, p, nThresholds, isUpperHinge,
+                                 n, p, nThresholds,
                                  logliks); 
             //PRINTF("e_hat %f\n", e_hat); 
 
@@ -272,15 +271,15 @@ SEXP gridC_gaussian(
 //            for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
 
             // create x_e at e_hat
-            if (!isUpperHinge) {
-                // (x-e)+
-                for(i=0; i<n; i++) 
-                    if(Xb(i,p-1)<e_hat) Xb(i,p-1) = 0; else Xb(i,p-1) -= e_hat;  
-            } else {
+//            if (!isUpperHinge) {
+//                // (x-e)+
+//                for(i=0; i<n; i++) 
+//                    if(Xb(i,p-1)<e_hat) Xb(i,p-1) = 0; else Xb(i,p-1) -= e_hat;  
+//            } else {
                 // (x-e)-
                 for(i=0; i<n; i++) 
                     if(Xb(i,p-1)<e_hat) Xb(i,p-1) -= e_hat; else Xb(i,p-1) = 0;  
-            }
+//            }
             //PRINTF("Xb_e\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
             //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
             

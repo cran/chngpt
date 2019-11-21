@@ -280,7 +280,8 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
             # simulate from fit.null
             y.b=rnorm(n, linear.predictors.null.sorted, sd.null) 
             llik.null.b=-n/2*log(mean(lm.fit(Z.sorted, y.b)$residuals**2)) # #tmpfit=lm(y~Girth, data.frame(y=y.b, Z)); logLik(tmpfit) + n/2*(1+log(2*pi)) # same as llik.null.b
-            f.name="fastgrid_" %.% family
+            f.name="fastgrid2_" %.% family
+            # note that this does not work anymore, because the C functions have changed to implement upper hinge models only
             yhy = .Call(f.name, 
                             cbind(Z.sorted,chngpt.var.sorted), 
                             as.double(y.b), 
@@ -289,7 +290,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
                             attr(chngpts,"index"),
                             attr(chngpts,"skipping"),
                             0,# bootstrap size
-                            type=="upperhinge"
+                            0
                     ) 
             2 * (max(-n/2*log((sum(y.b**2) - yhy)/n)) - llik.null.b)
         })

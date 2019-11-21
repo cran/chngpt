@@ -137,3 +137,45 @@
 
 2019-09-02
     * Replace bind1st and bind2nd by bind in matrix.h and smath.h in the scythe library. Thanks Prof Brian Ripley
+
+2019-09-05
+    * Add estimation and CI for hingequad model
+    * Vignette updated
+    * Add LIDAR data (lidar)
+
+2019-09-15
+    * add argument checking for weights
+    * add support for offset to chngptm and plot.chngptm
+    * Thanks to Ryan Terrill for the questions resulting in the updates
+
+2019-09-19
+    * add support for offset in fastgrid2 
+    * implement double.hinge
+
+2019-10-04
+    * implement segmented quadratic models: M1, M2, M3a, and M3b in chngptm
+    
+2019-10-15
+    * change how the step effect is implemented in make.chngpt.var(), from I(x>=e) to I(x>e) to be consistent with Fong et al. (2017)
+    * implement fastgrid2 for step
+
+2019-10-17
+    * fix a bug in chngptm relate to hingequad.to.upperhingequad, which causes the lower and upper CI bounds for some models to be reversed
+
+2019-10-29
+    * implement upper hinge and hinge cubic model
+
+2019-11-09
+    * implement segmented cubic models
+
+2019-11-13
+    * implement x4hinge and x4upperhinge models to fit LIDAR example, but grid search only
+
+2019-11-16
+    * rename the higher order models
+
+2019-11-18
+    * remove isupperhinge parameter and related implementations from all C functions. all c functions only implement upperhinge and related models. All hinge and related models are implemented through transformation
+
+2019-11-21
+    * add support for subsampling, aka m out of n bootstrap, in fastgrid2step_gaussian

@@ -156,6 +156,7 @@ plot(test)
 test = chngpt.test(formula.null=y~z, formula.chngpt=~x*z, dat, type="step", family="binomial")
 test
 plot(test)
+
 }
 
 

@@ -1,10 +1,9 @@
+test.chngptm.logistic <- function() {
+
 library("chngpt")
 library("RUnit")
 library("splines")
 library("kyotil")
-
-test.chngptm.logistic <- function() {
-
   suppressWarnings(RNGversion("3.5.0"))
 RNGkind("Mersenne-Twister", "Inversion")    
 tolerance=1e-1
@@ -27,7 +26,8 @@ dat=data.frame(y,X)
 # use a binomial to test
 fit=chngptm(formula.1=y~X2+X3, formula.2=~X2*X1+X3*X1, dat, type="step", family="binomial", grid.search.max=5, var.type="none")
 # (Intercept)              X2              X3    I(X1>chngpt) X2:I(X1>chngpt) X3:I(X1>chngpt)          chngpt 
-checkEqualsNumeric(c(coef(fit),fit$chngpt), c(0.20860034,-0.02784660,-0.08843246,0.65396890,1.02101488,1.24566539,0.02800216), tolerance=tolerance)    
+#checkEqualsNumeric(c(coef(fit),fit$chngpt), c(0.20860034,-0.02784660,-0.08843246,0.65396890,1.02101488,1.24566539,0.02800216), tolerance=tolerance)# before 10/15/2019
+checkEqualsNumeric(c(coef(fit),fit$chngpt), c(0.20427431,-0.02485192,-0.08683151,0.66217010,1.01376498,1.24094842,0.02800216), tolerance=tolerance) # on 10/15/2019
 
 
 
@@ -81,22 +81,22 @@ dat.2=sim.chngpt("thresholded", "step", n=200, seed=1, beta=1, alpha=-1, x.distr
 set.seed(1)
 dat.2$success=rbinom(nrow(dat.2), 10, 1/(1 + exp(-dat.2$eta)))
 dat.2$failure=10-dat.2$success
-fit.2a=chngptm(formula.1=cbind(success,failure)~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="grid", verbose=verbose)
-fit.2b=chngptm(formula.1=cbind(success,failure)~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="smoothapprox")
-checkEqualsNumeric(fit.2a$coefficients, c(-0.8634819,0.3477191,0.9316376,4.0116612), tolerance=tolerance)    
-checkEqualsNumeric(fit.2b$coefficients, c(-0.8637481,0.3477286,0.9255444,3.9907330), tolerance=tolerance)    
+fit.2a=chngptm(formula.1=cbind(success,failure)~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="grid", verbose=verbose, var.type="none")
+fit.2b=chngptm(formula.1=cbind(success,failure)~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="smoothapprox", var.type="none", verbose=verbose)
+checkEqualsNumeric(fit.2a$coefficients, c(-0.8634819,0.3477191,0.9316376,3.9907330), tolerance=tolerance)    
+checkEqualsNumeric(fit.2b$coefficients, c(-0.8634819,0.3477191,0.9316376,3.9907330), tolerance=tolerance)    
 checkEqualsNumeric(diag(vcov(fit.2a$best.fit)), c(0.008068637,0.002473882,0.011023127), tolerance=tolerance)    
-checkEqualsNumeric(diag(vcov(fit.2b$best.fit)), c(0.008207570,0.002474872,0.011138584), tolerance=tolerance)    
+checkEqualsNumeric(diag(vcov(fit.2b$best.fit)), c(0.008068637,0.002473882,0.011023127), tolerance=tolerance)    
 # compare cbind with single column outcome specification
 n <- dat.2$success + dat.2$failure
 dat.2$y.2 <- ifelse(n == 0, 0, dat.2$success/n)
 dat.2$weights <- n
-fit.2a1=chngptm(formula.1=y.2~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="grid", weights=dat.2$weights)
-fit.2b1=chngptm(formula.1=y.2~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="smoothapprox", weights=dat.2$weights)
-checkEqualsNumeric(fit.2a1$coefficients, c(-0.8634819,0.3477191,0.9316376,4.0116612), tolerance=tolerance)    
-checkEqualsNumeric(fit.2b1$coefficients, c(-0.8637481,0.3477286,0.9255444,3.9907330), tolerance=tolerance)    
+fit.2a1=chngptm(formula.1=y.2~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="grid", weights=dat.2$weights, var.type="none")
+fit.2b1=chngptm(formula.1=y.2~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="smoothapprox", weights=dat.2$weights, var.type="none")
+checkEqualsNumeric(fit.2a1$coefficients, c(-0.8634819,0.3477191,0.9316376,3.9907330), tolerance=tolerance)    
+checkEqualsNumeric(fit.2b1$coefficients, c(-0.8634819,0.3477191,0.9316376,3.9907330), tolerance=tolerance)    
 checkEqualsNumeric(diag(vcov(fit.2a1$best.fit)), c(0.008068637,0.002473882,0.011023127), tolerance=tolerance)    
-checkEqualsNumeric(diag(vcov(fit.2b1$best.fit)), c(0.008207570,0.002474872,0.011138584), tolerance=tolerance)    
+checkEqualsNumeric(diag(vcov(fit.2b1$best.fit)), c(0.008068637,0.002473882,0.011023127), tolerance=tolerance)    
 
 #    n <- dat.2$success + dat.2$failure
 #    dat.2$y.2 <- ifelse(n == 0, 0, dat.2$success/n)
@@ -158,9 +158,9 @@ data=sim.chngpt("thresholdedItxn", threshold.type="step", family="binomial", n=2
 # fit interaction effect
 
 fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0.1, ub.quantile=0.9, est.method="smoothapprox")
-checkEqualsNumeric(mean(fit$coefficients), 1.356519, tolerance=tolerance)
+checkEqualsNumeric(fit$coefficients, c(-0.5252114,0.2145485,0.3734826,0.5539497,6.1272134), tolerance=tolerance)
 fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0, ub.quantile=1, est.method="grid", verbose=verbose)
-checkEqualsNumeric(fit$coefficients, c( -0.4815401,0.3042468,16.0476083,-0.3042468,8.3927654), tolerance=tolerance)
+checkEqualsNumeric(fit$coefficients, c(-0.4815401,0.3042468,16.0476083,-0.3042468,8.0394665), tolerance=tolerance)
 
 fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="hinge",     lb.quantile=0.1, ub.quantile=0.9, est.method="grid")
 checkEqualsNumeric(fit$coefficients, c(-0.5368853,0.2618009,0.2526734,0.1231553,5.3939234), tolerance=tolerance)
@@ -175,7 +175,7 @@ checkEqualsNumeric(fit$coefficients, c(-1.27487926,2.11715992,0.20647617,-0.0794
 #    checkEqualsNumeric(fit$coefficients, c(-0.78767807,0.71956572,0.05555813,0.16831871,-0.11267073,0.30441830,5.31461397), tolerance=tolerance)
 
 fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="stegmented", lb.quantile=0.1, ub.quantile=0.9, est.method="grid", verbose=verbose)
-checkEqualsNumeric(fit$coefficients, c(-0.77952531,0.89672361,0.05137674,0.41156747,-0.09905192,1.46771433,-0.30845593,-0.17022170,6.00352437), tolerance=tolerance)
+checkEqualsNumeric(fit$coefficients, c(-0.77952531,0.89672361,0.05137674,0.41337727,-0.09905192,1.47335019,-0.30845593,-0.17022170,5.98525315), tolerance=tolerance)
 
 
 ########################################

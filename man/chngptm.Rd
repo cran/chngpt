@@ -18,20 +18,22 @@ Estimate change point logistic model
 
 \usage{
 
-chngptm (formula.1, formula.2, family, data, type = c("step",
-         "hinge", "upperhinge", "segmented", "segmented2",
-         "stegmented", "upperhingequad"), formula.strat = NULL,
-         weights = NULL, est.method = c("default",
-         "smoothapprox", "grid", "fastgrid", "fastgrid2",
-         "gridC"), var.type = c("default", "none", "robust",
-         "model", "bootstrap", "all"), aux.fit = NULL,
-         lb.quantile = 0.1, ub.quantile = 0.9, grid.search.max
-         = 5000, test.inv.ci = TRUE, boot.test.inv.ci = FALSE,
-         ci.bootstrap.size = 1000, alpha = 0.05, save.boot =
-         TRUE, m.out.of.n = FALSE, b.transition = Inf, tol =
-         1e-04, maxit = 100, chngpt.init = NULL, search.bound =
-         10, keep.best.fit = TRUE, ncpus = 1, verbose = FALSE,
-    ...)
+chngptm (formula.1, formula.2, family, data, type = c("hinge",
+         "quadhinge", "cubichinge", "x4hinge", "upperhinge",
+         "quadupperhinge", "cubicupperhinge", "x4upperhinge",
+         "M21", "M12", "M22", "M22c", "M31", "M13", "M33c",
+         "segmented", "segmented2", "step", "stegmented"),
+         formula.strat = NULL, weights = NULL, offset = NULL,
+         est.method = c("default", "smoothapprox", "grid",
+         "fastgrid", "fastgrid2", "gridC"), var.type =
+         c("default", "none", "robust", "model", "bootstrap",
+         "all"), aux.fit = NULL, lb.quantile = 0.1, ub.quantile
+         = 0.9, grid.search.max = 5000, test.inv.ci = TRUE,
+         boot.test.inv.ci = FALSE, ci.bootstrap.size = 1000,
+         alpha = 0.05, save.boot = TRUE, m.out.of.n = 0,
+         b.transition = Inf, tol = 1e-04, maxit = 100,
+         chngpt.init = NULL, search.bound = 10, keep.best.fit =
+         TRUE, ncpus = 1, verbose = FALSE, ...)
          
 chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
     ...)
@@ -41,9 +43,9 @@ chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
 \method{vcov}{chngptm} (object, var.type=NULL, ...)
 \method{print}{chngptm} (x, ...)
 \method{plot}{chngptm} (x, which = NULL, xlim = NULL, lwd = 2, lcol = "red",
- add = FALSE, add.points = TRUE, add.ci = TRUE, breaks
- = 20, mark.chngpt = FALSE, xlab = NULL, ylab = NULL,
- ...) 
+                 lty = 1, add = FALSE, add.points = TRUE, add.ci =
+                 TRUE, breaks = 20, mark.chngpt = FALSE, xlab = NULL,
+                 ylab = NULL, ...) 
 \method{summary}{chngptm} (object, var.type = NULL, expo = FALSE,
          show.slope.post.threshold = FALSE, verbose = FALSE,
          ...)
@@ -99,6 +101,8 @@ lincomb(object, comb, alpha=0.05)
   \item{mark.chngpt}{mark.chngpt}
   \item{xlab}{xlab}
   \item{ylab}{ylab}
+  \item{offset}{offset}
+  \item{lty}{lty}
   
   \item{comb}{a vector of combination coefficients that will be used to form an inner product with the estimated slope}
   \item{expo}{If family is binomial and expo is TRUE, coefficients summary will be shown on the scale of odds ratio instead of slopes}
@@ -133,15 +137,18 @@ Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for 
 
     
 # threshold linear regression
+types=c("hinge", "segmented", "quadhinge", "cubichinge")
+for (type in types) {
+    fit=chngptm(formula.1=logratio~1, formula.2=~range, lidar, type=type, family="gaussian", 
+        var.type="bootstrap")
+    summary(fit)
+    plot(fit)
+}
+
+
+# with weights
 dat.1=sim.chngpt("thresholded", "segmented", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4,
     family="gaussian")
-# default search method is fastgrid
-fit.1=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat.1, type="segmented", 
-    est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=10)
-summary(fit.1)
-head(resid(fit.1))
-plot(fit.1)
-# with weights
 fit.1.a=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat.1, type="segmented", 
     est.method="fastgrid", var.type="bootstrap", weights=ifelse(dat.1$x<3.5,100,1)
     , ci.bootstrap.size=10)
@@ -153,7 +160,7 @@ plot(fit.1.a)
 dat.2=sim.chngpt("thresholded", "step", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4, 
     family="binomial")
 
-fit.2=chngptm(formula.1=y~z, formula.2=~x, family="binomial", dat.2, type="step",est.method="grid")
+fit.2=chngptm(formula.1=y~z, formula.2=~x, family="binomial", dat.2, type="step", est.method="grid")
 summary(fit.2) 
 # no variance estimates available for discontinuous threshold models such as step
 # vcov(fit.2$best.fit) gives the variance estimates for the best model conditional on threshold est
@@ -177,7 +184,7 @@ fit.3=chngptm(formula.1=Surv(time, status)~1, formula.2=~x, data=dat.3, family="
 summary(fit.3)
 
 
-# Poisson
+# Poisson example
 counts <- c(18,17,15,20,10,20,25,13,12)
 outcome <- as.integer(gl(3,1,9))
 treatment <- gl(3,3)
@@ -190,28 +197,43 @@ summary(fit.4)
 
 
 \dontrun{
-# not run because otherwise the examples take >5s and that is a problem for R CMD check
+# Not run because otherwise the examples take >5s and that is a problem for R CMD check
 
-
-# an interaction model. est.method will be set to grid inside the function. fastgrid not
-# available for models with interaction terms yet
-
-# mtcars is a built-in dataset in R
+# one interaction term (mtcars is part of R default installation)
+# est.method will be grid as fastgrid not available for models with interaction terms yet
 fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="segmented", 
-    family="gaussian", var.type="bootstrap", ci.bootstrap.size=100)
+    family="gaussian", var.type="bootstrap", ci.bootstrap.size=10)
+summary(fit)
+
+# interaction, upperhinge model, bootstrap
+fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="upperhinge", 
+    family="gaussian", var.type="bootstrap", ci.bootstrap.size=10)
 summary(fit)
 
 # more than one interaction term
 # subsampling bootstrap confidence interval for step model
 fit=chngptm(formula.1=mpg~hp+wt, formula.2=~hp*drat+wt*drat, mtcars, type="step",
-    family="gaussian", var.type="bootstrap", ci.bootstrap.size=100)
+    family="gaussian", var.type="bootstrap", ci.bootstrap.size=10)
 summary(fit)
 
-
-# a simple step model
+# step model, subsampling bootstrap confidence intervals
 fit=chngptm(formula.1=mpg~hp, formula.2=~drat, mtcars, type="step",
-    family="gaussian", var.type="bootstrap", ci.bootstrap.size=100)
+    family="gaussian", var.type="bootstrap", ci.bootstrap.size=10, verbose=TRUE)
 summary(fit)
+
+# higher order threshold models
+dat=sim.chngpt(mean.model="thresholded", threshold.type="M22", n=500, seed=1, 
+    beta=c(32,2,10, 10), x.distr="norm", e.=6, b.transition=Inf, family="gaussian", 
+    alpha=0, sd=0, coef.z=0)
+fit.0=chngptm(formula.1=y~z, formula.2=~x, dat, type="M22", family="gaussian", 
+    est.method="fastgrid2"); plot(fit.0)
+
+dat=sim.chngpt(mean.model="thresholded", threshold.type="M22c", n=500, seed=1, 
+    beta=c(32,2,32, 10), x.distr="norm", e.=6, b.transition=Inf, family="gaussian", 
+    alpha=0, sd=0, coef.z=0)
+fit.0=chngptm(formula.1=y~z, formula.2=~x, dat, type="M22c", family="gaussian", 
+    est.method="fastgrid2"); plot(fit.0)
+    
 
 
 }
