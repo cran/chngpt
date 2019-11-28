@@ -24,11 +24,11 @@ chngptm (formula.1, formula.2, family, data, type = c("hinge",
          "M21", "M12", "M22", "M22c", "M31", "M13", "M33c",
          "segmented", "segmented2", "step", "stegmented"),
          formula.strat = NULL, weights = NULL, offset = NULL,
-         est.method = c("default", "smoothapprox", "grid",
-         "fastgrid", "fastgrid2", "gridC"), var.type =
+         est.method = c("default", "fastgrid2", "grid",
+         "smoothapprox"), var.type =
          c("default", "none", "robust", "model", "bootstrap",
          "all"), aux.fit = NULL, lb.quantile = 0.1, ub.quantile
-         = 0.9, grid.search.max = 5000, test.inv.ci = TRUE,
+         = 0.9, grid.search.max = Inf, test.inv.ci = TRUE,
          boot.test.inv.ci = FALSE, ci.bootstrap.size = 1000,
          alpha = 0.05, save.boot = TRUE, m.out.of.n = 0,
          b.transition = Inf, tol = 1e-04, maxit = 100,
@@ -63,10 +63,10 @@ lincomb(object, comb, alpha=0.05)
   \item{data}{data frame.}
   \item{type}{types of threshold effects. segmented2 differs from segmented in parameterization. }
   \item{b.transition}{Numeric. Controls whether threshold model or smooth transition model. Default to Inf, which correponds to threshold model}
-  \item{est.method}{string. Better leave it at NULL. grid: grid search; smoothapprox: smooth approximation}
+  \item{est.method}{default: estimation algorithm will be chosen optimally; fastgrid2: a super fast grid search algorithm, limited to linear regression; grid: plain grid search, works for almost all models; smoothapprox: approximates the likelihood function using a smooth function, only works for some models.}
   \item{var.type}{string. Different methods for estimating covariance matrix and constructing confidence intervals}
   \item{aux.fit}{a model fit object that is needed for model-robust estimation of covariance matrix}
-  \item{grid.search.max}{integer. }
+  \item{grid.search.max}{The maximum number of grid points used in grid search. When doing fast grid search, grid.search.max is set to Inf internally because it does not take more time to examine all potential thresholds.}
   \item{test.inv.ci}{Boolean, whether or not to find test-inversion confidence interval for threshold }
   \item{ci.bootstrap.size}{integer, number of bootstrap }
   \item{alpha}{double, norminal type I error rate}

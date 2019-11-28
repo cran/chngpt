@@ -16,6 +16,7 @@
 //#define SCYTHE_LAPACK
 
 
+#include "fastgrid_helper.h"
 #include "matrix.h"
 #include "distributions.h"
 #include "stat.h"
@@ -43,55 +44,11 @@
 using namespace std;
 using namespace scythe;
 
-// copied from random.c, sample with replacement
-static void SampleReplace(int k, int n, int *y)
-{
-    int i;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    GetRNGstate();    
-#endif
-    for (i = 0; i < k; i++) y[i] = n * unif_rand() + 1;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    PutRNGstate();    
-#endif
-}
-
-
-inline void make_symmetric(double* matrix, int rows)
-{
-      for (int i = 1; i < rows; ++i)
-        for (int j = 0; j < i; ++j)
-          matrix[i * rows + j] = matrix[j * rows + i];
-}
-  // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
-  // if a row-major matrix is passed as A, it will be transposed automatically
-inline Matrix<> crossprod1(const Matrix<>& A)
-{
-    SCYTHE_DEBUG_MSG("Using lapack/blas for crossprod");
-    // Set up some constants
-    const double zero = 0.0;
-    const double one = 1.0;
-
-    // Set up return value and arrays
-    Matrix<> res(A.cols(), A.cols(), false);
-    double* Apnt = A.getArray();
-    double* respnt = res.getArray();
-    int rows = (int) A.rows();
-    int cols = (int) A.cols();
-    //for (int i=0; i<rows*cols; i++) PRINTF("%f ", Apnt[i]); PRINTF("\n");       
-
-    dsyrk_("L", "T", &cols, &rows, &one, Apnt, &rows, &zero, respnt,
-                   &cols);
-    make_symmetric(respnt, cols); 
-
-    return res;
-}
-
 
 
 extern "C" {
 
-double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>& w, bool wAllOne, 
+double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>& w, 
     int * thresholdIdx, vector<double>& thresholds, 
     int n, int p, int nThresholds,
     double* logliks)
@@ -100,7 +57,7 @@ double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>
     // loop index. 
     int i,j;    
     int k; // k has a meaning in the algorithm 
-	int chosen=0;//initialize to get rid of compilation warning
+    int chosen=0;//initialize to get rid of compilation warning
 
     double delta, crit, crit_max=R_NegInf;
     
@@ -109,12 +66,10 @@ double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>
 //    if (isUpperHinge) for(i=0; i<n; i++) x_cpy[i] = x[i];
     
     // multiply X and Y with sqrt(w), but first save x
-    if (!wAllOne) {
-        for(i=0; i<n; i++) {
-            X(i,_)=X(i,_)*sqrt(w[i]);
-            Y(i) *= sqrt(w[i]);
-        }
-    }    
+    for(i=0; i<n; i++) {
+        X(i,_)=X(i,_)*sqrt(w[i]);
+        Y(i) *= sqrt(w[i]);
+    }
 
     // compute X_e, which is the last column of X
     //PRINTF("X[,p-1]\n"); for (int ii=0; ii<n; ii++) PRINTF("%f ", X(ii,p-1)); PRINTF("\n");
@@ -176,19 +131,19 @@ double _grid_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>
 // For grid, the meaning of the first two variables are B and r instead 
 SEXP gridC_gaussian(
      SEXP u_X, SEXP u_Y, 
-     SEXP u_W, SEXP u_wAllOne, 
+     SEXP u_W,
      SEXP u_thresholdIdx, SEXP u_skipping,
      SEXP u_nBoot, SEXP u_nSub)
 {
     double* X_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y); 
     double* W_dat=REAL(u_W);    
-    bool wAllOne=asLogical(u_wAllOne)==1;
+
     int *thresholdIdx=INTEGER(u_thresholdIdx);
     int nBoot = asInteger(u_nBoot);
 //    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
     
-	int i,j;
+    int i,j;
 
     const int n = nrows(u_X);
     const int p = ncols(u_X); // number of predictors, including the thresholed variable
@@ -201,9 +156,9 @@ SEXP gridC_gaussian(
     Matrix<double,Row,Concrete> Y(n, 1, Y_dat); // define as a matrix instead of vector b/c will be used in matrix operation
     vector<double> W(W_dat, W_dat + n);
     
-	vector<double> thresholds(nThresholds); 
-	
-	if (nBoot<0.1) {
+    vector<double> thresholds(nThresholds); 
+    
+    if (nBoot<0.1) {
     // a single search
     
         SEXP _logliks=PROTECT(allocVector(REALSXP, nThresholds));
@@ -212,7 +167,7 @@ SEXP gridC_gaussian(
         for(i=0; i<nThresholds; i++) thresholds[i]=X(thresholdIdx[i]-1,p-1);
         //PRINTF("thresholds: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", thresholds[i]); PRINTF("\n");
 
-        _grid_search(X, Y, W, wAllOne, 
+        _grid_search(X, Y, W, 
                              thresholdIdx, thresholds, 
                              n, p, nThresholds,
                              logliks); 
@@ -229,12 +184,12 @@ SEXP gridC_gaussian(
         SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p+1)));// p slopes, 1 threshold
         double *coef=REAL(_coef);    
         
-    	// these variables are reused within each bootstrap replicate
-    	vector<int> index(n);
+        // these variables are reused within each bootstrap replicate
+        vector<int> index(n);
         Matrix <double,Row,Concrete> Xb(n,p), Yb(n,1);
-    	vector<double> Wb(n); 
-    	double e_hat;
-    	
+        vector<double> Wb(n); 
+        double e_hat;
+        
         for (int b=0; b<nBoot; b++) {        
             // create bootstrap dataset, note that index is 1-based
             SampleReplace(n, n, &(index[0]));
@@ -253,7 +208,7 @@ SEXP gridC_gaussian(
             
             for(i=0; i<nThresholds; i++) thresholds[i]=Xb(thresholdIdx[i]-1,p-1);
             
-            e_hat = _grid_search(Xb, Yb, Wb, wAllOne, 
+            e_hat = _grid_search(Xb, Yb, Wb, 
                                  thresholdIdx, thresholds, 
                                  n, p, nThresholds,
                                  logliks); 
@@ -283,10 +238,8 @@ SEXP gridC_gaussian(
             //PRINTF("Xb_e\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
             //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
             
-            if (!wAllOne) {
-                // other columns of X and Y have already been weighted in the call _fast...
-                for(i=0; i<n; i++) Xb(i,p-1)=Xb(i,p-1)*sqrt(Wb[i]);
-            }
+            // other columns of X and Y have already been weighted in the call _fast...
+            for(i=0; i<n; i++) Xb(i,p-1)=Xb(i,p-1)*sqrt(Wb[i]);
                         
             Matrix <> beta_hat = invpd(crossprod(Xb)) * (t(Xb) * Yb);
             for (j=0; j<p; j++) coef[b*(p+1)+j]=beta_hat[j];             

@@ -8,13 +8,13 @@ chngptm = function(formula.1, formula.2, family, data,
       "M21","M12","M22","M22c","M31","M13","M33c",
       "segmented","segmented2","step","stegmented"), # segmented2 is the model studied in Cheng (2008)
   formula.strat=NULL,
-  weights=NULL, # this arg is kept here due to historical reasons
+  weights=NULL, 
   offset=NULL,
-  est.method=c("default","smoothapprox","grid","fastgrid","fastgrid2","gridC"), # gridC is for development use only 
+  est.method=c("default","fastgrid2","grid","smoothapprox"), 
   var.type=c("default","none","robust","model","bootstrap","all"), aux.fit=NULL,  # robusttruth is for development only
-  lb.quantile=.1, ub.quantile=.9, grid.search.max=5000, 
+  lb.quantile=.1, ub.quantile=.9, grid.search.max=Inf, 
   test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
-  ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, m.out.of.n=0, # grid.search.max is the maximum number of grid points used in grid search
+  ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, m.out.of.n=0, 
   b.transition=Inf,# controls whether threshold model or smooth transition model
   tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
   keep.best.fit=TRUE, # best.fit is needed for making prediction and plotting
@@ -75,7 +75,7 @@ chngptm = function(formula.1, formula.2, family, data,
     fastgrid.ok = family %in% c("gaussian") & 
                   threshold.type %in% c("hinge","upperhinge","segmented","quadupperhinge","quadhinge","cubicupperhinge","cubichinge","M21","M12","M22","M22c","M31","M13","M33c","step") & 
                   !has.itxn
-    
+                  
     #### est.method
     # smoothapprox cannot work when lhs of formula.1 is cbind() 
     # for now, fastgrid and C version of grid is implemented only for the following scenarios
@@ -93,6 +93,11 @@ chngptm = function(formula.1, formula.2, family, data,
     }
     #if (fastgrid.ok & !est.method%in%c("fastgrid","fastgrid2") & var.type!="none") cat("Note that for linear models, fastgrid2 is the best est.method.\n") # var.type condition is added so that this is not printed during bootstrap
     
+    if (est.method=="fastgrid2" & grid.search.max!=Inf) {
+        grid.search.max=Inf
+        warning("When doing fast grid search, grid.search.max is automatically set to Inf because it does not take more time to examine all potential thresholds")
+    }
+    
     # convert hinge models (M0x) to upperhinge models (Mx0)
     hinge.to.upperhinge=FALSE
     if(!var.type %in% c("all","robust","model") & est.method!="smoothapprox") {
@@ -108,6 +113,11 @@ chngptm = function(formula.1, formula.2, family, data,
         }
     }
     if(hinge.to.upperhinge) data[[chngpt.var.name]]=-data[[chngpt.var.name]]    
+    
+    if(fastgrid.ok) {
+        imodel=switch(threshold.type, upperhinge=10, segmented=10, quadupperhinge=20, M21=20, M12=20, M22=22, M22c=224, cubicupperhinge=30, M31=30, M13=30, M33c=334, 
+                                  step=5, x4upperhinge=NA, stop("wrong imodel"))
+    } else imodel=NA
                 
     chngpt.var = data[[chngpt.var.name]]
     # note that in chngpt.test, Z may already include chngptvar if threshold.type is segmented
@@ -163,13 +173,11 @@ chngptm = function(formula.1, formula.2, family, data,
     
     
     # weights
-    # w.all.one is needed in the next block. 
     # chngpt.glm.weights goes with the data because glm() is incredible that if the weights arg does not have global scope, it needs to be a variable name in the data frame
     # chngpt.glm.weights and does not get updated in the next block while weights are updated
     if (is.null(weights)) weights=rep(1,nrow(data)) 
     if (!is.numeric(weights)) stop("If weights is specified, it needs to be a numeric vector")
     data$chngpt.glm.weights=weights
-    w.all.one=all(weights==1)     
     # create a copy of chngpt.glm.weights in the function scope so that do.regression works
     chngpt.glm.weights=data$chngpt.glm.weights  
     # offset, a hack to make glm call work
@@ -196,7 +204,6 @@ chngptm = function(formula.1, formula.2, family, data,
         n.tmp <- y[,1]+y[,2]
         y <- ifelse(n.tmp == 0, 0, y[,1]/n.tmp)        
         weights <- n.tmp*weights
-        w.all.one=FALSE
     }
     
     
@@ -216,7 +223,7 @@ chngptm = function(formula.1, formula.2, family, data,
     o.sorted = offset[order.]
     
     if (verbose) {
-        myprint(family, threshold.type, est.method, var.type)
+        myprint(family, threshold.type, imodel, est.method, var.type)
         if (var.type=="bootstrap") myprint(var.type, m.out.of.n) 
         myprint(has.itxn, p.z, p.2.itxn, p)
         myprint(has.quad, has.cubic)
@@ -276,15 +283,16 @@ chngptm = function(formula.1, formula.2, family, data,
             # computes Y' H_e Y
             if(!stratified) {
                 # weirdly, f.name cannot be put inline b/c rcmdcheck throws an error otherwise
-                f.name=est.method %.% ifelse(threshold.type %in% c("M22","M22c","M33c","step"), threshold.type, ifelse(has.cubic,"cubic", ifelse(has.quad,"quad",""))) %.%  "_" %.% family
+                #f.name=est.method %.% ifelse(threshold.type %in% c("M22","M22c","step"), threshold.type, ifelse(has.cubic,"cubic", ifelse(has.quad,"quad",""))) %.%  "_" %.% family
+                f.name=paste0(est.method, "_", family)
                 if(verbose) myprint(f.name)
                 logliks = .Call(f.name
+                    , as.integer(imodel)
                     , cbind(Z.sorted, chngpt.var.sorted, if(include.x) chngpt.var.sorted) #design matrix, the last column is to be used as (x-e)+ in the C program
                     , as.double(y.sorted-o.sorted) # note that this way of handling offset only works for linear regression
                     , as.double(w.sorted)
-                    , w.all.one
                     , as.integer(attr(chngpts,"index"))
-                    , attr(chngpts,"skipping") # potential thresholds
+                    , as.integer(verbose)
                     , 0 # bootstrap size
                     , 0 # subsampling sample size
                 )  
@@ -297,7 +305,6 @@ chngptm = function(formula.1, formula.2, family, data,
                     as.double(chngpt.var.sorted), # threshold variable
                     as.double(y.sorted-o.sorted), # note that this way of handling offset only works for linear regression 
                     as.double(w.sorted), 
-                    w.all.one, 
                     as.integer(stratified.by.sorted),
                     as.double(lb.quantile),
                     as.double(ub.quantile),
@@ -317,6 +324,8 @@ chngptm = function(formula.1, formula.2, family, data,
                 sapply (chngpts, function(e) {
                     data=make.chngpt.var(chngpt.var, e, threshold.type, data, b.transition, stratified.by)
                     #myprint(e); tmp=data[,c("x","x.mod.e")]; tmp=tmp[order(tmp[,"x"]),]; print(tmp); stop("debug")
+                    #if(e==chngpts[1]) {tmp=model.matrix(formula.new, data); print(solve(t(tmp)%*%tmp))} #check for singularity
+                    
                     fit = do.regression (formula.new, data, family)            
                     if(length(fit$warning)!=0 & verbose>=3) {myprint(e); print(fit$warning); print(coef(fit$value)); print((logLik(fit$value)))}                 
                     #cat(sum(resid(fit$value)**2), " ") # to compare with fastgrid, uncomment the next line
@@ -348,6 +357,7 @@ chngptm = function(formula.1, formula.2, family, data,
                 })
                 })
             }
+            if (verbose) myprint(logliks, digits=10)
             
         }
     
@@ -850,14 +860,15 @@ chngptm = function(formula.1, formula.2, family, data,
                 boot.out$fake=TRUE
                 
                 if(!stratified) {
-                    f.name=est.method %.% ifelse(threshold.type %in% c("M22","M22c","M33c","step"), threshold.type, ifelse(has.cubic,"cubic", ifelse(has.quad,"quad",""))) %.%  "_" %.% family
+                    #f.name=est.method %.% ifelse(threshold.type %in% c("M22","M22c","step"), threshold.type, ifelse(has.cubic,"cubic", ifelse(has.quad,"quad",""))) %.%  "_" %.% family
+                    f.name=paste0(est.method, "_", family)
                     boot.out$t = .Call(f.name
+                        , as.integer(imodel)
                         , cbind(Z.sorted, chngpt.var.sorted, if(include.x) chngpt.var.sorted) #design matrix, the last column is to be used as (x-e)+ in the C program
                         , as.double(y.sorted-o.sorted) # note that this way of handling offset only works for linear regression
                         , as.double(w.sorted)
-                        , w.all.one
                         , as.integer(attr(chngpts,"index"))
-                        , attr(chngpts,"skipping") # potential thresholds
+                        , as.integer(verbose)
                         , ci.bootstrap.size
                         , m.out.of.n # subsampling sample size
                     )     
@@ -868,7 +879,6 @@ chngptm = function(formula.1, formula.2, family, data,
                         as.double(chngpt.var.sorted), # threshold variable
                         as.double(y.sorted-o.sorted), # note that this way of handling offset only works for linear regression 
                         as.double(w.sorted), 
-                        w.all.one, 
                         as.integer(stratified.by.sorted),
     #                    as.integer(attr(chngpts[[1]],"index")), # potential thresholds 
     #                    as.integer(attr(chngpts[[2]],"index")), # potential thresholds
@@ -900,7 +910,7 @@ chngptm = function(formula.1, formula.2, family, data,
                     fit.ii=try(chngptm (formula.1, formula.2, family, dat[ii,], type=threshold.type, 
                         formula.strat=formula.strat,
                         weights=w.sorted[ii], offset=o.sorted[ii], threshold.type, est.method=est.method, var.type="none", 
-                        b.transition=b.transition, verbose=verbose>=3, keep.best.fit=TRUE, lb.quantile=lb.quantile, ub.quantile=ub.quantile, 
+                        b.transition=b.transition, verbose=ifelse(verbose>1, verbose-1, FALSE), keep.best.fit=TRUE, lb.quantile=lb.quantile, ub.quantile=ub.quantile, 
                         chngpt.init=coef.hat["chngpt"], 
                         grid.search.max=grid.search.max))
                     tmp=length(coef.hat)*1+ifelse(!boot.test.inv.ci, 0, ifelse(family=="gaussian",2,1)) # need to adjust depending on the last else clause
@@ -948,9 +958,12 @@ chngptm = function(formula.1, formula.2, family, data,
             for (i in 1:length(coef.hat)){
                 # for stud, index needs to be of length 2 and the second element needs to be var. If the second element is not present, will have warnings: index out of bounds; minimum index only used
                 #ci.out=try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca","stud"), index=c(i, i+length(coef.hat))))
-                ci.out=suppressWarnings({
+                # invisible is used here because boot.ci prints messages about having only 1 bootstrap replicate when running unit testing code
+                ci.out=capture.output({
+                  suppressWarnings({
                     #try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n & is.null(boot.out$fake)) "bca"), index=i), silent=TRUE)# bca requires a true boot.out object
                     try(boot.ci(boot.out, type=c("perc","basic"), index=i), silent=TRUE)# bca requires a true boot.out object, changed to this for performance timing to be fair to true boot call
+                  })
                 })
                 # suppressWarnings changes the return type
                 outs$perc= cbind(outs$perc,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$percent[1,4:5])

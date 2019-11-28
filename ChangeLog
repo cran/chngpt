@@ -179,3 +179,10 @@
 
 2019-11-21
     * add support for subsampling, aka m out of n bootstrap, in fastgrid2step_gaussian
+
+2019-11-22
+    * change grid.search.max default in chgnptm from 5e3 to Inf
+    * remove fastgrid and gridC from est.method options
+    * add support for weight in fastgrid2
+    * replace invpd with chol_solve in the C functions, the former gives weird results sometimes. See M20.cc for an example. 
+    * refactor C code

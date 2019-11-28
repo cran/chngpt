@@ -16,32 +16,17 @@
 //#define SCYTHE_LAPACK
 
 
-#include "matrix.h"
-#include "distributions.h"
-#include "stat.h"
-#include "la.h"
-#include "ide.h"
-#include "smath.h"
-
+#include <float.h> //DBL_EPSILON
 #include <R.h>           // needed to use Rprintf()
 #include <R_ext/Utils.h> // needed to allow user interrupts
-
+#include <R_ext/Lapack.h>
+#include <Rmath.h>
 #include <Rdefines.h>
 #include <Rinternals.h>
 
-#include <float.h> //DBL_EPSILON
-#include <R_ext/Lapack.h>
-#include <Rmath.h>
-
-
 #define RUNIF runif
 #define PRINTF Rprintf
-#define MAX(A,B)    ((A) > (B) ? (A) : (B))
-#define MIN(A,B)    ((A) < (B) ? (A) : (B))
 
-
-using namespace std;
-using namespace scythe;
 
 
 /*
@@ -53,7 +38,6 @@ using namespace scythe;
     })
 */
 
-extern "C" {
 
 
 SEXP double_hinge_fit(
@@ -158,7 +142,5 @@ SEXP double_hinge_fit(
     
 }
 
-}  // end extern C
 
 #endif
-//#endif

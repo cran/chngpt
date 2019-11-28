@@ -18,6 +18,7 @@
 //#define SCYTHE_LAPACK
 
 
+#include "fastgrid_helper.h"
 #include "matrix.h"
 #include "distributions.h"
 #include "stat.h"
@@ -44,37 +45,6 @@
 
 using namespace std;
 using namespace scythe;
-
-
-inline void make_symmetric(double* matrix, int rows)
-{
-    for (int i = 1; i < rows; ++i)
-        for (int j = 0; j < i; ++j)
-          matrix[i * rows + j] = matrix[j * rows + i];
-}
-  // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
-  // if a row-major matrix is passed as A, it will be transposed automatically
-inline Matrix<> crossprod1(const Matrix<>& A)
-{
-    SCYTHE_DEBUG_MSG("Using lapack/blas for crossprod");
-    // Set up some constants
-    const double zero = 0.0;
-    const double one = 1.0;
-
-    // Set up return value and arrays
-    Matrix<> res(A.cols(), A.cols(), false);
-    double* Apnt = A.getArray();
-    double* respnt = res.getArray();
-    int rows = (int) A.rows();
-    int cols = (int) A.cols();
-    //for (int i=0; i<rows*cols; i++) PRINTF("%f ", Apnt[i]); PRINTF("\n");       
-
-    dsyrk_("L", "T", &cols, &rows, &one, Apnt, &rows, &zero, respnt,
-                   &cols);
-    make_symmetric(respnt, cols); 
-
-    return res;
-}
 
 
 extern "C" {
@@ -141,4 +111,5 @@ SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP u_nBoot, SEXP u_I)
 
 #endif
 //#endif
+
 

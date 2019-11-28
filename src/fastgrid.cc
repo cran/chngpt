@@ -18,6 +18,7 @@
 //#define SCYTHE_LAPACK
 
 
+#include "fastgrid_helper.h"
 #include "matrix.h"
 #include "distributions.h"
 #include "stat.h"
@@ -45,58 +46,9 @@
 using namespace std;
 using namespace scythe;
 
-// copied from random.c, sample with replacement
-static void SampleReplace(int k, int n, int *y)
-{
-    int i;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    GetRNGstate();    
-#endif
-    for (i = 0; i < k; i++) y[i] = n * unif_rand() + 1;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    PutRNGstate();    
-#endif
-}
 
-
-inline void make_symmetric(double* matrix, int rows)
-{
-    for (int i = 1; i < rows; ++i)
-        for (int j = 0; j < i; ++j)
-          matrix[i * rows + j] = matrix[j * rows + i];
-}
-  // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
-  // if a row-major matrix is passed as A, it will be transposed automatically
-inline Matrix<> crossprod1(const Matrix<>& A)
-{
-    SCYTHE_DEBUG_MSG("Using lapack/blas for crossprod");
-    // Set up some constants
-    const double zero = 0.0;
-    const double one = 1.0;
-
-    // Set up return value and arrays
-    Matrix<> res(A.cols(), A.cols(), false);
-    double* Apnt = A.getArray();
-    double* respnt = res.getArray();
-    int rows = (int) A.rows();
-    int cols = (int) A.cols();
-    //for (int i=0; i<rows*cols; i++) PRINTF("%f ", Apnt[i]); PRINTF("\n");       
-
-    dsyrk_("L", "T", &cols, &rows, &one, Apnt, &rows, &zero, respnt,
-                   &cols);
-    make_symmetric(respnt, cols); 
-
-    return res;
-}
-
-
-extern "C" {
-
-
-
-         
   //vectors such as thresholds are defined outside this function since when bootstrapping, we don't want to allocate the memory over and over again
-void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, vector<double>& w, bool wAllOne, int * thresholdIdx,
+void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, vector<double>& w, int * thresholdIdx,
     int n, int p, int nThresholds,
     Matrix<double,Row>& Xcusum, vector<double>& Ycusum, vector<double>& Wcusum, vector<double>& thresholds, vector<double>& Cps, 
     double* ans1, double* ans2)
@@ -106,7 +58,7 @@ void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, vector<double>& 
     int i,iX,j;
     int k;
     
-	int chosen=0;//initialize to get rid of compilation warning
+    int chosen=0;//initialize to get rid of compilation warning
     vector<double> C(p); 
 
 //    // for hinge or segmented, compute cusum of X and Y in the reverse order
@@ -142,26 +94,21 @@ void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, vector<double>& 
 //    }
     //for (j=0; j<n; j++) PRINTF("%f ", X(j,p-1)); PRINTF("\n");
     
-    if(wAllOne) {
-        for (j=0; j<p; j++) {C[j]=0; for (int cntr=0; cntr<n; cntr++) C[j] += X(cntr,j) * Y[cntr];}
-        A = crossprod1(X); 
-    } else {
-        for (j=0; j<p; j++) {
-            C[j]=0; 
-            for (int cntr=0; cntr<n; cntr++) 
-                C[j] += X(cntr,j) * Y[cntr] * w[cntr];
-        }
-        // mutiply X with sqrt(w) before crossprod. Note that this changes X! Don't use X after this
-        for (iX=0; iX<n; iX++) X(iX,_)=X(iX,_)*sqrt(w[iX]);
-        A = crossprod1(X);
+    for (j=0; j<p; j++) {
+        C[j]=0; 
+        for (int cntr=0; cntr<n; cntr++) 
+            C[j] += X(cntr,j) * Y[cntr] * w[cntr];
     }
+    // mutiply X with sqrt(w) before crossprod. Note that this changes X! Don't use X after this
+    for (iX=0; iX<n; iX++) X(iX,_)=X(iX,_)*sqrt(w[iX]);
+    A = crossprod1(X);
+
     Cps[0]=C[p-1];// save C[p-1] to be used for computing parameter estimate when done
             
     // Step 4:
     for(i=0; i<nThresholds; i++) {            
            
         // Step 4a: update A:=X'X and C:=X'Y 
-        // wAllOne handled by replacing n-i with Wcusum(i)
         if(i>0) {
             delta= thresholds[i]-thresholds[i-1]; //X(i,p-1)-X(i-1,p-1); //PRINTF("%f ", delta); PRINTF("\n"); 
 //            if (!isUpperHinge) {
@@ -205,6 +152,8 @@ void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, vector<double>& 
     
 }
 
+extern "C" {
+
   // For fastgrid,
   // assume X and Y are sorted in chngptvar from small to large
   // assume last col of X is chngptvar, which will be updated as move through the grid
@@ -212,14 +161,14 @@ void _fastgrid_search(Matrix<double,Row>& X, vector<double>& Y, vector<double>& 
   // For fastgrid2, the meaning of the first two variables are B and r instead 
 SEXP fastgrid_gaussian(
      SEXP u_X, SEXP u_Y, 
-     SEXP u_W, SEXP u_wAllOne, 
+     SEXP u_W,
      SEXP u_thresholdIdx, SEXP u_skipping,
      SEXP u_nBoot, SEXP u_nSub)
 {
     double* uX_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y);
     double* W_dat=REAL(u_W);    
-    bool wAllOne=asLogical(u_wAllOne)==1;
+
     int *thresholdIdx=INTEGER(u_thresholdIdx);
     int nBoot = asInteger(u_nBoot);
 //    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
@@ -234,13 +183,13 @@ SEXP fastgrid_gaussian(
     Matrix<double,Row,Concrete> X(Xcol); // convert to row major so that creating bootstrap datasets can be faster and to pass to _grid_search
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");}        
     
-	// these variables are reused within each bootstrap replicate
-	vector<int> index(n);
+    // these variables are reused within each bootstrap replicate
+    vector<int> index(n);
     Matrix <double,Row,Concrete> Xb (n, p), Xcusum (n, p, true, 0);
-	vector<double> thresholds(nThresholds), Cps(nThresholds), Ycusum(n), Yb(n), Wb(n); 
-	vector<double> Wcusum(n); //double rsses[nThresholds], Wcusum[n];
-    	
-	if (nBoot<0.1) {
+    vector<double> thresholds(nThresholds), Cps(nThresholds), Ycusum(n), Yb(n), Wb(n); 
+    vector<double> Wcusum(n); //double rsses[nThresholds], Wcusum[n];
+        
+    if (nBoot<0.1) {
     // a single search
         //output variables: logliks will be stored in ans and returned, stats won't be returned
         SEXP _ans=PROTECT(allocVector(REALSXP, nThresholds));
@@ -249,7 +198,7 @@ SEXP fastgrid_gaussian(
         
         for (int i=0; i<n; i++) Yb[i]=Y_dat[i]; // cannot pass Y_dat directly b/c type mismatch
         for (int i=0; i<n; i++) Wb[i]=W_dat[i]; 
-        _fastgrid_search(X, Yb, Wb, wAllOne, thresholdIdx, n, p, nThresholds,
+        _fastgrid_search(X, Yb, Wb, thresholdIdx, n, p, nThresholds,
                             Xcusum, Ycusum, Wcusum, thresholds, Cps, ans, stats); 
         //PRINTF("logliks : \n");  for(int i=0; i<nThresholds; i++) PRINTF("%f ", ans[i]); PRINTF("\n");  
             
@@ -276,7 +225,7 @@ SEXP fastgrid_gaussian(
             } 
             //PRINTF("Xb\n"); for (int i=0; i<n; i++) {for (int j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
             //PRINTF("Yb\n"); for (int i=0; i<n; i++) PRINTF("%f ", Yb[i]); PRINTF("\n");
-            _fastgrid_search(Xb, Yb, Wb, wAllOne, thresholdIdx, n, p, nThresholds,
+            _fastgrid_search(Xb, Yb, Wb, thresholdIdx, n, p, nThresholds,
                                  Xcusum, Ycusum, Wcusum, thresholds, Cps, rsses, ans+b*(p+1)); // rsses not used here
         } 
          
@@ -287,10 +236,6 @@ SEXP fastgrid_gaussian(
     
 }
   
-
-    
-}
+} // end extern "C" 
 
 #endif
-//#endif
-

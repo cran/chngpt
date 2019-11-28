@@ -3,7 +3,7 @@
 # quadupperhinge and quadhinge differ from upperhinge and hinge in that they have a quadratic term
 expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 sim.chngpt = function (
-    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear"), 
+    mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear","logistic"), 
     threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"
         ,"upperhinge","quadupperhinge","quadhinge","cubicupperhinge","cubichinge"
         ,"M21","M12","M22","M22c","M31","M13","M33c"),
@@ -139,14 +139,14 @@ sim.chngpt = function (
                 coef.[1:5]=c(alpha, coef.z,  0,       0,  0); coef.["x.uhinge"]=beta[1]; coef.["x.uhinge.quad"]=beta[2]; coef.["x.hinge"]=beta[3]; coef.["x.hinge.quad"]=beta[4]; 
             } else if (threshold.type=="M22c") {
                 coef.[1:5]=c(alpha, coef.z,  0,       0,  0); coef.["x.uhinge"]=beta[1]; coef.["x.uhinge.quad"]=beta[2]; coef.["x.hinge"]=beta[1]; coef.["x.hinge.quad"]=beta[3]; 
-
+    
             } else if (threshold.type=="M31") {
                 coef.[1:5]=c(alpha, coef.z,  0,       0,  0); coef.["x.uhinge"]=beta[1]; coef.["x.uhinge.quad"]=beta[2]; coef.["x.uhinge.cubic"]=beta[3]; coef.["x.hinge"]=beta[4];
             } else if (threshold.type=="M13") {
                 coef.[1:5]=c(alpha, coef.z,  0,       0,  0); coef.["x.hinge"]=beta[1]; coef.["x.hinge.quad"]=beta[2]; coef.["x.hinge.cubic"]=beta[3]; coef.["x.uhinge"]=beta[4];
             } else if (threshold.type=="M33c") {
                 coef.[1:5]=c(alpha, coef.z,  0,       0,  0); coef.["x.uhinge"]=beta[1]; coef.["x.hinge"]=beta[1]; coef.["x.uhinge.quad"]=beta[2]; coef.["x.hinge.quad"]=beta[2]; coef.["x.uhinge.cubic"]=beta[3]; coef.["x.hinge.cubic"]=beta[4]; 
-
+    
             } else if (threshold.type=="stegmented") {
                 coef.[1:5]=c(2,     coef.z,   log(.67), log(.67), beta) # all effects of x in the same direction, subject to perfect separation, though that does not seem to be the main problem
                 #coef.[1:5]=c(0, coef.z, -log(.67), log(.67), beta) # effects of x and x.gt.e in different direction
@@ -174,6 +174,11 @@ sim.chngpt = function (
     #        X=cbind(1, z, x.gt.e, x.gt.e*z^3)    
         
         
+    } else if (mean.model=="logistic") { 
+    # from Banerjee and McKeague
+        X=cbind(1,     z,        expit(15*(x-.5)))
+        coef.=c(alpha=0, z=coef.z, x=1)
+    
     } else if (mean.model=="quadratic") { 
     # x+x^2 
         X=cbind(1,     z,        x,   x*x)

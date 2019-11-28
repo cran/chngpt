@@ -16,6 +16,7 @@
 //#define SCYTHE_LAPACK
 
 
+#include "fastgrid_helper.h"
 #include "matrix.h"
 #include "distributions.h"
 #include "stat.h"
@@ -43,139 +44,13 @@
 using namespace std;
 using namespace scythe;
 
-// copied from random.c, sample with replacement
-static void SampleReplace(int k, int n, int *y)
-{
-    int i;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    GetRNGstate();    
-#endif
-    for (i = 0; i < k; i++) y[i] = n * unif_rand() + 1;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    PutRNGstate();    
-#endif
-}
-
-
-inline void make_symmetric(double* matrix, int rows)
-{
-      for (int i = 1; i < rows; ++i)
-        for (int j = 0; j < i; ++j)
-          matrix[i * rows + j] = matrix[j * rows + i];
-}
-  // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
-  // if a row-major matrix is passed as A, it will be transposed automatically
-inline Matrix<> crossprod1(const Matrix<>& A)
-{
-    SCYTHE_DEBUG_MSG("Using lapack/blas for crossprod");
-    // Set up some constants
-    const double zero = 0.0;
-    const double one = 1.0;
-
-    // Set up return value and arrays
-    Matrix<> res(A.cols(), A.cols(), false);
-    double* Apnt = A.getArray();
-    double* respnt = res.getArray();
-    int rows = (int) A.rows();
-    int cols = (int) A.cols();
-    //for (int i=0; i<rows*cols; i++) PRINTF("%f ", Apnt[i]); PRINTF("\n");       
-
-    dsyrk_("L", "T", &cols, &rows, &one, Apnt, &rows, &zero, respnt,
-                   &cols);
-    make_symmetric(respnt, cols); 
-
-    return res;
-}
-
-
-// copied from ide.h
-
-struct Eigen {
-   Matrix<> values;
-   Matrix<> vectors;
-};
-
-inline Eigen
-eigen (const Matrix<>& A, bool vectors=true)
-{
-    SCYTHE_DEBUG_MSG("Using lapack/blas for eigen");
-    SCYTHE_CHECK_10(! A.isSquare(), scythe_dimension_error,
-        "Matrix not square");
-    SCYTHE_CHECK_10(A.isNull(), scythe_null_error,
-        "Matrix is NULL");
-    // Should be symmetric but rounding errors make checking for this
-    // difficult.
-
-    // Make a copy of A
-    Matrix<> AA = A;
-
-    // Get a point to the internal array and set up some vars
-    double* Aarray = AA.getArray(); // internal array points
-    int order = (int) AA.rows();    // input matrix is order x_order
-    double dignored = 0;            // we do not use this option
-    int iignored = 0;               // or this one
-    double abstol = 0.0;            // tolerance (default)
-    int m;                          // output value
-    Matrix<> result;                // result matrix
-    char getvecs[1];                // are we getting eigenvectors?
-    if (vectors) {
-      getvecs[0] = 'V';
-      result = Matrix<>(order, order + 1, false);
-    } else {
-      result = Matrix<>(order, 1, false);
-      getvecs[0] = 'N';
-    }
-    double* eigenvalues = result.getArray(); // pointer to result array
-    int* isuppz = new int[2 * order];        // indices of nonzero eigvecs
-    double tmp;   // inital temporary value for getting work-space info
-    int lwork, liwork, *iwork, itmp; // stuff for workspace
-    double *work; // and more stuff for workspace
-    int info = 0;  // error code holder
-
-    // get optimal size for work arrays
-    lwork = -1;
-    liwork = -1;
-    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
-        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
-        eigenvalues + order, &order, isuppz, &tmp, &lwork, &itmp,
-        &liwork, &info);
-    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
-        "Internal error in LAPACK routine dsyevr");
-    lwork = (int) tmp;
-    liwork = itmp;
-    work = new double[lwork];
-    iwork = new int[liwork];
-
-    // do the actual operation
-    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
-        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
-        eigenvalues + order, &order, isuppz, work, &lwork, iwork,
-        &liwork, &info);
-    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
-        "Internal error in LAPACK routine dsyevr");
-
-    delete[] isuppz;
-    delete[] work;
-    delete[] iwork;
-    
-    Eigen resobj;
-    if (vectors) {
-      resobj.values = result(_, 0);
-      resobj.vectors = result(0, 1, result.rows() -1, result.cols() - 1);
-    } else {
-      resobj.values = result;
-    }
-
-    return resobj;
-}
-
 
 extern "C" {
 
 //variables such as Xcusum are defined outside this function since when bootstrapping, we do not want to allocate the memory over and over again
 int _twoD_search(
     Matrix<double,Row>& B, vector<double>& r, vector<double>& x,
-    vector<double>& w, bool wAllOne, 
+    vector<double>& w, 
     vector<int>& stratified_by,
     int n, int p, 
     int n0, int n1,
@@ -188,7 +63,7 @@ int _twoD_search(
 {
 
     const int TH=2; // assume there are two thresholds
-	
+    
     // loop index
     int i,j,t1,t2,iB,k;    
        
@@ -261,18 +136,15 @@ int _twoD_search(
     }
     //for (i=0; i<n; i++) {PRINTF("%f ", x_cpy[i]); PRINTF("%f ", xcusum[i]); PRINTF("%f ", x[i]); PRINTF("%f ", r[i]); PRINTF("\n");}
     
-    if(wAllOne) {
-        // we may be able to make this more efficient by changing summation index since we know some of the x's are 0
-        // vv is v'v
-        for (i=0 ; i<n0; i++) vv(0,0) += pow(x[i],2); 
-        for (i=n0; i<n ; i++) vv(1,1) += pow(x[i],2); 
-        for (i=0 ; i<n0; i++) vr(0,0) += x[i]*r[i]; 
-        for (i=n0; i<n ; i++) vr(1,0) += x[i]*r[i]; 
-        for (j=0; j<p; j++) {
-            for (i=0; i<n0; i++) vB(0,j) += x[i] * B(i,j);
-            for (i=n0; i<n; i++) vB(1,j) += x[i] * B(i,j);
-        }
-    } else {
+    // we may be able to make this more efficient by changing summation index since we know some of the x's are 0
+    // vv is v'v
+    for (i=0 ; i<n0; i++) vv(0,0) += pow(x[i],2); 
+    for (i=n0; i<n ; i++) vv(1,1) += pow(x[i],2); 
+    for (i=0 ; i<n0; i++) vr(0,0) += x[i]*r[i]; 
+    for (i=n0; i<n ; i++) vr(1,0) += x[i]*r[i]; 
+    for (j=0; j<p; j++) {
+        for (i=0; i<n0; i++) vB(0,j) += x[i] * B(i,j);
+        for (i=n0; i<n; i++) vB(1,j) += x[i] * B(i,j);
     }
     // save a copy for updating across the first row
     vv2=vv; vr2=vr; vB2=vB; 
@@ -388,7 +260,7 @@ SEXP twoD_gaussian(
      SEXP u_X, 
      SEXP u_x, 
      SEXP u_Y, 
-     SEXP u_W, SEXP u_wAllOne, 
+     SEXP u_W,
      SEXP u_stratified_by, 
      //SEXP u_thresholdIdx1, SEXP u_thresholdIdx2, 
      SEXP u_lb, SEXP u_ub, 
@@ -399,7 +271,7 @@ SEXP twoD_gaussian(
     double* x_dat = REAL(u_x);
     double* Y_dat=REAL(u_Y); 
     double* W_dat=REAL(u_W);    
-    bool wAllOne=asLogical(u_wAllOne)==1;
+
     int* stratified_by_dat = INTEGER(u_stratified_by);
 //    int *thresholdIdx1=INTEGER(u_thresholdIdx1);
 //    int *thresholdIdx2=INTEGER(u_thresholdIdx2);
@@ -424,13 +296,13 @@ SEXP twoD_gaussian(
     vector<double> W(W_dat, W_dat + n); // this does not need to be converted into vectors, but better to do so for consistency with bootstrap code
     vector<double> r(n); // residual vector
     
-	// these variables are reused within each bootstrap replicate
+    // these variables are reused within each bootstrap replicate
     Matrix <double,Row,Concrete> Xcusum(n, p);
     vector<double> rcusum(n), Wcusum(n), xcusum(n); 
-	
-	int i,j;
+    
+    int i,j;
 
-	if (nBoot<0.1) {
+    if (nBoot<0.1) {
     // a single search
     
         // define thresholds and thresholdIdx
@@ -441,7 +313,7 @@ SEXP twoD_gaussian(
         int nThresholds1=nUpper1-nLower1+1;
         int nThresholds2=nUpper2-nLower2+1;
         vector<int>    thresholdIdx1(nThresholds1), thresholdIdx2(nThresholds2);
-    	vector<double> thresholds1  (nThresholds1), thresholds2  (nThresholds2); 
+        vector<double> thresholds1  (nThresholds1), thresholds2  (nThresholds2); 
         for(i=0; i<nThresholds1; i++) {
             thresholdIdx1[i]=nLower1+i;
             thresholds1[i]=x[thresholdIdx1[i]-1];
@@ -449,7 +321,7 @@ SEXP twoD_gaussian(
         for(i=0; i<nThresholds2; i++) {
             thresholdIdx2[i]=nLower2+i+n0;
             thresholds2[i]=x[thresholdIdx2[i]-1];
-        }		
+        }       
         //PRINTF("n0 %d n1 %d\n", n0, n1); 
         //PRINTF("nThresholds1 %d nThresholds2 %d\n", nThresholds1, nThresholds2); 
         //for (i=0; i<nThresholds1; i++) PRINTF("%f ", thresholds1[i]); PRINTF("\n"); 
@@ -471,7 +343,7 @@ SEXP twoD_gaussian(
         //PRINTF("Y\n"); for (int i=0; i<n; i++) PRINTF("%f ", Y(i)); PRINTF("\n"); 
         
         _twoD_search(X, r, x,
-                        W, wAllOne, 
+                        W, 
                         stratified_by,
                         n, p, 
                         n0, n1,
@@ -499,14 +371,14 @@ SEXP twoD_gaussian(
         SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p+2+2)));// p slopes, 2 thresholds and 2 threshold-related slopes
         double *coef=REAL(_coef);    
         
-    	// these variables are reused within each bootstrap replicate
-    	vector<int> index(n);
+        // these variables are reused within each bootstrap replicate
+        vector<int> index(n);
         Matrix <double,Row,Concrete> Xb(n,p), Yb(n,1), Xeb(n,p+2);
-    	vector<double> xb(n), Wb(n), rb(n); 
-    	vector<int> stratified_by_b(n);
-    	double e_hat, f_hat;
-    	int chosen;
-    	
+        vector<double> xb(n), Wb(n), rb(n); 
+        vector<int> stratified_by_b(n);
+        double e_hat, f_hat;
+        int chosen;
+        
         for (int b=0; b<nBoot; b++) {        
             // create bootstrap dataset, note that index is 1-based
             SampleReplace(n, n, &(index[0]));
@@ -535,7 +407,7 @@ SEXP twoD_gaussian(
             int nThresholds1=nUpper1-nLower1+1;
             int nThresholds2=nUpper2-nLower2+1;
             vector<int>    thresholdIdx1(nThresholds1), thresholdIdx2(nThresholds2);
-        	vector<double> thresholds1  (nThresholds1), thresholds2  (nThresholds2); 
+            vector<double> thresholds1  (nThresholds1), thresholds2  (nThresholds2); 
             for(i=0; i<nThresholds1; i++) {
                 thresholdIdx1[i]=nLower1+i;
                 thresholds1[i]=xb[thresholdIdx1[i]-1];
@@ -543,7 +415,7 @@ SEXP twoD_gaussian(
             for(i=0; i<nThresholds2; i++) {
                 thresholdIdx2[i]=nLower2+i+n0;
                 thresholds2[i]=xb[thresholdIdx2[i]-1];
-            }		
+            }       
             //PRINTF("n0 %d n1 %d\n", n0, n1); 
             //PRINTF("nThresholds1 %d nThresholds2 %d\n", nThresholds1, nThresholds2); 
             //for (i=0; i<nThresholds1; i++) PRINTF("%f ", thresholds1[i]); PRINTF("\n"); 
@@ -554,7 +426,7 @@ SEXP twoD_gaussian(
             
             // Step 3-5
             chosen = _twoD_search(Xb, rb, xb,
-                        Wb, wAllOne, 
+                        Wb, 
                         stratified_by_b,
                         n, p, 
                         n0, n1, 

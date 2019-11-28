@@ -10,12 +10,11 @@
 #ifndef CHNGPTBOOT_CC
 #define CHNGPTBOOT_CC
 
-
 // the following leads to many problem
 //#ifndef SCYTHE_LAPACK 
 //#define SCYTHE_LAPACK
 
-
+#include "fastgrid_helper.h"
 #include "matrix.h"
 #include "distributions.h"
 #include "stat.h"
@@ -33,435 +32,164 @@
 #include <R_ext/Lapack.h>
 #include <Rmath.h>
 
-
 #define RUNIF runif
 #define PRINTF Rprintf
 #define MAX(A,B)    ((A) > (B) ? (A) : (B))
 #define MIN(A,B)    ((A) < (B) ? (A) : (B))
 
-
 using namespace std;
 using namespace scythe;
 
-// copied from random.c, sample with replacement
-static void SampleReplace(int k, int n, int *y)
-{
-    int i;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    GetRNGstate();    
-#endif
-    for (i = 0; i < k; i++) y[i] = n * unif_rand() + 1;
-#ifndef SCYTHE_COMPILE_DIRECT    
-    PutRNGstate();    
-#endif
-}
-
-
-inline void make_symmetric(double* matrix, int rows)
-{
-      for (int i = 1; i < rows; ++i)
-        for (int j = 0; j < i; ++j)
-          matrix[i * rows + j] = matrix[j * rows + i];
-}
-  // it is not clear to me whether crossprod is calling lapack or not. crossprod1 is the way I make sure it is
-  // if a row-major matrix is passed as A, it will be transposed automatically
-inline Matrix<> crossprod1(const Matrix<>& A)
-{
-    SCYTHE_DEBUG_MSG("Using lapack/blas for crossprod");
-    // Set up some constants
-    const double zero = 0.0;
-    const double one = 1.0;
-
-    // Set up return value and arrays
-    Matrix<> res(A.cols(), A.cols(), false);
-    double* Apnt = A.getArray();
-    double* respnt = res.getArray();
-    int rows = (int) A.rows();
-    int cols = (int) A.cols();
-    //for (int i=0; i<rows*cols; i++) PRINTF("%f ", Apnt[i]); PRINTF("\n");       
-
-    dsyrk_("L", "T", &cols, &rows, &one, Apnt, &rows, &zero, respnt,
-                   &cols);
-    make_symmetric(respnt, cols); 
-
-    return res;
-}
-
-
-// copied from ide.h
-
-struct Eigen {
-   Matrix<> values;
-   Matrix<> vectors;
-};
-
-inline Eigen
-eigen (const Matrix<>& A, bool vectors=true)
-{
-    SCYTHE_DEBUG_MSG("Using lapack/blas for eigen");
-    SCYTHE_CHECK_10(! A.isSquare(), scythe_dimension_error,
-        "Matrix not square");
-    SCYTHE_CHECK_10(A.isNull(), scythe_null_error,
-        "Matrix is NULL");
-    // Should be symmetric but rounding errors make checking for this
-    // difficult.
-
-    // Make a copy of A
-    Matrix<> AA = A;
-
-    // Get a point to the internal array and set up some vars
-    double* Aarray = AA.getArray(); // internal array points
-    int order = (int) AA.rows();    // input matrix is order x order
-    double dignored = 0;            // we do not use this option
-    int iignored = 0;               // or this one
-    double abstol = 0.0;            // tolerance (default)
-    int m;                          // output value
-    Matrix<> result;                // result matrix
-    char getvecs[1];                // are we getting eigenvectors?
-    if (vectors) {
-      getvecs[0] = 'V';
-      result = Matrix<>(order, order + 1, false);
-    } else {
-      result = Matrix<>(order, 1, false);
-      getvecs[0] = 'N';
-    }
-    double* eigenvalues = result.getArray(); // pointer to result array
-    int* isuppz = new int[2 * order];        // indices of nonzero eigvecs
-    double tmp;   // inital temporary value for getting work-space info
-    int lwork, liwork, *iwork, itmp; // stuff for workspace
-    double *work; // and more stuff for workspace
-    int info = 0;  // error code holder
-
-    // get optimal size for work arrays
-    lwork = -1;
-    liwork = -1;
-    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
-        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
-        eigenvalues + order, &order, isuppz, &tmp, &lwork, &itmp,
-        &liwork, &info);
-    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
-        "Internal error in LAPACK routine dsyevr");
-    lwork = (int) tmp;
-    liwork = itmp;
-    work = new double[lwork];
-    iwork = new int[liwork];
-
-    // do the actual operation
-    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
-        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
-        eigenvalues + order, &order, isuppz, work, &lwork, iwork,
-        &liwork, &info);
-    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
-        "Internal error in LAPACK routine dsyevr");
-
-    delete[] isuppz;
-    delete[] work;
-    delete[] iwork;
-    
-    Eigen resobj;
-    if (vectors) {
-      resobj.values = result(_, 0);
-      resobj.vectors = result(0, 1, result.rows() -1, result.cols() - 1);
-    } else {
-      resobj.values = result;
-    }
-
-    return resobj;
-}
-
-
-
-// first p-1 col of X and Y are changed
-inline void _preprocess(Matrix<double,Row>& X, Matrix<double,Row>& Y) {
-    int i,j; 
-    int p=X.cols();    
-    int n=X.rows();    
-    
-//// R code:    
-//    A <- solve(t(Z.sorted) %*% Z.sorted)
-//    H <- Z.sorted %*% A %*% t(Z.sorted)
-//    r <- as.numeric((diag(n)-H) %*% y.sorted)
-//    a.eig <- eigen(A)   
-//    A.sqrt <- a.eig$vectors %*% diag(sqrt(a.eig$values)) %*% solve(a.eig$vectors)
-//    B = Z.sorted %*% A.sqrt
-                
-    Matrix<> Z=X(0,0,X.rows()-1,p-2);
-    Matrix<> A = invpd(crossprod(Z));
-    
-    // eigen decomposition to get B
-    Eigen Aeig = eigen(A);
-    Matrix <double,Row,Concrete> A_eig (p-1, p-1, true, 0);
-    for (j=0; j<p-1; j++) A_eig(j,j)=sqrt(Aeig.values(j));
-    Matrix<> B = Z * (Aeig.vectors * A_eig * t(Aeig.vectors));
-    
-    // replace the first p-1 column of X with B
-    for (j=0; j<p-1; j++) X(_,j)=B(_,j);
-    //PRINTF("A\n"); for (i=0; i<p-1; i++) {for (j=0; j<p-1; j++)  PRINTF("%f ", A(i,j)); PRINTF("\n");}            
-    //PRINTF("eigen values\n"); for (j=0; j<p-1; j++) PRINTF("%f ", Aeig.values(j)); PRINTF("\n");
-    //PRINTF("B\n"); for (i=0; i<n; i++) {for (j=0; j<p-1; j++) PRINTF("%f ", B(i,j)); PRINTF("\n");}            
-    
-    Matrix <> r = Y - Z * A * (t(Z) * Y);
-    // replace Y with r
-    for (i=0; i<n; i++) Y(i)=r(i);
-}
-         
-
-
 extern "C" {
-       
-
-// X is actually cbind(B,x) and Y is actually r
-  //variables such as Xcusum are defined outside this function since when bootstrapping, we do not want to allocate the memory over and over again
-double _fastgrid2_search(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>& w, bool wAllOne, 
-    int * thresholdIdx, bool skipping, vector<double>& thresholds, 
-    int n, int p, int nThresholds,
-    Matrix<double,Row>& Xcusum, vector<double>& Ycusum, vector<double>& Wcusum, 
-    double* logliks)
-{
-
-    // loop index. 
-    int i,j,m,t;    
-    int k;
-    //int iX, skipped; // k has a meaning in the algorithm 
-	int chosen=0;//initialize to get rid of compilation warning
-	
-    vector<double> x_cpy(n);
-   	vector<double> x_r_cusum (n);
-    // store additional Cusum
-    Matrix <double,Row,Concrete> x_B_cusum (n, p); // x^2 is the last column
-	if(skipping) { // guess if the thresholds are thinned. we could have change the .Call interface, but it is too much work
-        // save a copy of x for later use
-        for(i=0; i<n; i++) x_cpy[i] = X(i,p-1);        
-    }
-        
-    // for hinge or segmented, compute cusum of X and Y in the reverse order
-    // for upperhinge, compute cusum of X and Y in the forward order
-//    if (!isUpperHinge) {
-//        Xcusum(n-1,_) = X(n-1,_)*w[n-1]; 
-//        Ycusum[n-1] = Y(n-1)*w[n-1];     
-//        Wcusum[n-1] = w[n-1];             
-//        for (i=n-2; i>=0; i--) {
-//            Xcusum(i,_)    = Xcusum(i+1,_)    + X(i,_)* w[i]; 
-//            Ycusum[i]      = Ycusum[i+1]      + Y(i)* w[i]; 
-//            Wcusum[i]      = Wcusum[i+1]      + w[i]; 
-//    	}
-//        if(skipping) {
-//            x_r_cusum[n-1]   = x_cpy[n-1]*Y(n-1)   * w[n-1]; 
-//            x_B_cusum(n-1,_) = x_cpy[n-1]*X(n-1,_) * w[n-1]; 
-//            for (i=n-2; i>=0; i--) {
-//                x_r_cusum[i]   = x_r_cusum[i+1]   + x_cpy[i]*Y(i)* w[i]; 
-//                x_B_cusum(i,_) = x_B_cusum(i+1,_) + x_cpy[i]*X(i,_)* w[i]; 
-//            }
-//        }    
-//    } else {
-        Xcusum(0,_) = X(0,_)* w[0];    
-        Ycusum[0] = Y(0)* w[0];        
-        Wcusum[0] = w[0];              
-        for (i=1; i<n; i++) {
-            Xcusum(i,_)    = Xcusum(i-1,_)    + X(i,_)* w[i]; 
-            Ycusum[i]      = Ycusum[i-1]      + Y(i)* w[i]; 
-            Wcusum[i]      = Wcusum[i-1]      + w[i]; 
-    	}
-        if(skipping) {
-            x_r_cusum[0]   = x_cpy[0] * Y(0)* w[0];        
-            x_B_cusum(0,_) = x_cpy[0] * X(0,_)* w[0];    
-            for (i=1; i<n; i++) {
-                x_r_cusum[i]   = x_r_cusum[i-1]   + x_cpy[i]* Y(i)* w[i]; 
-                x_B_cusum(i,_) = x_B_cusum(i-1,_) + x_cpy[i]* X(i,_)* w[i]; 
-            }
-        }
-//    }
-    //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xcusum(i,j)); PRINTF("\n");}        
-    //for (i=0; i<n; i++) PRINTF("%f ", Ycusum[i]); PRINTF("\n");
-    
-    vector<double> vB(p-1); 
-    double vv, vr, d;
-    double delta, crit, crit_max=R_NegInf;
-    
-    // Step 2: Initialize vv, vr and vB 
-    
-    // threshold x, which is the last column of X, at the first threshold value
-//    if (!isUpperHinge) {
-//        // (x-e)+
-//        for(i=0; i<thresholdIdx[0]; i++) X(i,p-1)=0;  
-//        for(i=thresholdIdx[0]; i<n; i++) X(i,p-1)=X(i,p-1)-thresholds[0]; 
-//    } else {
-        // (x-e)-
-        for(i=0; i<thresholdIdx[0]; i++) X(i,p-1)=X(i,p-1)-thresholds[0];  
-        for(i=thresholdIdx[0]; i<n; i++) X(i,p-1)=0; 
-//    }
-    //for (j=0; j<n; j++) PRINTF("%f ", X(j,p-1)); PRINTF("\n");
-    
-    vv=0; vr=0; 
-    if(wAllOne) {
-        for (i=0; i<n; i++) vv += pow(X(i,p-1),2); 
-        for (i=0; i<n; i++) vr += X(i,p-1)*Y(i); 
-        for (j=0; j<p-1; j++) {
-            vB[j]=0; 
-            for (i=0; i<n; i++) 
-                vB[j] += X(i,p-1) * X(i,j);
-        }
-    } else {
-    }
-    
-    // Step 4 (Step 3 = Step 4b)
-    for(t=0; t<nThresholds; t++) { 
-            
-        // Step 4a: update vv, vr and vB
-        if(t>0) {
-            delta= thresholds[t]-thresholds[t-1]; //X(t,p-1)-X(t-1,p-1); //PRINTF("%f ", delta); PRINTF("\n"); 
-//            if (!isUpperHinge) {
-//                iX = thresholdIdx[t]-1; 
-//                k  = n-thresholdIdx[t]+1; // the current threshold is the kth largest 
-//                
-//                vv -= 2 * delta * (Xcusum(iX,p-1) - k*thresholds[t-1]) -  k * pow(delta,2); 
-//                vr -= delta * Ycusum[iX];
-//                for (j=0; j<p-1; j++) vB[j] -= delta * Xcusum(iX,j); 
-//
-//               	if(skipping) {
-//                    // for thinned thresholds
-//                    skipped = thresholdIdx[t]-1 - thresholdIdx[t-1];
-//                    if (skipped>0) {
-//                        vv -= x_B_cusum(thresholdIdx[t-1],p-1)- x_B_cusum(thresholdIdx[t]-1,p-1) 
-//                              - 2*thresholds[t-1]*(Xcusum(thresholdIdx[t-1],p-1)- Xcusum(thresholdIdx[t]-1,p-1))
-//                              + skipped * pow(thresholds[t-1],2);
-//                        vr -= x_r_cusum[thresholdIdx[t-1]]- x_r_cusum[thresholdIdx[t]-1]
-//                              - thresholds[t-1]*(Ycusum[thresholdIdx[t-1]]- Ycusum[thresholdIdx[t]-1]);
-//                        for (j=0; j<p-1; j++) vB[j] -= x_B_cusum(thresholdIdx[t-1],j)- x_B_cusum(thresholdIdx[t]-1,j)
-//                                                       - thresholds[t-1]*(Xcusum(thresholdIdx[t-1],j)- Xcusum(thresholdIdx[t]-1,j)); 
-//                    }
-//    //                // a more straightforward implementation
-//    //                for (m=thresholdIdx[t-1]; m<thresholdIdx[t]-1; m++) {
-//    //                    d = x_cpy[m]-thresholds[t-1]; //PRINTF("d %f\n",d);
-//    //                    vv -= d * d; // X(m,p-1)+thresholds[0] gives back x_m b/c X(,p-1) has been updated
-//    //                    vr -= d * Y[m]; // X(m,p-1)+thresholds[0] gives back x_m b/c X(,p-1) has been updated
-//    //                    for (j=0; j<p-1; j++) vB[j] -= d * X(m,j); 
-//    //                }
-//                }
-//                //for (int cntr=0; cntr<p; cntr++) for (j=0; j<p; j++)  PRINTF("%f ", A(cntr,j)); PRINTF("\n");        
-//            } else {
-                // e.g, when t=1, we are at the second threshold, we want to update vv, vr and vB for e_2
-                //            t=1 and t+1=2 
-                k  = thresholdIdx[t-1]; // k is 1-based index of x, e_t = x_k
-                vv -= 2*delta*(Xcusum(k-1,p-1) - k*thresholds[t-1]) - k * pow(delta,2);            
-                vr -= delta * Ycusum[k-1];
-                for (j=0; j<p-1; j++) vB[j] -= delta * Xcusum(k-1,j); 
-
-            	if(skipping) {
-                    // for thinned thresholds
-                    // a straightforward implementation
-                    for (m=thresholdIdx[t-1]; m<thresholdIdx[t]-1; m++) {
-                        d = thresholds[t] - x_cpy[m]; //PRINTF("d %f\n",d);
-                        vv -= - d * d; // X(m,p-1)+thresholds[0] gives back x_m b/c X(,p-1) has been updated
-                        vr -= d * Y[m]; // X(m,p-1)+thresholds[0] gives back x_m b/c X(,p-1) has been updated
-                        for (j=0; j<p-1; j++) vB[j] -= d * X(m,j); 
-                    }
-                }
-                //for (int cntr=0; cntr<p; cntr++) for (j=0; j<p; j++)  PRINTF("%f ", A(cntr,j)); PRINTF("\n");        
-//            }
-        }
-        
-        // Step 4b: compute Y'H_eY - Y'HY
-        // first compute vB'vB, abusing the notation a little bit
-        crit=0; for (j=0; j<p-1; j++) crit += pow(vB[j],2); 
-        // now compute crit
-        crit = vr*vr / (vv - crit);
-        logliks[t] = crit;
-        if(crit>=crit_max) {
-            chosen = t;
-            crit_max=crit;
-        }             
-    }        
-    //PRINTF("logliks: \n");  for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");  
-
-    return thresholds[chosen]; 
-    
-}
-
 
   // For fastgrid,
   // assume X and Y are sorted in chngptvar from small to large
   // assume last col of X is chngptvar, which will be updated as move through the grid
   // thresholdIdx are 1-based index, which define the grid of thresholds
-  // For fastgrid2, the meaning of the first two variables are B and r instead 
 SEXP fastgrid2_gaussian(
-     SEXP u_X, SEXP u_Y, 
-     SEXP u_W, SEXP u_wAllOne, 
-     SEXP u_thresholdIdx, SEXP u_skipping,
-     SEXP u_nBoot, SEXP u_nSub)
+     SEXP u_model,
+     SEXP u_X, 
+     SEXP u_Y, 
+     SEXP u_W,
+     SEXP u_thresholdIdx, 
+     SEXP u_verbose,
+     SEXP u_nBoot, 
+     SEXP u_nSub)
 {
+
+    int model = asInteger(u_model);
+    
     double* X_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y); 
     double* W_dat=REAL(u_W);    
-    bool wAllOne=asLogical(u_wAllOne)==1;
+
     int *thresholdIdx=INTEGER(u_thresholdIdx);
-    bool skipping=asLogical(u_skipping)==1;
+    int verbose=asInteger(u_verbose); 
     int nBoot = asInteger(u_nBoot);
-//    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
     
     const int n = nrows(u_X);
-    const int p = ncols(u_X); // number of predictors, including the thresholed variable
+    const int p = ncols(u_X); 
     int nThresholds=length(u_thresholdIdx);
+    int nSub = asInteger(u_nSub);
+    if (nSub==0) nSub=n;
     //PRINTF("thresholdIdx: "); for (int i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
         
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe or MCMCpack MCMCmetrop1R.cc
     Matrix<double,Col,Concrete> Xcol (n, p, X_dat); //column major     
     Matrix<double,Row,Concrete> X(Xcol); // convert to row major so that creating bootstrap datasets can be faster and to pass to _grid_search
-    Matrix<double,Row,Concrete> Y(n, 1, Y_dat); // define as a matrix instead of vector b/c will be used in matrix operation
-    vector<double> W(W_dat, W_dat + n);
-    
-	// these variables are reused within each bootstrap replicate
-    Matrix <double,Row,Concrete> Xcusum (n, p);
-	vector<double> Ycusum(n), Wcusum(n); 
-	vector<double> thresholds(nThresholds); 
-	
-	int i,j;
+    Matrix<double,Row,Concrete> Y(n, 1, Y_dat); // define as a matrix instead of vector b/c will be used in matrix operation    
+    vector<double> w(W_dat, W_dat + n);
 
-	if (nBoot<0.1) {
+    vector<double> thresholds(nThresholds); 
+    
+    // importantly, both X and Y are weighted but not x because x will be compared to e
+    vector<double> x(n);
+    int i,j;
+    for (i=0; i<n; i++) {
+        w[i]=sqrt(w[i]);
+        x[i] = X(i,p-1);    
+        X(i,_)=X(i,_)*w[i];
+        Y(i,0)=Y(i,0)*w[i];
+    }
+    
+    Matrix<double, Row> Z=X(0,0,X.rows()-1,p-2); // in the R code we make sure p>1
+    
+    // define these here to avoid the need to re-allocate memory when doing bootstrap
+    Matrix <double,Row,Concrete> Bcusum (n, p-1);
+    vector<double> rcusum(n), Wcusum(n), xcusum(n); 
+    // for higher order models we need to define more variables. 
+    // to make it more efficient for the basic segmented models, we change n to nsmall
+    int nsmall = model>10?n:1;
+    Matrix <double,Row,Concrete> xBcusum (nsmall, p-1), x2Bcusum (nsmall, p), BcusumR (nsmall, p), xBcusumR (nsmall, p), x2BcusumR (nsmall, p);
+    vector<double> x2cusum (nsmall), x3cusum (nsmall), xrcusum (nsmall), x4cusum (nsmall), x5cusum (nsmall), x2rcusum (nsmall), rcusumR(nsmall);
+    vector<double> WcusumR(nsmall), xcusumR(nsmall), x2cusumR(nsmall), x3cusumR(nsmall), x4cusumR(nsmall), x5cusumR(nsmall), xrcusumR(nsmall), x2rcusumR(nsmall); 
+
+
+    if (nBoot<0.1) {
     // a single search
     
         SEXP _logliks=PROTECT(allocVector(REALSXP, nThresholds));
         double *logliks=REAL(_logliks);       
-        
-        // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
-        double yhy=0;
-        if (p>1) {
-        // if p is 0, we cannot do what is in this condition         
-           Matrix<> Z=X(0,0,X.rows()-1,p-2);
-           yhy = ((t(Y) * Z) * invpd(crossprod(Z)) * (t(Z) * Y))(0);
-            
-            // Step 2. Compute B and r
-            _preprocess(X, Y);
-            //PRINTF("B\n"); for (int i=0; i<n; i++) {for (int j=0; j<p; j++) PRINTF("%f ", X(i,j)); PRINTF("\n");}
-            //PRINTF("Y\n"); for (int i=0; i<n; i++) PRINTF("%f ", Y(i)); PRINTF("\n"); 
-        }
-        
-        for(i=0; i<nThresholds; i++) thresholds[i]=X(thresholdIdx[i]-1,p-1);
 
-        _fastgrid2_search(X, Y, W, wAllOne, thresholdIdx, skipping, thresholds, 
-                             n, p, nThresholds,
-                             Xcusum, Ycusum, Wcusum, 
+        // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
+        double yhy = ((t(Y) * Z) * invpd(crossprod(Z)) * (t(Z) * Y))(0);
+        
+        // Step 2. Compute B and r, which are saved in Z and Y
+        if (p>1) _preprocess(Z,Y);
+        
+        for(i=0; i<nThresholds; i++) thresholds[i]=x[thresholdIdx[i]-1];
+
+        if(model==5) { 
+               Mstep_search(Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds,
+                             Bcusum, rcusum, Wcusum,
+                             logliks);                              
+        } else if(model==10) {
+               M10_search(Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds,
+                             Bcusum, rcusum, Wcusum, xcusum,
+                             logliks);                              
+        } else if(model==20) {
+               M20_search (Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds, 
+                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
                              logliks); 
-        for(i=0; i<nThresholds; i++) logliks[i]=logliks[i]+yhy; 
-        //PRINTF("logliks : \n");  for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");  
+        } else if(model==22) {
+               M22_search (Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds, 
+                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                             BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
+                             logliks); 
+        } else if(model==224) {
+               M22c_search(Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds,
+                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                             BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
+                             logliks); 
+        } else if(model==30) {
+               M30_search (Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds, 
+                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
+                             logliks); 
+        } else if(model==334) {
+               M33c_search (Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds, 
+                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
+                             BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, x4cusumR, x5cusumR, xrcusumR, x2rcusumR, xBcusumR, x2BcusumR, 
+                             logliks); 
+        } else PRINTF("wrong \n");
+        
             
+        for(i=0; i<nThresholds; i++) logliks[i]=logliks[i]+yhy; 
+        if(verbose>0) {PRINTF("search logliks: ");  for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");}
+        
         UNPROTECT(1);
         return _logliks;
 
-    } else {
-    // bootstrap
-    
-      //  //output variables: logliks will not be returned to R, estimates from each bootstrap copy will be stored in coef and returned
+    } else if (nSub==n) {
+    // Efron bootstrap
+
+        //output variables: logliks will not be returned to R, estimates from each bootstrap copy will be stored in coef and returned
         double * logliks = (double *) malloc((nThresholds) * sizeof(double));
-        SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p+1)));// p slopes, 1 threshold
-        double *coef=REAL(_coef);    
         
-    	// these variables are reused within each bootstrap replicate
-    	vector<int> index(n);
-        Matrix <double,Row,Concrete> Xb(n,p), Yb(n,1);
-    	vector<double> Wb(n); 
-    	double e_hat;
-    	
+        int p_coef=0;
+        if        (model==5)  { p_coef=p+1; 
+        } else if (model==10) { p_coef=p+1;
+        } else if (model==20) { p_coef=p+2;
+        } else if (model==22) { p_coef=p+4;
+        } else if (model==224){ p_coef=p+3;
+        } else if (model==30) { p_coef=p+3;
+        } else if (model==334){ p_coef=p+4;
+        } else PRINTF("wrong \n");;
+        
+        SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p_coef)));
+        double *coef=REAL(_coef);    
+
+        Matrix <double,Row,Concrete> Zb(n,p-1), Xbreg(n,p_coef-1), Yb(n,1);
+        vector<double> wb(n), xb(n);
+        vector<int> index(n);         
+        double e_hat=0;
+        
         for (int b=0; b<nBoot; b++) {        
             // create bootstrap dataset, note that index is 1-based
             SampleReplace(n, n, &(index[0]));
@@ -469,65 +197,237 @@ SEXP fastgrid2_gaussian(
             sort (index.begin(), index.end());
             
             for (i=0; i<n; i++) { //note that index need to -1 to become 0-based
-                Xb(i,_)=X(index[i]-1,_); 
-                Yb(i)  =Y(index[i]-1); 
-                Wb[i]  =W[index[i]-1]; 
+                Zb(i,_)=Z(index[i]-1,_); 
+                Yb(i,0)=Y(index[i]-1,0); 
+                xb[i]  =x[index[i]-1];    
+                wb[i]  =w[index[i]-1]; 
             } 
-//            for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); Wb[i]=W[i]; } // debug use, can be used to compare with non-boot
-            //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
+            //for (i=0; i<n; i++) {for (j=0; j<p-1; j++)  PRINTF("%f ", Zb(i,j)); PRINTF("%f %f %f ", Yb(i,0), xb[i], wb[i]); PRINTF("\n");} 
             
-            for(i=0; i<nThresholds; i++) thresholds[i]=Xb(thresholdIdx[i]-1,p-1);
+            for(i=0; i<nThresholds; i++) thresholds[i]=xb[thresholdIdx[i]-1];
+            //PRINTF("thresholds: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", thresholds[i]); PRINTF("\n");
             
-            if (p>1) {
-            // if p is 0, we cannot do what is in this condition
-                // Compute B and r
-                _preprocess(Xb, Yb);            
-            }
-            
-            e_hat = _fastgrid2_search(Xb, Yb, Wb, wAllOne, thresholdIdx, skipping, thresholds, 
-                                 n, p, nThresholds,
-                                 Xcusum, Ycusum, Wcusum, 
-                                 logliks); 
-            //PRINTF("e_hat %f\n", e_hat); 
+            // compute Y'HY. This is not needed to find e_hat, but good to have for comparison with other estimation methods
+            double yhyb=0;
+            if(verbose>0) yhyb = ((t(Yb) * Zb) * invpd(crossprod(Zb)) * (t(Zb) * Yb))(0);
+    
+            // Compute B and r, which are saved in Z and Y
+            if (p>1) _preprocess(Zb,Yb);
 
-            // fit model at the selected threshold and save results in coef
+            if(model==5) { 
+                   e_hat=Mstep_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds,
+                                 Bcusum, rcusum, Wcusum,
+                                 logliks);                              
+            } else if(model==10) {
+                   e_hat=M10_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds,
+                                 Bcusum, rcusum, Wcusum, xcusum,
+                                 logliks);                              
+            } else if(model==20) {
+                   e_hat=M20_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 logliks); 
+            } else if(model==22) {
+                   e_hat=M22_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
+                                 logliks); 
+            } else if(model==224) {
+                   e_hat=M22c_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds,
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
+                                 logliks); 
+            } else if(model==30) {
+                   e_hat=M30_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
+                                 logliks); 
+            } else if(model==334) {
+                   e_hat=M33c_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
+                                 BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, x4cusumR, x5cusumR, xrcusumR, x2rcusumR, xBcusumR, x2BcusumR, 
+                                 logliks); 
+            } else PRINTF("wrong \n");
             
-            // since after _preprocess, Xb and Yb have changed to B and r, we need to put X and Y back
-            for (i=0; i<n; i++) { //note that index need to -1 to become 0-based
-                Xb(i,_)=X(index[i]-1,_); 
-                Yb(i)  =Y(index[i]-1); 
+            if(verbose>0) {
+                for(i=0; i<nThresholds; i++) logliks[i]=logliks[i]+yhyb; 
+                PRINTF("boot logliks: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");
             }
-            //PRINTF("Xb\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
-            //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
-//            for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
-            // create x_e at e_hat
-//            if (!isUpperHinge) {
-//                // (x-e)+
-//                for(i=0; i<n; i++) 
-//                    if(Xb(i,p-1)<e_hat) Xb(i,p-1) = 0; else Xb(i,p-1) -= e_hat;  
-//            } else {
-                // (x-e)-
-                for(i=0; i<n; i++) 
-                    if(Xb(i,p-1)<e_hat) Xb(i,p-1) -= e_hat; else Xb(i,p-1) = 0;  
-//            }
-            //PRINTF("Xb_e\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
-            //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
+    
+            // fit model at the selected threshold and save results in coef 
+            // since Xb and Yb are changed during search, we need to copy from X 
+            for (i=0; i<n; i++) { 
+                
+                Yb(i,0)=Y(index[i]-1,0); 
+                for (j=0; j<p-1; j++) Xbreg(i,j)=X(index[i]-1,j);
+                
+                // thresholded covariates
+                if (model==5) {     // step model               
+                    if(x[index[i]-1]>e_hat) Xbreg(i,p-1) =1; else Xbreg(i,p-1) = 0; 
+                
+                } else if(model==10) {                    
+                    if(x[index[i]-1]<e_hat) Xbreg(i,p-1) =x[index[i]-1]- e_hat; else Xbreg(i,p-1) = 0; // (x-e)- 
+                
+                } else if (model==20) {                    
+                    if(x[index[i]-1]<e_hat) Xbreg(i,p-1) =x[index[i]-1]- e_hat; else Xbreg(i,p-1) = 0;// (x-e)-                    
+                    Xbreg(i,p)=pow(Xbreg(i,p-1),2);// (x-e)-^2
+                
+                } else if (model==22) {                    
+                    if(x[index[i]-1]<e_hat) Xbreg(i,p-1) =x[index[i]-1]- e_hat; else Xbreg(i,p-1) = 0;// (x-e)-                    
+                    Xbreg(i,p)=pow(Xbreg(i,p-1),2);// (x-e)-^2
+                    // populate with weighted x
+                    Xbreg(i,p+1)=X(index[i]-1,p-1);                    
+                    if(x[index[i]-1]>e_hat) Xbreg(i,p+1) =x[index[i]-1]- e_hat; else Xbreg(i,p+1) = 0;// (x-e)+                    
+                    Xbreg(i,p+2)=pow(Xbreg(i,p+1),2);// (x-e)+^2
+                
+                } else if (model==224) {                    
+                    Xbreg(i,p-1) =x[index[i]-1]- e_hat; // x-e                    
+                    if(x[index[i]-1]<e_hat) Xbreg(i,p)  =pow(Xbreg(i,p-1),2); else Xbreg(i,p)=0;// (x-e)-^2                    
+                    if(x[index[i]-1]>e_hat) Xbreg(i,p+1)=pow(Xbreg(i,p-1),2); else Xbreg(i,p+1)=0;// (x-e)+^2                       
+                       
+                } else if (model==30) {                       
+                    if(x[index[i]-1]<e_hat) Xbreg(i,p-1) =x[index[i]-1]- e_hat; else Xbreg(i,p-1) = 0;//(x-e)-
+                    Xbreg(i,p)=pow(Xbreg(i,p-1),2);//(x-e)-^2
+                    Xbreg(i,p+1)=pow(Xbreg(i,p-1),3);//(x-e)-^3
+    
+                } else if (model==334) {                    
+                    Xbreg(i,p-1) =x[index[i]-1]- e_hat; // x-e
+                    Xbreg(i,p)=pow(Xbreg(i,p-1),2);// (x-e)^2                    
+                    if(x[index[i]-1]<e_hat) Xbreg(i,p+1)=pow(Xbreg(i,p-1),3); else Xbreg(i,p+1)=0;// (x-e)-^3                    
+                    if(x[index[i]-1]>e_hat) Xbreg(i,p+2)=pow(Xbreg(i,p-1),3); else Xbreg(i,p+2)=0;// (x-e)+^3
+                    
+                } else PRINTF("wrong \n");               
+                 
+                // add weight to thresholded covariates
+                for (j=p-1; j<p_coef-1; j++) Xbreg(i,j)=Xbreg(i,j)*wb[i];
+            }
             
-                        
-            Matrix <> beta_hat = invpd(crossprod(Xb)) * (t(Xb) * Yb);
-            for (j=0; j<p; j++) coef[b*(p+1)+j]=beta_hat[j];             
             
-            coef[b*(p+1)+p] = e_hat;
-        } 
-         
+            Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
+            for (int j=0; j<p_coef-1; j++) coef[b*p_coef+j]=beta_hat[j];                         
+            coef[(b+1)*p_coef-1] = e_hat;
+            
+            //PRINTF("Xbreg\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xbreg(i,j)); PRINTF("\n");} 
+            //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
+            //for (int j=0; j<p_coef-1; j++) PRINTF("%f ", beta_hat[j]); PRINTF("\n");
+            //for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
+        }
+        
         UNPROTECT(1);
         free(logliks);
         return _coef;
+        
+    } else {
+        // subsampling m-out-of-n bootstrap
+              
+        int p_coef=0;
+        if(model==5) { 
+            p_coef=p+1; 
+        } else PRINTF("wrong \n");;
+                
+        SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p_coef)));
+        double *coef=REAL(_coef);    
+
+        // redefine these variables with nSub rows
+        Matrix <double,Row,Concrete> Bcusum (nSub, p);
+        vector<double> rcusum(nSub), Wcusum(nSub); 
+    
+        Matrix <double,Row,Concrete> Zb(nSub,p-1), Xbreg(nSub,p_coef-1), Yb(nSub,1);
+        vector<double> wb(nSub), xb(nSub); 
+        vector<int> index(nSub), index2(n);
+        double e_hat=0;
+        
+        int nThresholdsb, minThresholdIdx=thresholdIdx[0], maxThresholdIdx=thresholdIdx[nThresholds-1];
+
+        for (int b=0; b<nBoot; b++) {        
+            SampleNoReplace(nSub, n, &(index[0]), &(index2[0]));
+            // Step 1: sort
+            sort (index.begin(), index.end());
+            
+            for (i=0; i<nSub; i++) { //note that index need to -1 to become 0-based
+                Zb(i,_)=Z(index[i]-1,_); 
+                Yb(i,0)=Y(index[i]-1,0); 
+                xb[i]  =x[index[i]-1];    
+                wb[i]  =w[index[i]-1]; 
+            } 
+            //for (i=0; i<n; i++) {for (j=0; j<p-1; j++)  PRINTF("%f ", Zb(i,j)); PRINTF("%f %f %f ", Yb(i,0), xb[i], wb[i]); PRINTF("\n");} 
+            
+//            // this only works when there is no m-out-of-n subsampling       
+//            nThresholdsb=nThresholds;
+//            vector<double> thresholdsb;
+//            vector<int> thresholdIdxb;
+//            for(i=0; i<nThresholdsb; i++) {
+//                thresholdIdxb.push_back(thresholdIdx[i]); //thresholdIdx and thresholdIdxb are the same
+//                thresholdsb.push_back(Xb(thresholdIdx[i]-1,p-1)); // make new thresholds vector that match the resampled dataset
+//            }
+            
+            // needs to do this for subsampling
+            vector<double> thresholdsb;
+            vector<int> thresholdIdxb;
+            for (i=0; i<nSub; i++) { 
+                if (index[i]>=minThresholdIdx && index[i]<=maxThresholdIdx) {
+                    thresholdIdxb.push_back (i+1); // threshold id is 1-based
+                    thresholdsb.push_back   (xb[i]);// make new thresholds vector
+                }
+            }
+            nThresholdsb=thresholdsb.size();
+            
+            double * logliks = (double *) malloc((nThresholdsb) * sizeof(double));
+
+            // Compute B and r, which are saved in Z and Y
+            if (p>1) _preprocess(Zb,Yb);
+
+            if(model==5) { 
+                   e_hat=Mstep_search(Zb, Yb, xb, wb, 
+                                 thresholdIdxb.data(), thresholdsb, nThresholdsb,
+                                 Bcusum, rcusum, Wcusum,
+                                 logliks);                              
+            } else PRINTF("wrong \n");
+                
+            // fit model at the selected threshold and save results in coef 
+            // since Xb and Yb are changed during search, we need to copy from X 
+            for (i=0; i<nSub; i++) { 
+                
+                Yb(i,0)=Y(index[i]-1,0); 
+                for (j=0; j<p-1; j++) Xbreg(i,j)=X(index[i]-1,j);
+                
+                // thresholded covariates
+                if (model==5) {     // step model               
+                    if(x[index[i]-1]>e_hat) Xbreg(i,p-1) =1; else Xbreg(i,p-1) = 0; // (x-e)-                 
+                } else PRINTF("wrong \n");               
+                 
+                // add weight to thresholded covariates
+                for (j=p-1; j<p_coef-1; j++) Xbreg(i,j)=Xbreg(i,j)*wb[i];
+            }
+            
+            
+            Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
+            for (int j=0; j<p_coef-1; j++) coef[b*p_coef+j]=beta_hat[j];                         
+            coef[(b+1)*p_coef-1] = e_hat;
+            
+            free(logliks);
+        
+            //PRINTF("Xbreg\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xbreg(i,j)); PRINTF("\n");} 
+            //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
+            //for (int j=0; j<p_coef-1; j++) PRINTF("%f ", beta_hat[j]); PRINTF("\n");
+            //for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
+        }
+        
+        UNPROTECT(1);
+        return _coef;
+        
     }
     
-}
+} // end function
+
 
 }  // end extern C
 
 #endif
-//#endif
+
+
