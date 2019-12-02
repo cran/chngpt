@@ -70,7 +70,7 @@ double M33c_search(
     vector<double> x_cpy(n);
     for(i=0; i<n; i++) x_cpy[i] = x[i];        
     
-    BcusumR(n-1,_) = B(n-1,_)* w[n-1];    
+    if(p>1) BcusumR(n-1,_) = B(n-1,_)* w[n-1];    
     rcusumR[n-1] = r(n-1)* w[n-1];        
     WcusumR[n-1] = w[n-1]* w[n-1];              
     xcusumR[n-1]    = x[n-1] * w[n-1]* w[n-1]; // xcusumR is the last columnn of BcusumR, but perhaps better to be its own variable
@@ -80,10 +80,10 @@ double M33c_search(
     x5cusumR[n-1]   = pow(x[n-1],5) * w[n-1]* w[n-1];        
     xrcusumR[n-1]   = x[n-1] * r(n-1)* w[n-1];        
     x2rcusumR[n-1]  = pow(x[n-1],2) * r(n-1)* w[n-1];        
-    xBcusumR(n-1,_) = x[n-1] * B(n-1,_)* w[n-1];    
-    x2BcusumR(n-1,_)= pow(x[n-1],2) * B(n-1,_)* w[n-1];    
+    if(p>1) xBcusumR(n-1,_) = x[n-1] * B(n-1,_)* w[n-1];    
+    if(p>1) x2BcusumR(n-1,_)= pow(x[n-1],2) * B(n-1,_)* w[n-1];    
     for (i=n-2; i>=0; i--) {
-        BcusumR(i,_)  = BcusumR(i+1,_)    + B(i,_)* w[i]; 
+        if(p>1) BcusumR(i,_)  = BcusumR(i+1,_)    + B(i,_)* w[i]; 
         rcusumR[i]    = rcusumR[i+1]      + r(i)* w[i]; 
         WcusumR[i]    = WcusumR[i+1]      + w[i]* w[i]; 
         xcusumR[i]    = xcusumR[i+1]      + x[i]* w[i]* w[i]; 
@@ -93,12 +93,12 @@ double M33c_search(
         x5cusumR[i]   = x5cusumR[i+1]     + pow(x[i],5)* w[i]* w[i]; 
         xrcusumR[i]   = xrcusumR[i+1]     + x[i]* r(i)* w[i]; 
         x2rcusumR[i]  = x2rcusumR[i+1]    + pow(x[i],2)* r(i)* w[i]; 
-        xBcusumR(i,_) = xBcusumR(i+1,_)   + x[i]* B(i,_)* w[i]; 
-        x2BcusumR(i,_)= x2BcusumR(i+1,_)  + pow(x[i],2)* B(i,_)* w[i]; 
+        if(p>1) xBcusumR(i,_) = xBcusumR(i+1,_)   + x[i]* B(i,_)* w[i]; 
+        if(p>1) x2BcusumR(i,_)= x2BcusumR(i+1,_)  + pow(x[i],2)* B(i,_)* w[i]; 
     }
     
     
-    Bcusum(0,_) = B(0,_)* w[0];    
+    if(p>1) Bcusum(0,_) = B(0,_)* w[0];    
     rcusum[0] = r(0)* w[0];        
     Wcusum[0] = w[0]* w[0];              
     xcusum[0]    = x[0] * w[0]* w[0]; 
@@ -108,10 +108,10 @@ double M33c_search(
     x5cusum[0]   = pow(x[0],5) * w[0]* w[0];        
     xrcusum[0]   = x[0] * r(0)* w[0];        
     x2rcusum[0]  = pow(x[0],2) * r(0)* w[0];        
-    xBcusum(0,_) = x[0] * B(0,_)* w[0];    
-    x2Bcusum(0,_)= pow(x[0],2) * B(0,_)* w[0];    
+    if(p>1) xBcusum(0,_) = x[0] * B(0,_)* w[0];    
+    if(p>1) x2Bcusum(0,_)= pow(x[0],2) * B(0,_)* w[0];    
     for (i=1; i<n; i++) {
-        Bcusum(i,_)  = Bcusum(i-1,_)    + B(i,_)* w[i]; 
+        if(p>1) Bcusum(i,_)  = Bcusum(i-1,_)    + B(i,_)* w[i]; 
         rcusum[i]    = rcusum[i-1]      + r(i)* w[i]; 
         Wcusum[i]    = Wcusum[i-1]      + w[i]* w[i]; 
         xcusum[i]    = xcusum[i-1]      + x[i]* w[i]* w[i]; 
@@ -121,8 +121,8 @@ double M33c_search(
         x5cusum[i]   = x5cusum[i-1]     + pow(x[i],5)* w[i]* w[i]; 
         xrcusum[i]   = xrcusum[i-1]     + x[i]* r(i)* w[i]; 
         x2rcusum[i]  = x2rcusum[i-1]    + pow(x[i],2)* r(i)* w[i]; 
-        xBcusum(i,_) = xBcusum(i-1,_)   + x[i]* B(i,_)* w[i]; 
-        x2Bcusum(i,_)= x2Bcusum(i-1,_)  + pow(x[i],2)* B(i,_)* w[i]; 
+        if(p>1) xBcusum(i,_) = xBcusum(i-1,_)   + x[i]* B(i,_)* w[i]; 
+        if(p>1) x2Bcusum(i,_)= x2Bcusum(i-1,_)  + pow(x[i],2)* B(i,_)* w[i]; 
     }
     
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Bcusum(i,j)); PRINTF("\n");}        

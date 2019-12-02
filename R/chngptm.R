@@ -10,7 +10,8 @@ chngptm = function(formula.1, formula.2, family, data,
   formula.strat=NULL,
   weights=NULL, 
   offset=NULL,
-  est.method=c("default","fastgrid2","grid","smoothapprox"), 
+  est.method=c(
+    "default","fastgrid2","fastgrid","grid","smoothapprox"), 
   var.type=c("default","none","robust","model","bootstrap","all"), aux.fit=NULL,  # robusttruth is for development only
   lb.quantile=.1, ub.quantile=.9, grid.search.max=Inf, 
   test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
@@ -26,12 +27,13 @@ chngptm = function(formula.1, formula.2, family, data,
     threshold.type<-match.arg(type)  # change name from type to threshold.type
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
+    if (est.method=="fastgrid") est.method="fastgrid2" # keep fastgrid only for backward compatibility
     
     if(!is.character(family)) stop("Please enter a string as family, e.g. \"gaussian\"")
     family=tolower(family)
         
     # remove missing observations
-    subset. = complete.cases(model.frame(update(formula.1, formula.2), data, na.action=na.pass))
+    subset. = complete.cases(model.frame(formula.1, data, na.action=na.pass)) & complete.cases(model.frame(formula.2, data, na.action=na.pass))
     data=data[subset.,,drop=FALSE]
     
     # set b.search
@@ -78,7 +80,6 @@ chngptm = function(formula.1, formula.2, family, data,
                   
     #### est.method
     # smoothapprox cannot work when lhs of formula.1 is cbind() 
-    # for now, fastgrid and C version of grid is implemented only for the following scenarios
     if ((!family%in%c("binomial","gaussian")) & est.method=="smoothapprox") stop ("smoothapprox only implemented for binomial and guassian families and when lhs of formula is not cbind()")
     if(!fastgrid.ok & est.method%in%c("fastgrid","fastgrid2")) {
         warning ("Fast grid search only implemented for guassian family and hinge/upperhinge/segmented models without interaction. Switching to grid search")
@@ -200,7 +201,7 @@ chngptm = function(formula.1, formula.2, family, data,
     
     # deal with cbind() in lhs in logistic regression 
     # convert cbind() to single column and update weights (but not chngpt.glm.weights, b/c formula is still cbind())
-    if(is.matrix(y)) {
+    if(is.matrix(y) & family=="binomial") {
         n.tmp <- y[,1]+y[,2]
         y <- ifelse(n.tmp == 0, 0, y[,1]/n.tmp)        
         weights <- n.tmp*weights
@@ -1169,6 +1170,10 @@ get.chngpts=function (chngpt.var.sorted, lb.quantile, ub.quantile, n.chngpts, st
         if (length(chngpts)>n.chngpts) {
             stop("subsetting chngpts not supported for now for stratified")
         } 
+    }
+    # if there are many duplicated values, the min and max may be part of chngpts. that is a problem
+    if(chngpts[1]==chngpt.var.sorted[1] | chngpts[length(chngpts)]==last(chngpt.var.sorted)) {
+        stop("There are too many duplicated smallest or largest values. Please try larger lb.quantile or smaller ub.quantile.")
     }
     
     chngpts

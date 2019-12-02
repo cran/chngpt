@@ -11,6 +11,37 @@ if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_c
 print(paste0("tol: ", tolerance), quote=FALSE)
 verbose = FALSE
 
+print("########  offset ")
+for (type in c("hinge","quadhinge")) {
+    est.methods=c("grid","fastgrid2")
+    out=sapply(est.methods, function(est.method){
+        fit.0=chngptm(formula.1=pressure~-1, formula.2=~temperature, pressure, type=type, family="gaussian", est.method=est.method, var.type="none", offset=rep(1,nrow(pressure)), ci.bootstrap.size=1, verbose=verbose, weights=c(rep(1,9), rep(5,10)))
+        if(verbose) plot(fit.0); fit.0
+        c(
+          fit.0$logliks[1],
+          diff(fit.0$logliks)[1:3],
+          fit.0$coefficients,
+          fit.0$vcov$boot.samples[1,]
+        )
+    })    
+    if(verbose) print(out)
+    for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
+}
+
+
+print("########  step model m out of n subsampling")
+dat=sim.chngpt("thresholded", threshold.type="step", family="gaussian", n=20, seed=1, beta=-log(.67), alpha=1)
+est.method="fastgrid2"
+fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", m.out.of.n=10, ci.bootstrap.size=10, verbose=verbose)
+if (verbose) plot(fit.0); fit.0
+out=c(
+  fit.0$logliks[1],
+  diff(fit.0$logliks)[1:3],
+  fit.0$coefficients,
+  fit.0$vcov$boot.samples[1,]
+)    
+checkEqualsNumeric(out, c(35.52723714,-0.15529784,-0.18206414,0.02324697,0.99337520,0.38349876,0.48532422,4.67409558,1.03713972,0.27900925,0.65087769,  5.32027458), tolerance=tolerance)
+
 
 print("########  step")
 dat=sim.chngpt("thresholded", threshold.type="step", family="gaussian", n=250, seed=1, beta=-log(.67), alpha=1)
@@ -28,22 +59,6 @@ for (est.method in est.methods) {
 }    
 colnames(out)=est.methods
 for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)
-
-
-print("########  step model m out of n subsampling")
-dat=sim.chngpt("thresholded", threshold.type="step", family="gaussian", n=20, seed=1, beta=-log(.67), alpha=1)
-est.method="fastgrid2"
-fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", m.out.of.n=10, ci.bootstrap.size=10, verbose=verbose)
-if (verbose) plot(fit.0); fit.0
-out=c(
-  fit.0$logliks[1],
-  diff(fit.0$logliks)[1:3],
-  fit.0$coefficients,
-  fit.0$vcov$boot.samples[1,]
-)    
-checkEqualsNumeric(out, c(35.52723714,-0.15529784,-0.18206414,0.02324697,0.99337520,0.38349876,0.48532422,4.67409558,1.03713972,0.27900925,0.65087769,  5.32027458), tolerance=tolerance)
-
-
 
 
 print("########  segmented hinge upperhinge") 
@@ -219,23 +234,6 @@ for(t in c("hinge", "upperhinge")){
 }
 
 
-
-print("########  offset ")
-for (type in c("hinge","quadhinge")) {
-    est.methods=c("grid","fastgrid2")
-    out=sapply(est.methods, function(est.method){
-        fit.0=chngptm(formula.1=pressure~-1, formula.2=~temperature, pressure, type=type, family="gaussian", est.method=est.method, var.type="bootstrap", offset=rep(1,nrow(pressure)), ci.bootstrap.size=1, verbose=verbose, weights=c(rep(1,9), rep(5,10)))
-        if(verbose) plot(fit.0); fit.0
-        c(
-          fit.0$logliks[1],
-          diff(fit.0$logliks)[1:3],
-          fit.0$coefficients,
-          fit.0$vcov$boot.samples[1,]
-        )
-    })    
-    if(verbose) print(out)
-    for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
-}
 
 
 print("########  thinned thresholds, fastgrid will not be suppported")

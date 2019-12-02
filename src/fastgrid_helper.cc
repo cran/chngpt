@@ -174,11 +174,11 @@ Eigen eigen (const Matrix<>& A, bool vectors=true)
 
 
 void _preprocess(Matrix<double, Row>& Z, Matrix<double, Row>& Y) {
+    int p=Z.cols();
     Matrix<> A = invpd(crossprod(Z));
     Eigen Aeig = eigen(A);
-    int p=Z.cols()+1;        
-    Matrix <double,Row,Concrete> A_eig (p-1, p-1, true, 0);
-    for (int j=0; j<p-1; j++) A_eig(j,j)=sqrt(Aeig.values(j));
+    Matrix <double,Row,Concrete> A_eig (p, p, true, 0);
+    for (int j=0; j<p; j++) A_eig(j,j)=sqrt(Aeig.values(j));
     Y = Y - Z * A * (t(Z) * Y);                       // save r in Y
     Z = Z * (Aeig.vectors * A_eig * t(Aeig.vectors)); // save B in Z
 }

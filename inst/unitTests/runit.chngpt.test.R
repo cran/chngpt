@@ -23,8 +23,8 @@ df1 <- data.frame(x = x1, y)
 df2 <- data.frame(x = x2, y)
 
 test1 <- chngpt.test(y~1, ~x, data = df, type = "step", family = "gaussian")
-test2 <- chngpt.test(y~1, ~x, data = df1, type = "step", family = "gaussian")
-test3 <- chngpt.test(y~1, ~x, data = df2, type = "step", family = "gaussian")
+test2 <- chngpt.test(y~1, ~x, data = df1, type = "step", family = "gaussian", lb.quantil=.2)
+test3 <- chngpt.test(y~1, ~x, data = df2, type = "step", family = "gaussian", lb.quantil=.2)
 checkEqualsNumeric(c(test2$p.value,test3$p.value), c(0,0), tolerance=tolerance) 
 
 

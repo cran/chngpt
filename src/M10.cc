@@ -50,12 +50,12 @@ double M10_search(
     int n=B.rows();
     int p=B.cols()+1;
     
-    Bcusum(0,_) = B(0,_)* w[0];    
+    if(p>1) Bcusum(0,_) = B(0,_)* w[0];    // if we take out the if condition, there will be memory issue when p is 1
     xcusum[0] = x[0]* w[0]* w[0];    
     rcusum[0] = r(0)* w[0];        
     Wcusum[0] = w[0]* w[0];              
     for (i=1; i<n; i++) {
-        Bcusum(i,_)    = Bcusum(i-1,_)    + B(i,_)* w[i]; 
+        if(p>1) Bcusum(i,_)    = Bcusum(i-1,_)    + B(i,_)* w[i]; 
         xcusum[i]      = xcusum[i-1]      + x[i]* w[i]* w[i]; 
         rcusum[i]      = rcusum[i-1]      + r(i)* w[i]; 
         Wcusum[i]      = Wcusum[i-1]      + w[i]* w[i]; 

@@ -159,8 +159,8 @@ data=sim.chngpt("thresholdedItxn", threshold.type="step", family="binomial", n=2
 
 fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0.1, ub.quantile=0.9, est.method="smoothapprox")
 checkEqualsNumeric(fit$coefficients, c(-0.5252114,0.2145485,0.3734826,0.5539497,6.1272134), tolerance=tolerance)
-fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0, ub.quantile=1, est.method="grid", verbose=verbose)
-checkEqualsNumeric(fit$coefficients, c(-0.4815401,0.3042468,16.0476083,-0.3042468,8.0394665), tolerance=tolerance)
+fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="step",      lb.quantile=0.1, ub.quantile=0.9, est.method="grid", verbose=verbose)
+checkEqualsNumeric(fit$coefficients, c(-0.5448914,0.1977217,0.4542935,0.6316745,5.9852531), tolerance=tolerance)
 
 fit = chngptm (y~z, ~x*z, family="binomial", data, tol=1e-4, maxit=1e3, type="hinge",     lb.quantile=0.1, ub.quantile=0.9, est.method="grid")
 checkEqualsNumeric(fit$coefficients, c(-0.5368853,0.2618009,0.2526734,0.1231553,5.3939234), tolerance=tolerance)

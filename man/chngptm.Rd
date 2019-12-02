@@ -24,7 +24,7 @@ chngptm (formula.1, formula.2, family, data, type = c("hinge",
          "M21", "M12", "M22", "M22c", "M31", "M13", "M33c",
          "segmented", "segmented2", "step", "stegmented"),
          formula.strat = NULL, weights = NULL, offset = NULL,
-         est.method = c("default", "fastgrid2", "grid",
+         est.method = c("default", "fastgrid2", "fastgrid", "grid",
          "smoothapprox"), var.type =
          c("default", "none", "robust", "model", "bootstrap",
          "all"), aux.fit = NULL, lb.quantile = 0.1, ub.quantile
@@ -63,7 +63,7 @@ lincomb(object, comb, alpha=0.05)
   \item{data}{data frame.}
   \item{type}{types of threshold effects. segmented2 differs from segmented in parameterization. }
   \item{b.transition}{Numeric. Controls whether threshold model or smooth transition model. Default to Inf, which correponds to threshold model}
-  \item{est.method}{default: estimation algorithm will be chosen optimally; fastgrid2: a super fast grid search algorithm, limited to linear regression; grid: plain grid search, works for almost all models; smoothapprox: approximates the likelihood function using a smooth function, only works for some models.}
+  \item{est.method}{default: estimation algorithm will be chosen optimally; fastgrid2: a super fast grid search algorithm, limited to linear regression; grid: plain grid search, works for almost all models; smoothapprox: approximates the likelihood function using a smooth function, only works for some models. fastgrid = fastgrid2, kept for backward compatibility}
   \item{var.type}{string. Different methods for estimating covariance matrix and constructing confidence intervals}
   \item{aux.fit}{a model fit object that is needed for model-robust estimation of covariance matrix}
   \item{grid.search.max}{The maximum number of grid points used in grid search. When doing fast grid search, grid.search.max is set to Inf internally because it does not take more time to examine all potential thresholds.}
@@ -173,24 +173,12 @@ fit.2a=chngptm(formula.1=cbind(success,failure)~z, formula.2=~x, family="binomia
     type="step")
 
 
-# coxph example
-library(survival)
-dat.3 <- data.frame(time=c(4,3,1,1,2,2,3), status=c(1,1,1,0,1,1,0), x=c(0,2,1,1,1,0,0), 
-    sex=c(0,0,0,0,1,1,1)) 
-system.time({
-fit.3=chngptm(formula.1=Surv(time, status)~1, formula.2=~x, data=dat.3, family="coxph",
-    type="segmented", var.type="bootstrap", ci.bootstrap.size=10, ncpus=1)
-})
-summary(fit.3)
-
-
 # Poisson example
-counts <- c(18,17,15,20,10,20,25,13,12)
-outcome <- as.integer(gl(3,1,9))
-treatment <- gl(3,3)
-print(d.AD <- data.frame(treatment, outcome, counts))
-fit.4=chngptm(formula.1=counts ~ treatment, formula.2=~outcome, data=d.AD, family="poisson", 
-    type="segmented", var.type="bootstrap", verbose=1, ci.bootstrap.size=10)
+counts <- c(18,17,15,20,10,20,25,13,12,33,35)
+x <- 1:length(counts)
+print(d.AD <- data.frame(x, counts))
+fit.4=chngptm(formula.1=counts ~ 1, formula.2=~x, data=d.AD, family="poisson", 
+    type="segmented", var.type="bootstrap", verbose=1, ci.bootstrap.size=1)
 summary(fit.4)
 
 
@@ -198,6 +186,13 @@ summary(fit.4)
 
 \dontrun{
 # Not run because otherwise the examples take >5s and that is a problem for R CMD check
+
+# coxph example
+library(survival)
+fit=chngptm(formula.1=Surv(time, status) ~ ph.ecog, formula.2=~age, data=lung, family="coxph",
+    type="segmented", var.type="bootstrap", ci.bootstrap.size=10)
+summary(fit)
+
 
 # one interaction term (mtcars is part of R default installation)
 # est.method will be grid as fastgrid not available for models with interaction terms yet

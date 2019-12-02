@@ -100,7 +100,7 @@ SEXP fastgrid2_gaussian(
     // for higher order models we need to define more variables. 
     // to make it more efficient for the basic segmented models, we change n to nsmall
     int nsmall = model>10?n:1;
-    Matrix <double,Row,Concrete> xBcusum (nsmall, p-1), x2Bcusum (nsmall, p), BcusumR (nsmall, p), xBcusumR (nsmall, p), x2BcusumR (nsmall, p);
+    Matrix <double,Row,Concrete> xBcusum (nsmall, p-1), x2Bcusum (nsmall, p-1), BcusumR (nsmall, p-1), xBcusumR (nsmall, p-1), x2BcusumR (nsmall, p-1);
     vector<double> x2cusum (nsmall), x3cusum (nsmall), xrcusum (nsmall), x4cusum (nsmall), x5cusum (nsmall), x2rcusum (nsmall), rcusumR(nsmall);
     vector<double> WcusumR(nsmall), xcusumR(nsmall), x2cusumR(nsmall), x3cusumR(nsmall), x4cusumR(nsmall), x5cusumR(nsmall), xrcusumR(nsmall), x2rcusumR(nsmall); 
 
@@ -112,11 +112,14 @@ SEXP fastgrid2_gaussian(
         double *logliks=REAL(_logliks);       
 
         // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
-        double yhy = ((t(Y) * Z) * invpd(crossprod(Z)) * (t(Z) * Y))(0);
+        double yhy = 0;
         
         // Step 2. Compute B and r, which are saved in Z and Y
-        if (p>1) _preprocess(Z,Y);
-        
+        if (p>1) {
+            yhy = ((t(Y) * Z) * invpd(crossprod(Z)) * (t(Z) * Y))(0);
+            _preprocess(Z,Y);
+        }
+            
         for(i=0; i<nThresholds; i++) thresholds[i]=x[thresholdIdx[i]-1];
 
         if(model==5) { 
@@ -209,7 +212,7 @@ SEXP fastgrid2_gaussian(
             
             // compute Y'HY. This is not needed to find e_hat, but good to have for comparison with other estimation methods
             double yhyb=0;
-            if(verbose>0) yhyb = ((t(Yb) * Zb) * invpd(crossprod(Zb)) * (t(Zb) * Yb))(0);
+            if(verbose>0 && p>1) yhyb = ((t(Yb) * Zb) * invpd(crossprod(Zb)) * (t(Zb) * Yb))(0);
     
             // Compute B and r, which are saved in Z and Y
             if (p>1) _preprocess(Zb,Yb);
@@ -328,13 +331,13 @@ SEXP fastgrid2_gaussian(
         int p_coef=0;
         if(model==5) { 
             p_coef=p+1; 
-        } else PRINTF("wrong \n");;
+        } else PRINTF("wrong model in m-out-of-n bootstrap\n");;
                 
         SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p_coef)));
         double *coef=REAL(_coef);    
 
         // redefine these variables with nSub rows
-        Matrix <double,Row,Concrete> Bcusum (nSub, p);
+        Matrix <double,Row,Concrete> Bcusum (nSub, p-1);
         vector<double> rcusum(nSub), Wcusum(nSub); 
     
         Matrix <double,Row,Concrete> Zb(nSub,p-1), Xbreg(nSub,p_coef-1), Yb(nSub,1);

@@ -59,23 +59,23 @@ double M20_search(
     
     // for hinge or segmented, compute cusum of B and r in the reverse order
     // for upperhinge, compute cusum of B and r in the forward order
-    Bcusum(0,_) = B(0,_)* w[0];    
+    if(p>1) Bcusum(0,_) = B(0,_)* w[0];    
     rcusum[0] = r(0)* w[0];        
     Wcusum[0] = w[0]* w[0];              
     xcusum[0]    = x[0] * w[0]* w[0]; // xcusum is the last columnn of Bcusum, but perhaps better to be its own variable
     x2cusum[0]   = pow(x[0],2) * w[0]* w[0];        
     x3cusum[0]   = pow(x[0],3) * w[0]* w[0];        
     xrcusum[0]   = x[0] * r(0)* w[0];        
-    xBcusum(0,_) = x[0] * B(0,_)* w[0];    
+    if(p>1) xBcusum(0,_) = x[0] * B(0,_)* w[0];    
     for (i=1; i<n; i++) {
-        Bcusum(i,_)  = Bcusum(i-1,_)    + B(i,_)* w[i]; 
+        if(p>1) Bcusum(i,_)  = Bcusum(i-1,_)    + B(i,_)* w[i]; 
         rcusum[i]    = rcusum[i-1]      + r(i)* w[i]; 
         Wcusum[i]    = Wcusum[i-1]      + w[i]* w[i]; 
         xcusum[i]    = xcusum[i-1]      + x[i]* w[i]* w[i]; 
         x2cusum[i]   = x2cusum[i-1]     + pow(x[i],2)* w[i]* w[i]; 
         x3cusum[i]   = x3cusum[i-1]     + pow(x[i],3)* w[i]* w[i]; 
         xrcusum[i]   = xrcusum[i-1]     + x[i]* r(i)* w[i]; 
-        xBcusum(i,_) = xBcusum(i-1,_)   + x[i]* B(i,_)* w[i]; 
+        if(p>1) xBcusum(i,_) = xBcusum(i-1,_)   + x[i]* B(i,_)* w[i]; 
     }    
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Bcusum(i,j)); PRINTF("\n");}        
     //for (i=0; i<n; i++) PRINTF("%f ", rcusum[i]); PRINTF("\n");

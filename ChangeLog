@@ -186,3 +186,10 @@
     * add support for weight in fastgrid2
     * replace invpd with chol_solve in the C functions, the former gives weird results sometimes. See M20.cc for an example. 
     * refactor C code
+
+2019-11-26
+    * fix a memory issue from inverting a 0-column matrix when the design matrix has 0 columns
+
+2019-11-30
+    * Add a check in get.chngpts() so that we do not have the min to be the first change point
+    * Change direct assignment to indirect copy in _preprocess (fastgrid_helper.cc)

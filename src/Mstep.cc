@@ -58,11 +58,11 @@ double Mstep_search(
     int n=B.rows();
     int p=B.cols()+1;
     
-    Bcusum(n-1,_) = B(n-1,_)*w[n-1]; 
+    if(p>1) Bcusum(n-1,_) = B(n-1,_)*w[n-1]; 
     rcusum[n-1] = r(n-1)*w[n-1];     
     Wcusum[n-1] = w[n-1]*w[n-1];             
     for (i=n-2; i>=0; i--) {
-        Bcusum(i,_)    = Bcusum(i+1,_)    + B(i,_)* w[i]; 
+        if(p>1) Bcusum(i,_)    = Bcusum(i+1,_)    + B(i,_)* w[i]; 
         rcusum[i]      = rcusum[i+1]      + r(i)* w[i]; 
         Wcusum[i]      = Wcusum[i+1]      + w[i]* w[i]; 
     }
