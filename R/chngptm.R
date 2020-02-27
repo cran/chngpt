@@ -3,9 +3,9 @@
 #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
 chngptm = function(formula.1, formula.2, family, data, 
   type=c(
-      "hinge","quadhinge","cubichinge","x4hinge",
-      "upperhinge","quadupperhinge","cubicupperhinge","x4upperhinge",
-      "M21","M12","M22","M22c","M31","M13","M33c",
+      "hinge","M02","M03","M04", # hinge models
+      "upperhinge","M20","M30","M40",# upper hinge models
+      "M21","M12","M21c","M12c","M22","M22c","M31","M13","M33c", # segmented models with higher order trends
       "segmented","segmented2","step","stegmented"), # segmented2 is the model studied in Cheng (2008)
   formula.strat=NULL,
   weights=NULL, 
@@ -75,7 +75,7 @@ chngptm = function(formula.1, formula.2, family, data,
     z.1 = formula.2.dat[,z.1.name] # if the intersection is a null set, z.1 is a matrix of n x 0 dimension
     
     fastgrid.ok = family %in% c("gaussian") & 
-                  threshold.type %in% c("hinge","upperhinge","segmented","quadupperhinge","quadhinge","cubicupperhinge","cubichinge","M21","M12","M22","M22c","M31","M13","M33c","step") & 
+                  threshold.type %in% c("hinge","upperhinge","segmented","M20","M02","M30","M03","M21","M12","M21c","M12c","M22","M22c","M31","M13","M33c","step") & 
                   !has.itxn
                   
     #### est.method
@@ -100,24 +100,22 @@ chngptm = function(formula.1, formula.2, family, data,
     }
     
     # convert hinge models (M0x) to upperhinge models (Mx0)
+    # var.model and var.robust has not been fixed and won't work when hinge is converted to upper hinge
     hinge.to.upperhinge=FALSE
     if(!var.type %in% c("all","robust","model") & est.method!="smoothapprox") {
-    # var.model and var.robust has not been fixed and won't work when hinge is converted to upper hinge
-        if (endsWith(threshold.type, "hinge") & !endsWith(threshold.type, "upperhinge") | threshold.type %in% c("M12","M13")) {
-            hinge.to.upperhinge=TRUE
-            if (threshold.type == "hinge") threshold.type= "upperhinge"
-            if (threshold.type == "quadhinge") threshold.type= "quadupperhinge"
-            if (threshold.type == "cubichinge") threshold.type= "cubicupperhinge"
-            if (threshold.type == "x4hinge") threshold.type= "x4upperhinge"
-            if (threshold.type == "M12") threshold.type= "M21"
-            if (threshold.type == "M13") threshold.type= "M31"        
-        }
+        if (threshold.type == "hinge") {hinge.to.upperhinge=TRUE; threshold.type= "upperhinge"}
+        if (threshold.type == "M02")   {hinge.to.upperhinge=TRUE; threshold.type= "M20"}
+        if (threshold.type == "M03")   {hinge.to.upperhinge=TRUE; threshold.type= "M30"}
+        if (threshold.type == "M04")   {hinge.to.upperhinge=TRUE; threshold.type= "M40"}
+        if (threshold.type == "M12")   {hinge.to.upperhinge=TRUE; threshold.type= "M21"}
+        if (threshold.type == "M12c")  {hinge.to.upperhinge=TRUE; threshold.type= "M21c"}
+        if (threshold.type == "M13")   {hinge.to.upperhinge=TRUE; threshold.type= "M31"}        
     }
     if(hinge.to.upperhinge) data[[chngpt.var.name]]=-data[[chngpt.var.name]]    
     
     if(fastgrid.ok) {
-        imodel=switch(threshold.type, upperhinge=10, segmented=10, quadupperhinge=20, M21=20, M12=20, M22=22, M22c=224, cubicupperhinge=30, M31=30, M13=30, M33c=334, 
-                                  step=5, x4upperhinge=NA, stop("wrong imodel"))
+        imodel=switch(threshold.type, upperhinge=10, segmented=10, M20=20, M21=20, M21c=204, M22=22, M22c=224, M30=30, M31=30, M33c=334, 
+                                  step=5, M40=NA, stop("wrong imodel"))
     } else imodel=NA
                 
     chngpt.var = data[[chngpt.var.name]]
@@ -161,7 +159,7 @@ chngptm = function(formula.1, formula.2, family, data,
     formula.new = formula.1
     # add the non-thresholded version of x if needed
     # include.x works through formula.new in grid search and through design matrix in fast grid search
-    include.x=threshold.type %in% c("segmented","segmented2","stegmented","M21","M12","M31","M13")
+    include.x=threshold.type %in% c("segmented","segmented2","stegmented","M21","M21c","M12","M31","M13")
     if(include.x) formula.new = update(formula.new, as.formula("~.+"%.%chngpt.var.name)) 
     # add the components dependent on threshold
     if (!has.itxn) {
@@ -233,50 +231,51 @@ chngptm = function(formula.1, formula.2, family, data,
         
     # threshold candidates
     chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,n.chngpts=grid.search.max, stratified.by.sorted=stratified.by.sorted)
-    
+    if(verbose) myprint(chngpts)
     
     grid.search=function(){
         if(verbose) myprint(fastgrid.ok, est.method)
         
         if(fastgrid.ok & est.method%in%c("gridC", "fastgrid", "fastgrid2")) {
         
-#            # this can be used to debug C code for V'V
-#            e1=chngpt.var.sorted[11]; e2=chngpt.var.sorted[12]            
-#            e=e1
+#            # for fastgrid2 debugging
+#            e=chngpts[1]; e2=chngpts[2]            
 #            ve=(chngpt.var.sorted-e)*(chngpt.var.sorted<e)
 #            ue=(chngpt.var.sorted-e)*(chngpt.var.sorted>e)
-#            Ve1=cbind((chngpt.var.sorted-e), (chngpt.var.sorted-e)**2, ve**3, ue**3)
-#            e=e2
-#            ve=(chngpt.var.sorted-e)*(chngpt.var.sorted<e)
-#            ue=(chngpt.var.sorted-e)*(chngpt.var.sorted>e)
-#            Ve2=cbind((chngpt.var.sorted-e), (chngpt.var.sorted-e)**2, ve**3, ue**3)
-#            t(Ve1)%*%Ve1
-#            t(Ve2)%*%Ve2
-           
-        
+#            Ve1=cbind(ve**2) #(chngpt.var.sorted-e), (chngpt.var.sorted-e)**2, ve**3, ue**3)
+#            print(t(Ve1)%*%Ve1)
+##            e=e2
+##            ve=(chngpt.var.sorted-e)*(chngpt.var.sorted<e)
+##            ue=(chngpt.var.sorted-e)*(chngpt.var.sorted>e)
+##            Ve2=cbind((chngpt.var.sorted-e), (chngpt.var.sorted-e)**2, ve**3, ue**3)
+##            print(t(Ve2)%*%Ve2)
+#            
+#            desg=cbind(Z.sorted, if(include.x) chngpt.var.sorted)
+#            #str(desg);# stop("debugging")
+#            A <- solve(t(desg) %*% desg)
+#            H <- desg %*% A %*% t(desg)
+#            r <- as.numeric((diag(n)-H) %*% y.sorted)
+#            print(t(Ve1) %*% r)
+#            
+#            # find sqrt of A
+#            if (ncol(A)==1) {
+#                A.sqrt=sqrt(A)
+#            } else {
+#                a.eig <- eigen(A)   
+#                A.sqrt <- a.eig$vectors %*% diag(sqrt(a.eig$values)) %*% t(a.eig$vectors) # solve can be replaced by t b/c A is symmetrical
+#            }
+#            B = desg %*% A.sqrt                                    
+#            
+#            #r %*% Ve1 %*% solve(t(Ve1)%*%Ve1 - t(Ve1)%*%B%*%t(B)%*%Ve1) %*% t(r %*% Ve1) - r %*% Ve2 %*% solve(t(Ve2)%*%Ve2 - t(Ve2)%*%B%*%t(B)%*%Ve2) %*% t(r %*% Ve2)
+#            
+#            print(t(Ve1)%*%B)
+                
+    
 #            # gridC:     Only used for a fair comparison of speed with fastgrid. It is not as robust as grid, which is an R implementation that handles weights more easily
 #            # for upperhinge fastgrid2, get.liks.upperhinge is an R implementation for a simple case: linear, without weights. It is even slower than grid search, 
 #            # but it implements a good algorithm and can be used to debug fastgrid2
 #            logliks=get.liks.upperhinge (y.sorted,Z.sorted,chngpt.var.sorted,chngpts)   
         
-#            # for fastgrid2 debugging
-#            A <- solve(t(Z.sorted) %*% Z.sorted)
-#            H <- Z.sorted %*% A %*% t(Z.sorted)
-#            r <- as.numeric((diag(n)-H) %*% y.sorted)
-#            # find sqrt of A
-#            a.eig <- eigen(A)   
-#            A.sqrt <- a.eig$vectors %*% diag(sqrt(a.eig$values)) %*% t(a.eig$vectors) # solve can be replaced by t b/c A is symmetrical
-#            B = Z.sorted %*% A.sqrt                                    
-            
-#            r %*% Ve1 %*% solve(t(Ve1)%*%Ve1 - t(Ve1)%*%B%*%t(B)%*%Ve1) %*% t(r %*% Ve1) - r %*% Ve2 %*% solve(t(Ve2)%*%Ve2 - t(Ve2)%*%B%*%t(B)%*%Ve2) %*% t(r %*% Ve2)
-#            
-#            t(Ve1)%*%Ve1
-#            t(Ve2)%*%Ve2
-#            t(Ve1)%*%B
-#            t(Ve2)%*%B
-#            t(r %*% Ve1)
-#            t(r %*% Ve2)
-            
 #                # for fastgrid2 development, the first two argments may be replaced by:
 #                cbind(B, chngpt.var.sorted), #design matrix, the last column is to be used as (x-e)+ in the C program
 #                as.double(r), 
@@ -293,7 +292,7 @@ chngptm = function(formula.1, formula.2, family, data,
                     , as.double(y.sorted-o.sorted) # note that this way of handling offset only works for linear regression
                     , as.double(w.sorted)
                     , as.integer(attr(chngpts,"index"))
-                    , as.integer(verbose)
+                    , ifelse(verbose>1, as.integer(verbose), 0)
                     , 0 # bootstrap size
                     , 0 # subsampling sample size
                 )  
@@ -311,7 +310,7 @@ chngptm = function(formula.1, formula.2, family, data,
                     as.double(ub.quantile),
                     0,# bootstrap size
                     T
-                    #threshold.type %in% c("upperhinge","quadupperhinge","cubicupperhinge","M21","M31"
+                    #threshold.type %in% c("upperhinge","M20","M30","M21","M31"
                 )
                 logliks=matrix(logliks, nrow=length(chngpts[[1]]), ncol=length(chngpts[[2]]))
             }
@@ -391,7 +390,6 @@ chngptm = function(formula.1, formula.2, family, data,
         attr(fit,"logliks")=logliks
         fit
     } # end grid.search
-    
     # find e.final
     if (est.method %in% c("grid","gridC","fastgrid","fastgrid2")) {
     #### grid search
@@ -497,32 +495,11 @@ chngptm = function(formula.1, formula.2, family, data,
         coef.hat=c(coef(best.fit), "chngpt"=e.final)
         
     } else stop("wrong est.method") # end if grid/smoothapprox
-    
+
     if(!stratified) {
         names(coef.hat)[length(coef.hat)]="chngpt"
-        new.names=names(coef.hat)
-        
-        if (threshold.type=="stegmented") {
-            new.names=sub("x.mod.e.2", "("%.%chngpt.var.name%.%"-chngpt)+", new.names)    
-            new.names=sub("x.mod.e", "I("%.%chngpt.var.name%.%">chngpt)", new.names)    
-        } else if (threshold.type %in% c("M22","M22c","M33c")) {
-            new.names=sub("x.lt.e.3", "("%.%chngpt.var.name%.%"-chngpt)-^3", new.names)    
-            new.names=sub("x.lt.e.2", "("%.%chngpt.var.name%.%"-chngpt)-^2", new.names)    
-            new.names=sub("x.lt.e",   "("%.%chngpt.var.name%.%"-chngpt)-",   new.names)    
-            new.names=sub("x.gt.e.2", "("%.%chngpt.var.name%.%"-chngpt)+^2", new.names)    
-            new.names=sub("x.gt.e.3", "("%.%chngpt.var.name%.%"-chngpt)+^3", new.names)    
-            new.names=sub("x.gt.e",   "("%.%chngpt.var.name%.%"-chngpt)+",   new.names)    
-            new.names=sub("x.mi.e",   "("%.%chngpt.var.name%.%"-chngpt)",   new.names)    
-        } else {
-            if (threshold.type=="step") {
-                replacement="I("%.%chngpt.var.name%.%">chngpt)"
-            } else if (threshold.type %in% c("hinge","quadhinge","cubichinge","x4hinge","segmented","segmented2","M12","M13") | hinge.to.upperhinge) {
-                replacement="("%.%chngpt.var.name%.%"-chngpt)+"
-            } else if (threshold.type %in% c("upperhinge","quadupperhinge","cubicupperhinge","x4upperhinge","M21","M31")) {
-                replacement="("%.%chngpt.var.name%.%"-chngpt)-"
-            } else stop("wrong threshold type")
-            new.names=sub("x.mod.e", replacement, new.names)    
-        }
+        new.names=name.conversion(threshold.type, chngpt.var.name, names(coef.hat), hinge.to.upperhinge)
+    
     } else {
         names(coef.hat)[length(coef.hat)-1:0]=c("chngpt.0","chngpt.1")
         if (threshold.type %in% c("hinge","segmented","segmented2")) {
@@ -536,6 +513,13 @@ chngptm = function(formula.1, formula.2, family, data,
     if (verbose>1) cat(new.names,"\n")
     names(coef.hat)=new.names
     
+    # convert now, otherwise there may be trouble with bootstrap
+    if (hinge.to.upperhinge) {
+        coef.hat["chngpt"]=-coef.hat["chngpt"]
+#        tmp=chngpt.var.name;                           if(!is.na(coef.hat[tmp])) coef.hat[tmp]=-coef.hat[tmp]
+        tmp=paste0("(",chngpt.var.name,"-chngpt)+");   if(!is.na(coef.hat[tmp])) coef.hat[tmp]=-coef.hat[tmp]
+        tmp=paste0("(",chngpt.var.name,"-chngpt)+^3"); if(!is.na(coef.hat[tmp])) coef.hat[tmp]=-coef.hat[tmp]
+    }
 
     ###############################################################################################
     # keep an empty line here between estimation and var estimate
@@ -849,7 +833,6 @@ chngptm = function(formula.1, formula.2, family, data,
             set.seed(1)     # this is only added on 7/30/2017, well after biometrics paper is published. should not change the results qualitatively
             
             #if (fastgrid.ok & est.method%in%c("fastgrid","fastgrid2")) {
-            # for the upperhinge2 manuscript, we add grid here
             if (fastgrid.ok & est.method%in%c("fastgrid","fastgrid2","gridC")) {      
                 boot.out=list()
                 class(boot.out)="boot"
@@ -869,7 +852,7 @@ chngptm = function(formula.1, formula.2, family, data,
                         , as.double(y.sorted-o.sorted) # note that this way of handling offset only works for linear regression
                         , as.double(w.sorted)
                         , as.integer(attr(chngpts,"index"))
-                        , as.integer(verbose)
+                        , ifelse(verbose>1, as.integer(verbose), 0)
                         , ci.bootstrap.size
                         , m.out.of.n # subsampling sample size
                     )     
@@ -887,11 +870,11 @@ chngptm = function(formula.1, formula.2, family, data,
                         as.double(ub.quantile),
                         ci.bootstrap.size,# bootstrap size
                         T
-                        #threshold.type %in% c("upperhinge","quadupperhinge","cubicupperhinge","M21","M31"
+                        #threshold.type %in% c("upperhinge","M20","M30","M21","M31"
                     )
                 }
-                #str(boot.out$t)
-                tmp=t(matrix(boot.out$t, ncol=ci.bootstrap.size))                
+#                str(boot.out$t); stop("debug")
+                tmp=t(matrix(boot.out$t, ncol=ci.bootstrap.size, dimnames=list(names(coef.hat), NULL)))                
                 # for segmented, need to reparameterize b/c .C implements upperhinge based parameterization
                 if (threshold.type=="segmented") {
                     tmp[,1] = tmp[,1] - tmp[,ncol(tmp)-1] * tmp[,ncol(tmp)]
@@ -924,7 +907,14 @@ chngptm = function(formula.1, formula.2, family, data,
 #                            rep(NA,tmp)
                     } else {
                         if(!boot.test.inv.ci) {
-                            fit.ii$coefficients
+                            # bootstrap datasets model fits may not have all the factor levels as the original dataset, that is why we cannot just return and neeed to select here
+                            if(hinge.to.upperhinge) {
+                            # if it is a converted problem, names are different
+                                tmp.name=sub("-chngpt)\\+","-chngpt)-",new.names)
+                                fit.ii$coefficients[tmp.name]
+                            } else {
+                                fit.ii$coefficients[new.names]
+                            }
                         } else {
                             # compute profile likelihood ratio
                             # pl can be negative even when grid search is used in both point estimate and bootstrap
@@ -952,27 +942,57 @@ chngptm = function(formula.1, formula.2, family, data,
             # restore rng state 
             assign(".Random.seed", save.seed, .GlobalEnv)     
             
-            boot.samples=boot.out$t            
-            
-            # use boot.ci to extract basic, percentile and abc confidence intervals
-            outs=list(perc=NULL, basic=NULL, bc=NULL) # this fixes the order of the list components
-            for (i in 1:length(coef.hat)){
-                # for stud, index needs to be of length 2 and the second element needs to be var. If the second element is not present, will have warnings: index out of bounds; minimum index only used
-                #ci.out=try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca","stud"), index=c(i, i+length(coef.hat))))
-                # invisible is used here because boot.ci prints messages about having only 1 bootstrap replicate when running unit testing code
-                ci.out=capture.output({
-                  suppressWarnings({
-                    #try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n & is.null(boot.out$fake)) "bca"), index=i), silent=TRUE)# bca requires a true boot.out object
-                    try(boot.ci(boot.out, type=c("perc","basic"), index=i), silent=TRUE)# bca requires a true boot.out object, changed to this for performance timing to be fair to true boot call
-                  })
-                })
-                # suppressWarnings changes the return type
-                outs$perc= cbind(outs$perc,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$percent[1,4:5])
-                outs$basic=cbind(outs$basic, if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$basic[1,4:5])                    
-                #outs$abc=  cbind(outs$abc,   if(!inherits(ci.out,"bootci")) c(NA,NA) else if(ci.bootstrap.size>n) ci.out$bca[1,4:5] else c(NA,NA) ) # for bca to work, the number of bootstrap replicates needs to be greater than sample size
-                #outs$stud= cbind(outs$stud,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$student[1,4:5])
+            if (hinge.to.upperhinge) {
+            # switch signs of some coefficients as needed
+                tmp1=which(paste0("(",chngpt.var.name,"-chngpt)+")==names(coef.hat))
+                boot.out$t[,tmp1]=(-boot.out$t[,tmp1])
+                boot.out$t0[tmp1]=(-boot.out$t0[tmp1])
+                
+                tmp1=which(paste0("(",chngpt.var.name,"-chngpt)+^3")==names(coef.hat))
+                boot.out$t[,tmp1]=(-boot.out$t[,tmp1])
+                boot.out$t0[tmp1]=(-boot.out$t0[tmp1])
+                
+                tmp1=which("chngpt"==names(coef.hat))
+                boot.out$t0[tmp1]=(-boot.out$t0[tmp1])
+                boot.out$t[,tmp1]=(-boot.out$t[,tmp1])
+                
+                tmp1=which(chngpt.var.name==names(coef.hat))
+                boot.out$t[,tmp1]=(-boot.out$t[,tmp1])
+                boot.out$t0[tmp1]=(-boot.out$t0[tmp1])
             }
-            colnames(outs$perc)<-colnames(outs$basic)<-names(coef.hat) # <-colnames(outs$abc)
+    
+            boot.samples=boot.out$t            
+            if(is.null(colnames(boot.samples))) colnames(boot.samples)=c(names(coef.hat), rep("",ncol(boot.samples)-length(coef.hat)))
+                        
+            # use boot.ci to get CI has a problem when hinge.to.upperhinge is on
+            outs=list(perc=NULL, basic=NULL, bc=NULL) # this fixes the order of the list components
+#            for (i in 1:length(coef.hat)){
+#                # for stud, index needs to be of length 2 and the second element needs to be var. If the second element is not present, will have warnings: index out of bounds; minimum index only used
+#                #ci.out=try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n) "bca","stud"), index=c(i, i+length(coef.hat))))
+#                # invisible is used here because boot.ci prints messages about having only 1 bootstrap replicate when running unit testing code
+#                capture.output({
+#                  ci.out=suppressWarnings({
+#                    #try(boot.ci(boot.out, type=c("perc","basic",if(ci.bootstrap.size>n & is.null(boot.out$fake)) "bca"), index=i), silent=TRUE)# bca requires a true boot.out object
+#                    try(boot::boot.ci(boot.out, type=c("perc","basic"), index=i), silent=TRUE)# bca requires a true boot.out object, changed to this for performance timing to be fair to true boot call
+#                  })
+#                })
+#                # suppressWarnings changes the return type
+#                outs$perc= cbind(outs$perc,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$percent[1,4:5])
+#                outs$basic=cbind(outs$basic, if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$basic[1,4:5])  
+#                #outs$abc=  cbind(outs$abc,   if(!inherits(ci.out,"bootci")) c(NA,NA) else if(ci.bootstrap.size>n) ci.out$bca[1,4:5] else c(NA,NA) ) # for bca to work, the number of bootstrap replicates needs to be greater than sample size
+#                #outs$stud= cbind(outs$stud,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$student[1,4:5])
+#            }
+#            colnames(outs$perc)<-colnames(outs$basic)<-names(coef.hat) # <-colnames(outs$abc)
+
+            outs$perc=sapply (1:length(coef.hat), function(i) {
+                quantile(boot.samples[,i], c(alpha/2,1-alpha/2), na.rm=TRUE)
+            })
+            colnames(outs$perc)<-names(coef.hat) 
+            outs$basic=sapply (1:length(coef.hat), function(i) {
+                tmp=quantile(boot.samples[,i], c(alpha/2,1-alpha/2), na.rm=TRUE)
+                c(2*coef.hat[i]-tmp[2], 2*coef.hat[i]-tmp[1])
+            })
+            colnames(outs$basic)<-names(coef.hat) 
             # find bc CI from boot.out$t as ci.out does not provide bc
             outs$bc=sapply (1:length(coef.hat), function(i) {
                 z.0=qnorm(mean(boot.samples[,i]<coef.hat[i], na.rm=TRUE))                    
@@ -1021,24 +1041,6 @@ chngptm = function(formula.1, formula.2, family, data,
 #                myprint(ci.abc)
             
             if(save.boot) outs[["boot.samples"]]=boot.samples            
-            if (hinge.to.upperhinge) {
-                # switch signs and lower/upper limits
-                for (i in 1:length(outs)) {
-                    tmp1=which(paste0("(",chngpt.var.name,"-chngpt)+")==names(coef.hat))
-                    outs[[i]][,tmp1]=rev(-outs[[i]][,tmp1])
-                    
-                    # for cubic
-                    tmp1=which(paste0("I((",chngpt.var.name,"-chngpt)+^3)")==names(coef.hat))
-                    outs[[i]][,tmp1]=rev(-outs[[i]][,tmp1])
-                    
-                    tmp1=which("chngpt"==names(coef.hat))
-                    outs[[i]][,tmp1]=rev(-outs[[i]][,tmp1])
-                    
-                    # for M12
-                    tmp1=which(chngpt.var.name==names(coef.hat))
-                    outs[[i]][,tmp1]=rev(-outs[[i]][,tmp1])
-                }                
-            }
             outs                
         }
         
@@ -1069,22 +1071,24 @@ chngptm = function(formula.1, formula.2, family, data,
         
     } # end variance estimate
     
-        
-    # convert quadupperhinge problem back to quadhinge problem
-    # slope for I((x-chngpt)-^2) need not be changed
+    # cannot move this to before variance estimation for some reason
+    # convert M20 problem back to M02 problem
+    # slope for (x-chngpt)-^2 need not be changed
     # boot.samples is already transformed inside ci.bootstrap()
     # best.fit is already transformed inside grid.search() and 
     if (hinge.to.upperhinge) {
         if (threshold.type == "upperhinge") threshold.type= "hinge"
-        if (threshold.type == "quadupperhinge") threshold.type= "quadhinge"
-        if (threshold.type == "cubicupperhinge") threshold.type= "cubichinge"
-        if (threshold.type == "x4upperhinge") threshold.type= "x4hinge"
+        if (threshold.type == "M20") threshold.type= "M02"
+        if (threshold.type == "M30") threshold.type= "M03"
+        if (threshold.type == "M40") threshold.type= "M04"
         if (threshold.type == "M21") threshold.type= "M12"
+        if (threshold.type == "M21c") threshold.type= "M12c"
         if (threshold.type == "M31") threshold.type= "M13"
         
-        coef.hat["chngpt"]=-coef.hat["chngpt"]
-        tmp=paste0("(",chngpt.var.name,"-chngpt)+"); coef.hat[tmp]=-coef.hat[tmp]
-        tmp=paste0("I((",chngpt.var.name,"-chngpt)+^3)"); if(!is.na(coef.hat[tmp])) coef.hat[tmp]=-coef.hat[tmp]
+#        coef.hat["chngpt"]=-coef.hat["chngpt"]
+##        tmp=chngpt.var.name;                           if(!is.na(coef.hat[tmp])) coef.hat[tmp]=-coef.hat[tmp]
+#        tmp=paste0("(",chngpt.var.name,"-chngpt)+");   if(!is.na(coef.hat[tmp])) coef.hat[tmp]=-coef.hat[tmp]
+#        tmp=paste0("(",chngpt.var.name,"-chngpt)+^3"); if(!is.na(coef.hat[tmp])) coef.hat[tmp]=-coef.hat[tmp]
     
         e.final= - e.final
         
@@ -1095,7 +1099,7 @@ chngptm = function(formula.1, formula.2, family, data,
             for (tmp in 1:length(chngpts)) chngpts[[tmp]]=-chngpts[[tmp]]
         }
     }
-        
+            
     res=list(
           coefficients=coef.hat
         , vcov=var.est
@@ -1129,7 +1133,7 @@ chngptm = function(formula.1, formula.2, family, data,
     if(keep.best.fit) res=append(res, list(best.fit=best.fit), 0)
     if (!stratified) names(res$chngpt) = round(100*mean(chngpt.var<res$chngpt),1) %.% "%" else res$chngpt=unname(res$chngpt)
     
-    class(res)=c("chngptm", class(res))
+    class(res)=c("chngptm", threshold.type, class(res))
     res    
 }
 
@@ -1141,7 +1145,7 @@ chngptm.xy = function(x, y, type=c("step","hinge","segmented","segmented2","steg
 }
 
 
-get.chngpts=function (chngpt.var.sorted, lb.quantile, ub.quantile, n.chngpts, stratified.by.sorted=NULL) {    
+get.chngpts=function (chngpt.var.sorted, lb.quantile, ub.quantile, n.chngpts, stratified.by.sorted=NULL, min.max.not.allowed=FALSE) {    
     if (is.null(stratified.by.sorted)) {
         n=length(chngpt.var.sorted)
         nLower=round(n*lb.quantile)+1; nUpper=round(n*ub.quantile)
@@ -1171,9 +1175,15 @@ get.chngpts=function (chngpt.var.sorted, lb.quantile, ub.quantile, n.chngpts, st
             stop("subsetting chngpts not supported for now for stratified")
         } 
     }
-    # if there are many duplicated values, the min and max may be part of chngpts. that is a problem
-    if(chngpts[1]==chngpt.var.sorted[1] | chngpts[length(chngpts)]==last(chngpt.var.sorted)) {
-        stop("There are too many duplicated smallest or largest values. Please try larger lb.quantile or smaller ub.quantile.")
+    
+    # if there are many duplicated values, the min and max may be part of chngpts. For testing, that could be a problem
+    if(min.max.not.allowed) {
+        if(chngpts[1]==chngpt.var.sorted[1]) {
+            chngpts=chngpts[chngpts!=chngpt.var.sorted[1]]
+        } 
+        if (chngpts[length(chngpts)]==last(chngpt.var.sorted)) {
+            chngpts=chngpts[chngpts!=last(chngpt.var.sorted)]
+        }
     }
     
     chngpts
@@ -1183,6 +1193,7 @@ get.chngpts=function (chngpt.var.sorted, lb.quantile, ub.quantile, n.chngpts, st
 #    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
 #    # old from chngpt.test, chngpts are mostly between observed values
 #    chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt)) 
+get.chngpts (c(1:5,5:10), lb.quantile=.1, ub.quantile=.9, n.chngpts=Inf)
 
 
 ## make.chngpt.var creates thresholded covariates. 
@@ -1199,11 +1210,11 @@ make.chngpt.var=function(x, e, threshold.type, data=NULL, b.transition=Inf, stra
         
         if(threshold.type=="step") {
             out=transition
-        } else if (threshold.type %in% c("upperhinge", "quadupperhinge", "cubicupperhinge", "x4upperhinge", "M21", "M31")) {
+        } else if (threshold.type %in% c("upperhinge", "M20", "M30", "M40", "M21", "M21c", "M31")) {
             out=(1-transition)*(x-e)
         } else if (threshold.type %in% c("segmented","hinge")) {
         # hinge is needed here b/c this function is also called by chngpt.test
-#        } else if (threshold.type %in% c("hinge","quadhinge","cubichinge","x4hinge","segmented", "M12", "M13")) {
+#        } else if (threshold.type %in% c("hinge","M02","M03","M04","segmented", "M12", "M13")) {
             out=transition*(x-e)
         } else if (threshold.type %in% c("M22","M22c","M33c")) {
             out=cbind((1-transition)*(x-e), transition*(x-e), x-e )
@@ -1221,9 +1232,12 @@ make.chngpt.var=function(x, e, threshold.type, data=NULL, b.transition=Inf, stra
                 data$x.mod.e   = out[,1]
                 data$x.mod.e.2 = out[,2]
             } else if (threshold.type %in% c("M22","M22c","M33c")) {
+                data$x   = x
                 data$x.lt.e   = out[,1]
                 data$x.gt.e   = out[,2]
                 data$x.mi.e   = out[,3]
+            } else if (threshold.type %in% c("M21c")) {
+                data$x.lt.e   = out
             } else {
                 data$x.mod.e = out
             }
@@ -1275,11 +1289,13 @@ get.f.alt=function(threshold.type, chngpt.var.name, modified.by=NULL, stratified
         if (threshold.type=="M22") {
             f.alt="~.+x.lt.e+I(x.lt.e^2)+x.gt.e+I(x.gt.e^2)"
         } else if (threshold.type=="M22c") {
-            f.alt="~.+x.mi.e+I(x.lt.e^2)+I(x.gt.e^2)"
+            f.alt="~.+x+I(x.lt.e^2)+I(x.gt.e^2)"
+        } else if (threshold.type=="M21c") {
+            f.alt="~.+I(x.lt.e^2)" # x is already added outside get.f.alt
         } else if (threshold.type=="M33c") {
-            f.alt="~.+x.mi.e+I(x.mi.e^2)+I(x.lt.e^3)+I(x.gt.e^3)"
-        } else if (threshold.type %in% c("x4upperhinge")) {
-        #} else if (threshold.type %in% c("x4hinge", "x4upperhinge")) {
+            f.alt="~.+x+I(x.mi.e^2)+I(x.lt.e^3)+I(x.gt.e^3)"
+        } else if (threshold.type %in% c("M40")) {
+        #} else if (threshold.type %in% c("M04", "M40")) {
             f.alt="~.+x.mod.e+I(x.mod.e^2)+I(x.mod.e^3)+I(x.mod.e^4)"
         } else {
             f.alt = "~.+x.mod.e"
@@ -1313,7 +1329,8 @@ get.f.alt=function(threshold.type, chngpt.var.name, modified.by=NULL, stratified
 
 predict.chngptm=function (object, newdata = NULL, type = c("link", "response", "terms"), ...){    
     if (is.null(object$best.fit)) stop("To make predictions, chngptm fit needs to have keep.best.fit=TRUE in the option.")
-    newdata = make.chngpt.var(newdata[[object$chngpt.var]], object$chngpt, object$threshold.type, newdata, object$b.transition)            
+    newdata = make.chngpt.var(newdata[[object$chngpt.var]], object$chngpt, object$threshold.type, newdata, object$b.transition)    
+    newdata$chngpt.glm.offset=rep(0, nrow(newdata))
     predict(object$best.fit, newdata, type, ...)
 }
 print.chngptm=function(x, ...) {
@@ -1360,11 +1377,15 @@ vcov.chngptm=function(object, var.type=NULL, ...) {
     attr(vcov, "boot.conf")=boot.conf
     vcov
 }
-getFixedEf.chngptm=function(object, exp=FALSE, show.slope.post.threshold=FALSE, ...) {
+getFixedEf.chngptm=function(object, exp=FALSE, show.slope.post.threshold=FALSE, exclude.chngpt=FALSE, ...) {
     capture.output({
         res=summary(object, expo=exp, show.slope.post.threshold=show.slope.post.threshold, ...)
     })
-    rbind(res$coefficients, chngpt=res$chngpt)
+    if (exclude.chngpt) {
+        res$coefficients
+    } else {
+        rbind(res$coefficients, chngpt=res$chngpt)
+    }
 }
 lincomb=function(object, comb, alpha=0.05){
     if(!is.matrix(comb)) comb=matrix(comb, ncol=1)
@@ -1421,21 +1442,26 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", lty=1, add=FA
         
         slope=coef(fit)[fit$chngpt.var]; if (is.na(slope)) slope=0
         pre.slope   =coef(fit)[  "("%.%fit$chngpt.var%.%"-chngpt)-"];    if (is.na(pre.slope))    pre.slope=0
-        pre.slope.2 =coef(fit)["I(("%.%fit$chngpt.var%.%"-chngpt)-^2)"]; if (is.na(pre.slope.2))  pre.slope.2=0 # quad
-        pre.slope.3 =coef(fit)["I(("%.%fit$chngpt.var%.%"-chngpt)-^3)"]; if (is.na(pre.slope.3))  pre.slope.3=0 # cubic
-        pre.slope.4 =coef(fit)["I(("%.%fit$chngpt.var%.%"-chngpt)-^4)"]; if (is.na(pre.slope.4))  pre.slope.4=0 # 4
+        pre.slope.2 =coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)-^2"]; if (is.na(pre.slope.2))  pre.slope.2=0 # quad
+        pre.slope.3 =coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)-^3"]; if (is.na(pre.slope.3))  pre.slope.3=0 # cubic
+        pre.slope.4 =coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)-^4"]; if (is.na(pre.slope.4))  pre.slope.4=0 # 4
         post.slope  =coef(fit)[  "("%.%fit$chngpt.var%.%"-chngpt)+"];    if (is.na(post.slope))   post.slope=0
-        post.slope.2=coef(fit)["I(("%.%fit$chngpt.var%.%"-chngpt)+^2)"]; if (is.na(post.slope.2)) post.slope.2=0 # quad
-        post.slope.3=coef(fit)["I(("%.%fit$chngpt.var%.%"-chngpt)+^3)"]; if (is.na(post.slope.3)) post.slope.3=0 # cubic
-        post.slope.4=coef(fit)["I(("%.%fit$chngpt.var%.%"-chngpt)+^4)"]; if (is.na(post.slope.4)) post.slope.4=0 # 4
-        post.jump   =coef(fit)[ "I("%.%fit$chngpt.var%.%">chngpt)"]; if (is.na(post.jump)) post.jump=0 # step
-        # M22c and M33c have x-chngpt and I((x-chngpt)^2) 
-        M3bslope=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)"]; if (is.na(M3bslope)) M3bslope=0
-        M6bquad =coef(fit)["I(("%.%fit$chngpt.var%.%"-chngpt)^2)"]; if (is.na(M6bquad)) M6bquad=0
+        post.slope.2=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)+^2"]; if (is.na(post.slope.2)) post.slope.2=0 # quad
+        post.slope.3=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)+^3"]; if (is.na(post.slope.3)) post.slope.3=0 # cubic
+        post.slope.4=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)+^4"]; if (is.na(post.slope.4)) post.slope.4=0 # 4
+        post.jump   =coef(fit)[ fit$chngpt.var%.%">chngpt"]; if (is.na(post.jump)) post.jump=0 # step
+        # M22c and M33c have x-chngpt and (x-chngpt)^2 
+#        M3bslope=coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)"]; if (is.na(M3bslope)) M3bslope=0
+        M6bquad =coef(fit)["("%.%fit$chngpt.var%.%"-chngpt)^2"]; if (is.na(M6bquad)) M6bquad=0
+        
+#        myprint(slope)
+#        myprint(pre.slope, pre.slope.2, pre.slope.3, pre.slope.4)
+#        myprint(post.slope, post.slope.2, post.slope.3, post.slope.4)
+#        myprint(post.jump, M6bquad)
         
         # pre
         xx=seq(xlim[1],chngpt.est,length=100)
-        yy = offset + intercept + slope*xx + (pre.slope+M3bslope)*(xx-chngpt.est) + (pre.slope.2+M6bquad)*(xx-chngpt.est)^2 + pre.slope.3*(xx-chngpt.est)^3  + pre.slope.4*(xx-chngpt.est)^4 
+        yy = offset + intercept + slope*xx + (pre.slope)*(xx-chngpt.est) + (pre.slope.2+M6bquad)*(xx-chngpt.est)^2 + pre.slope.3*(xx-chngpt.est)^3  + pre.slope.4*(xx-chngpt.est)^4 
         yy=linkinv(yy)
         out[[1]]=cbind(xx,yy)
         lines(xx, yy, lwd=lwd, col=lcol, lty=lty)
@@ -1443,7 +1469,7 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", lty=1, add=FA
         
         # post
         xx=seq(chngpt.est, xlim[2], length=100)
-        yy = offset + intercept + slope*xx + (post.slope+M3bslope)*(xx-chngpt.est) + (post.slope.2+M6bquad)*(xx-chngpt.est)^2 + post.slope.3*(xx-chngpt.est)^3 + post.slope.4*(xx-chngpt.est)^4 + post.jump
+        yy = offset + intercept + slope*xx + (post.slope)*(xx-chngpt.est) + (post.slope.2+M6bquad)*(xx-chngpt.est)^2 + post.slope.3*(xx-chngpt.est)^3 + post.slope.4*(xx-chngpt.est)^4 + post.jump
         yy=linkinv(yy)
         out[[1]]=rbind(out[[1]], cbind(xx,yy))
         lines(xx, yy, lwd=lwd, col=lcol, lty=lty)
@@ -1456,7 +1482,7 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", lty=1, add=FA
     # loglik vs threshold
         if (!has.submodel.lik) stop("no submodel likelihoods")
         plot(fit$chngpts, fit$logliks, xlim=xlim, xlab="threshold", ylab="log likelihood", type="b", ...)
-        abline(v=summary(fit)$chngpt[1], lty=c(1)) # point est 
+        abline(v=fit$chngpt, lty=c(1)) # point est 
         
     } else if (which==3) {
     # histograms of threshold estimates from bootstrap
@@ -1466,14 +1492,15 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", lty=1, add=FA
         } else {
             hist(fit$vcov$boot.samples[,1+length(coef(fit))], xlim=xlim, breaks=breaks, xlab="bootstrap threshold estimate", add=add, ...)
         }
-        if(add.ci) abline(v=summary(fit)$chngpt[2:3], lty=c(2,2)) #CI
+        ci=summary(fit)$chngpt[c("(lower","upper)")]
+        if(add.ci) abline(v=ci, lty=c(2,2)) 
         
     } else stop("wrong which")
     
     invisible(out)
 }
 
-summary.chngptm=function(object, var.type=NULL, expo=FALSE, show.slope.post.threshold=FALSE, verbose=FALSE, ...) {    
+summary.chngptm=function(object, var.type=NULL, expo=FALSE, show.slope.post.threshold=FALSE, verbose=FALSE, boot.type="symm", ...) {    
     # "Estimate" "Std. Error" "t value" "Pr(>|t|)"        
     fit=object
     p.z=length(fit$coefficients) # this count includes threshold parameter
@@ -1488,7 +1515,7 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, show.slope.post.thre
     } else {    
         vcov=vcov(fit, var.type)
         boot.conf= attr(vcov,"boot.conf")
-        if (boot.conf) vcov=fit$vcov$symm  
+        if (boot.conf) vcov=fit$vcov[[boot.type]]
         if(is.null(vcov)) {
             cat("No variance estimate available.\n\n")
             print(fit)
@@ -1537,7 +1564,9 @@ summary.chngptm=function(object, var.type=NULL, expo=FALSE, show.slope.post.thre
     })
     rownames(res$coefficients)=names(fit$coefficients)[-p.z]
     colnames(res$coefficients)[1]=if(fit$family=="binomial" & expo) "OR" else "est"
-    if(boot.conf) colnames(res$coefficients)[2]=colnames(res$coefficients)[2]%.%"*"
+    if(boot.conf) colnames(res$coefficients)[c(2,5)]=colnames(res$coefficients)[c(2,5)]%.%"*"
+    
+    # add a column to indicate whether CI includes 0
     
     # may need to find linear combination
     if(show.slope.post.threshold){
@@ -1756,6 +1785,185 @@ get.liks.upperhinge=function(y,Z,x,cand_e){
     
     sudo_liks
 }
+
+
+name.conversion=function(threshold.type, chngpt.var.name, new.names, hinge.to.upperhinge=FALSE){
+    if (threshold.type=="stegmented") {
+        new.names=sub("x.mod.e.2", "("%.%chngpt.var.name%.%"-chngpt)+", new.names)    
+        new.names=sub("x.mod.e", "I("%.%chngpt.var.name%.%">chngpt)", new.names)    
+        
+    } else if (threshold.type == "M21c" & hinge.to.upperhinge) {    
+        new.names=sub("x.lt.e",   "("%.%chngpt.var.name%.%"-chngpt)+",   new.names)    
+    
+    } else if (threshold.type %in% c("M22","M22c","M33c","M12c","M21c")) {
+        new.names=sub("x.lt.e.3", "("%.%chngpt.var.name%.%"-chngpt)-^3", new.names)    
+        new.names=sub("x.lt.e.2", "("%.%chngpt.var.name%.%"-chngpt)-^2", new.names)    
+        new.names=sub("x.lt.e",   "("%.%chngpt.var.name%.%"-chngpt)-",   new.names)    
+        new.names=sub("x.gt.e.2", "("%.%chngpt.var.name%.%"-chngpt)+^2", new.names)    
+        new.names=sub("x.gt.e.3", "("%.%chngpt.var.name%.%"-chngpt)+^3", new.names)    
+        new.names=sub("x.gt.e",   "("%.%chngpt.var.name%.%"-chngpt)+",   new.names)    
+        new.names=sub("x.mi.e",   "("%.%chngpt.var.name%.%"-chngpt)",    new.names)    
+        new.names=sub("x",        chngpt.var.name,                       new.names)    
+        
+    } else if (threshold.type=="step") {
+            new.names=sub("x.mod.e", "I("%.%chngpt.var.name%.%">chngpt)", new.names)
+            
+    } else if (threshold.type %in% c("hinge","M02","M03","M04","M12","M13","segmented","segmented2") | hinge.to.upperhinge) {
+        new.names=sub("x.mod.e", "("%.%chngpt.var.name%.%"-chngpt)+", new.names)
+        
+    } else if (threshold.type %in% c("upperhinge",  "M20","M30","M40","M21","M31")) {
+        new.names=sub("x.mod.e", "("%.%chngpt.var.name%.%"-chngpt)-", new.names)
+        
+    } else stop("wrong threshold type")
+                    
+    new.names=sub("^I\\((.+))$", "\\1", new.names)    
+    new.names    
+}
+
+
+name.conversion.2=function(new.names, chngpt.var.name="x"){
+    new.names=sub("x.uhinge.cubic", "("%.%chngpt.var.name%.%"-chngpt)-^3", new.names)    
+    new.names=sub("x.uhinge.quad", "("%.%chngpt.var.name%.%"-chngpt)-^2", new.names)    
+    new.names=sub("x.uhinge",   "("%.%chngpt.var.name%.%"-chngpt)-",   new.names)    
+    new.names=sub("x.hinge.cubic", "("%.%chngpt.var.name%.%"-chngpt)+^3", new.names)    
+    new.names=sub("x.hinge.quad", "("%.%chngpt.var.name%.%"-chngpt)+^2", new.names)    
+    new.names=sub("x.hinge",   "("%.%chngpt.var.name%.%"-chngpt)+",   new.names)    
+    new.names=sub("x.mi.e",   "("%.%chngpt.var.name%.%"-chngpt)",   new.names)    
+    new.names=sub("intercept",   "(Intercept)",   new.names)    
+    new.names    
+}
+
+
+# converting from parameterization used in sim.chngpt to that used in chngptm
+convert.coef=function(coef.0, threshold.type) {
+           
+    if (threshold.type=="M12")  {
+        coef.0["x"]=coef.0["(x-chngpt)-"]
+        coef.0["(x-chngpt)+"]=coef.0["(x-chngpt)+"] - coef.0["x"]
+        coef.0["(Intercept)"]= coef.0["(Intercept)"] - coef.0["x"]*coef.0["chngpt"]
+    
+    } else if (threshold.type=="M13")  {
+        coef.0["x"]=coef.0["(x-chngpt)-"]
+        coef.0["(x-chngpt)+"]=coef.0["(x-chngpt)+"] - coef.0["x"]
+        coef.0["(Intercept)"]= coef.0["(Intercept)"] - coef.0["x"]*coef.0["chngpt"]
+    
+    } else if (threshold.type=="M21")  {
+        coef.0["x"]=coef.0["(x-chngpt)+"]
+        coef.0["(x-chngpt)-"]=coef.0["(x-chngpt)-"] - coef.0["x"]
+        coef.0["(Intercept)"]= coef.0["(Intercept)"] - coef.0["x"]*coef.0["chngpt"]
+    
+    } else if (threshold.type=="M21c" | threshold.type=="M12c")  {
+        coef.0["x"]=coef.0["(x-chngpt)+"]
+        coef.0["(Intercept)"]= coef.0["(Intercept)"] - coef.0["x"]*coef.0["chngpt"]
+    
+    } else if (threshold.type=="M31")  {
+        coef.0["x"]=coef.0["(x-chngpt)+"]
+        coef.0["(x-chngpt)-"]=coef.0["(x-chngpt)-"] - coef.0["x"]
+        coef.0["(Intercept)"]= coef.0["(Intercept)"] - coef.0["x"]*coef.0["chngpt"]
+    
+    } else if (threshold.type=="M22c") {
+        coef.0["x"]=coef.0["(x-chngpt)+"]
+        coef.0["(Intercept)"]= coef.0["(Intercept)"] - coef.0["x"]*coef.0["chngpt"]
+    
+    } else if (threshold.type=="M33c") {
+        coef.0["x"]=coef.0["(x-chngpt)+"]
+        coef.0=c(coef.0, "(x-chngpt)^2"=unname(coef.0["(x-chngpt)-^2"]))
+        coef.0["(Intercept)"]= coef.0["(Intercept)"] - coef.0["x"]*coef.0["chngpt"]
+    
+    }
+    coef.0
+}
+
+
+# important to include intercept it seems
+threshold.func=function(threshold.type, coef, xx, x.name, include.intercept=FALSE) { 
+  with(as.list(coef), switch(threshold.type 
+  , segmented = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) + get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) 
+  , hinge     = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) 
+  , M02       = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2 
+  , M03       = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)+^3")*(xx>chngpt)*(xx-chngpt)^3 
+  , M04       = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)+^3")*(xx>chngpt)*(xx-chngpt)^3 + get("("%.%x.name%.%"-chngpt)+^4")*(xx>chngpt)*(xx-chngpt)^4 
+  , upperhinge= ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)-")*(xx<chngpt)*(xx-chngpt) 
+  , M20       = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)-")*(xx<chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2
+  , M30       = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)-")*(xx<chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)-^3")*(xx<chngpt)*(xx-chngpt)^3
+  , M40       = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)-")*(xx<chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)-^3")*(xx<chngpt)*(xx-chngpt)^3 + get("("%.%x.name%.%"-chngpt)-^4")*(xx<chngpt)*(xx-chngpt)^4
+  , M21       = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) + get("("%.%x.name%.%"-chngpt)-")*(xx<chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2
+  , M21c      = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) +                                                           get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2
+  , M12       = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) + get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2
+  , M12c      = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) +                                                           get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2
+  , M22       = ifelse(include.intercept,get("(Intercept)"),0) +                  get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)-")*(xx<chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2
+  , M22c      = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) +                                                           get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2
+  , M31       = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) + get("("%.%x.name%.%"-chngpt)-")*(xx<chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)-^2")*(xx<chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)-^3")*(xx<chngpt)*(xx-chngpt)^3
+  , M13       = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) + get("("%.%x.name%.%"-chngpt)+")*(xx>chngpt)*(xx-chngpt) + get("("%.%x.name%.%"-chngpt)+^2")*(xx>chngpt)*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)+^3")*(xx>chngpt)*(xx-chngpt)^3
+  , M33c      = ifelse(include.intercept,get("(Intercept)"),0) + xx*get(x.name) +                                                           get("("%.%x.name%.%"-chngpt)^2")*(xx-chngpt)^2 + get("("%.%x.name%.%"-chngpt)+^3")*(xx>chngpt)*(xx-chngpt)^3 + get("("%.%x.name%.%"-chngpt)-^3")*(xx<chngpt)*(xx-chngpt)^3 
+  , step      = ifelse(include.intercept,get("(Intercept)"),0) +                  get(""%.%x.name%.%">chngpt)")  *(xx>chngpt)
+  ))
+}
+
+
+
+predictx=function(fit, boot.type, alpha=0.05, xx=NULL, verbose=FALSE, return.boot=FALSE, include.intercept=FALSE) {
+    
+    threshold.type=fit$threshold.type
+    
+    if (is.null(xx)) {
+        xx=fit$best.fit$data[[fit$chngpt.var]]
+        xx=seq(min(xx), max(xx), length=100)
+    }
+    
+    yy=threshold.func(threshold.type, fit$coefficients, xx, fit$chngpt.var, include.intercept=include.intercept)
+    yy.boot=apply(fit$vcov$boot.samples, 1, function(coef) threshold.func(threshold.type, coef, xx, fit$chngpt.var, include.intercept=include.intercept) )
+    
+    get.pointwise.ci=function(yy, yy.boot, boot.type, alpha) {
+        if (boot.type=="perc") {
+            point.ci=apply(yy.boot, 1, function(x) quantile(x, c(alpha/2,1-alpha/2)))
+        } else if (boot.type=="basic") {
+            point.ci=apply(yy.boot, 1, function(x) quantile(x, c(alpha/2,1-alpha/2)))
+            point.ci=rbind(2*yy-point.ci[2,], 2*yy-point.ci[1,])
+        } else if (boot.type=="symm") {
+            q.1=apply(abs(yy.boot-yy), 1, function(x) quantile(x, 1-alpha) )        
+            point.ci=rbind(yy-q.1, yy+q.1)
+        } else stop("get.pointwise.ci: wrong boot.type "%.% boot.type)
+        point.ci
+    }
+        
+    point.ci=get.pointwise.ci(yy, yy.boot, boot.type, alpha)
+    out = list(xx=xx, yy=yy, point.ci=point.ci, simul.ci=NULL)    
+        
+    # get simultaneous CI
+    alpha.cpy=alpha
+    while(TRUE) {
+        # compute simultaneous coverage
+        simul.cvg=mean(sapply (1:ncol(yy.boot), function(j) {
+            all(yy.boot[,j] >= point.ci[1,] & yy.boot[,j] <= point.ci[2,])
+        }))
+        if (verbose) {
+            point.cvg=rowMeans(sapply (1:ncol(yy.boot), function(j) {
+                yy.boot[,j] >= point.ci[1,] & yy.boot[,j] <= point.ci[2,]
+            }))        
+            myprint(alpha, mean(point.cvg), simul.cvg)
+        }
+        
+        if (round(simul.cvg,2)<1-alpha.cpy) {
+            alpha=alpha-0.001
+            if(abs(alpha)<1e-6) break
+            point.ci=get.pointwise.ci(yy, yy.boot, boot.type, alpha)
+        } else {
+            break
+        }
+    }
+    if (abs(alpha)<1e-6) {
+        warning("no simultaneous CI found")
+    } else {
+        out$simul.ci=point.ci
+    }
+    
+    if(return.boot) out$boot=yy.boot
+    
+    out
+}
+
+
 
 ## R code for validating 2D search
 #X=cbind(1, dat$z, dat$x)

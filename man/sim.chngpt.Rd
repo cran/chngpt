@@ -10,21 +10,20 @@ Generate simulation datasets for change point Monte Carlo studies.
 \usage{
 
 sim.chngpt(mean.model = c("thresholded", "thresholdedItxn",
-         "quadratic", "quadratic2b", "cubic2b", "exp",
-         "flatHyperbolic", "z2", "z2hinge", "z2segmented",
-         "z2linear", "logistic"), threshold.type = c("NA",
-         "step", "hinge", "segmented", "segmented2",
-         "stegmented", "upperhinge", "quadupperhinge",
-         "quadhinge", "cubicupperhinge", "cubichinge", "M21",
-         "M12", "M22", "M22c", "M31", "M13", "M33c"),
-         b.transition = Inf, family = c("binomial",
-         "gaussian"), x.distr = c("norm", "norm3", "norm6",
-         "imb", "lin", "mix", "gam", "zbinary", "gam1", "gam2",
-         "fixnorm"), e. = NULL, mu.x = 4.7, sd.x = NULL, sd =
-         0.3, mu.z = 0, alpha = NULL, alpha.candidate = NULL,
-         coef.z = log(1.4), beta = NULL, beta.itxn = NULL, n,
-         seed, weighted = FALSE, heteroscedastic = FALSE,
-         verbose = FALSE)
+ "quadratic", "quadratic2b", "cubic2b", "exp",
+ "flatHyperbolic", "z2", "z2hinge", "z2segmented",
+ "z2linear", "logistic"), threshold.type = c("NA",
+ "hinge", "M02", "M03", "upperhinge", "M20", "M30",
+ "M21", "M12", "M22", "M22c", "M31", "M13", "M33c",
+ "segmented", "segmented2", "step", "stegmented"),
+ b.transition = Inf, family = c("binomial",
+ "gaussian"), x.distr = c("norm", "norm3", "norm6",
+ "imb", "lin", "mix", "gam", "zbinary", "gam1", "gam2",
+ "fixnorm", "unif"), e. = NULL, mu.x = 4.7, sd.x =
+ NULL, sd = 0.3, mu.z = 0, alpha = NULL,
+ alpha.candidate = NULL, coef.z = log(1.4), beta =
+ NULL, beta.itxn = NULL, n, seed, weighted = FALSE,
+ heteroscedastic = FALSE, verbose = FALSE)
 
 }
 %- maybe also 'usage' for other objects documented here.

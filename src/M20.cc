@@ -90,6 +90,7 @@ double M20_search(
     
     Matrix <double,Row,Concrete> VV(2, 2), Vr(2, 1), VB(2, p-1);
     double delta, s, crit, crit_max=R_NegInf;// s is defined as difference in squared threshold
+    
     VV(0,0)=0; for (i=0; i<n; i++) VV(0,0) += pow(x[i],2)*w[i]*w[i]; 
     VV(1,1)=0; for (i=0; i<n; i++) VV(1,1) += pow(x[i],4)*w[i]*w[i]; 
     VV(0,1)=0; for (i=0; i<n; i++) VV(0,1) += pow(x[i],3)*w[i]*w[i];

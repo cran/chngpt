@@ -193,3 +193,50 @@
 2019-11-30
     * Add a check in get.chngpts() so that we do not have the min to be the first change point
     * Change direct assignment to indirect copy in _preprocess (fastgrid_helper.cc)
+
+2019-12-4
+    * Add a new argument, min.max.not.allowed, in get.chngpts(), default to FALSE, but in chngpt.test, set it to TRUE
+    * revamp double.hinge so that there is no need to supply mid.x
+
+2019-12-6
+    * Add summary function for double.hinge to faciliate hypothesis testing
+
+2019-12-7
+    * Add predictx for confidence bands
+
+2019-12-13
+    * Change paramterization of M22c and M33c. Remove x.mi.e
+    * Change M10 back to upperhinge
+
+2019-12-31
+    * Add x.gt.e[is.nan(x.gt.e)]=0 in sim.chngpt
+
+2020-01-02
+    * Fix name.conversion for M22c and M33c
+    * Add nutrition dataset
+
+2020-01-09
+    * Implement M21c and M12c
+    * Implement plot.double.hinge
+
+2020-01-20
+    * Add intercept to predictions in threshold.func()
+    * Add boot.type argument to summary.chngptm
+    * Make changes to chngptm so that it will work when bootstrap logistic regression with factor predictors of many levels. 
+      The problem was that bootstrap datasets may not have all the levels
+
+2020-02-11
+    * Modify name.conversion.2() to change intercept to (Intercept) in coef.0
+    * Modify convert.coef to add M21c
+    * Fix a bug that lead to errors in basic bootstrap intervals when hinge.to.upperhinge is TRUE
+
+2020-02-17
+    * Add heteroscedastic argument to sim.chngpt
+
+2020-02-20
+    * Add unif argument to sim.chngpt
+
+2020-02-22
+    * Modify convert.coef() to include adjustment of intercept
+    * Modify plot.chngptm() so that it works properly for step model
+    * Add * next to p value in summary.chngptm print out to indicate that it is not a true p value

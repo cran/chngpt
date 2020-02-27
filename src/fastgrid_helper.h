@@ -62,6 +62,13 @@ double M20_search(
     vector<double>& x2cusum, vector<double>& x3cusum, vector<double>& xrcusum, Matrix<double,Row>& xBcusum, 
     double* logliks);
 
+double M20c_search(
+    Matrix<double,Row>& B, Matrix<double,Row>& r, vector<double>& x, vector<double>& w, 
+    int * thresholdIdx, vector<double>& thresholds, int nThresholds,
+    Matrix<double,Row>& Bcusum, vector<double>& rcusum, vector<double>& Wcusum, vector<double>& xcusum, 
+    vector<double>& x2cusum, vector<double>& x3cusum, vector<double>& xrcusum, Matrix<double,Row>& xBcusum, 
+    double* logliks);
+
 double M22_search(
     Matrix<double,Row>& B, Matrix<double,Row>& r, vector<double>& x, vector<double>& w, 
     int * thresholdIdx, vector<double>& thresholds, int nThresholds, 

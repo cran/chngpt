@@ -1,6 +1,8 @@
 \name{chngptm}
 \alias{chngptm}
 \alias{chngptm.xy}
+\alias{chngptm.xy}
+\alias{chngptm.xy}
 \alias{coef.chngptm}
 \alias{residuals.chngptm}
 \alias{vcov.chngptm}
@@ -19,21 +21,20 @@ Estimate change point logistic model
 \usage{
 
 chngptm (formula.1, formula.2, family, data, type = c("hinge",
-         "quadhinge", "cubichinge", "x4hinge", "upperhinge",
-         "quadupperhinge", "cubicupperhinge", "x4upperhinge",
-         "M21", "M12", "M22", "M22c", "M31", "M13", "M33c",
-         "segmented", "segmented2", "step", "stegmented"),
-         formula.strat = NULL, weights = NULL, offset = NULL,
-         est.method = c("default", "fastgrid2", "fastgrid", "grid",
-         "smoothapprox"), var.type =
-         c("default", "none", "robust", "model", "bootstrap",
-         "all"), aux.fit = NULL, lb.quantile = 0.1, ub.quantile
-         = 0.9, grid.search.max = Inf, test.inv.ci = TRUE,
-         boot.test.inv.ci = FALSE, ci.bootstrap.size = 1000,
-         alpha = 0.05, save.boot = TRUE, m.out.of.n = 0,
-         b.transition = Inf, tol = 1e-04, maxit = 100,
-         chngpt.init = NULL, search.bound = 10, keep.best.fit =
-         TRUE, ncpus = 1, verbose = FALSE, ...)
+         "M02", "M03", "M04", "upperhinge", "M20", "M30",
+         "M40", "M21", "M12", "M21c", "M12c", "M22", "M22c",
+         "M31", "M13", "M33c", "segmented", "segmented2",
+         "step", "stegmented"), formula.strat = NULL, weights =
+         NULL, offset = NULL, est.method = c("default",
+         "fastgrid2", "fastgrid", "grid", "smoothapprox"),
+         var.type = c("default", "none", "robust", "model",
+         "bootstrap", "all"), aux.fit = NULL, lb.quantile =
+         0.1, ub.quantile = 0.9, grid.search.max = Inf,
+         test.inv.ci = TRUE, boot.test.inv.ci = FALSE,
+         ci.bootstrap.size = 1000, alpha = 0.05, save.boot =
+         TRUE, m.out.of.n = 0, b.transition = Inf, tol = 1e-04,
+         maxit = 100, chngpt.init = NULL, search.bound = 10,
+         keep.best.fit = TRUE, ncpus = 1, verbose = FALSE, ...)
          
 chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
     ...)
@@ -47,8 +48,9 @@ chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
                  TRUE, breaks = 20, mark.chngpt = FALSE, xlab = NULL,
                  ylab = NULL, ...) 
 \method{summary}{chngptm} (object, var.type = NULL, expo = FALSE,
-         show.slope.post.threshold = FALSE, verbose = FALSE,
-         ...)
+ show.slope.post.threshold = FALSE, verbose = FALSE,
+ boot.type = "symm", ...)
+ 
 
 lincomb(object, comb, alpha=0.05)
 
@@ -103,6 +105,7 @@ lincomb(object, comb, alpha=0.05)
   \item{ylab}{ylab}
   \item{offset}{offset}
   \item{lty}{lty}
+  \item{boot.type}{lty}
   
   \item{comb}{a vector of combination coefficients that will be used to form an inner product with the estimated slope}
   \item{expo}{If family is binomial and expo is TRUE, coefficients summary will be shown on the scale of odds ratio instead of slopes}
@@ -137,7 +140,7 @@ Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for 
 
     
 # threshold linear regression
-types=c("hinge", "segmented", "quadhinge", "cubichinge")
+types=c("hinge", "segmented", "M02", "M03")
 for (type in types) {
     fit=chngptm(formula.1=logratio~1, formula.2=~range, lidar, type=type, family="gaussian", 
         var.type="bootstrap")
@@ -201,7 +204,7 @@ fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="segmented",
 summary(fit)
 
 # interaction, upperhinge model, bootstrap
-fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="upperhinge", 
+fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="M10", 
     family="gaussian", var.type="bootstrap", ci.bootstrap.size=10)
 summary(fit)
 
@@ -229,6 +232,12 @@ dat=sim.chngpt(mean.model="thresholded", threshold.type="M22c", n=500, seed=1,
 fit.0=chngptm(formula.1=y~z, formula.2=~x, dat, type="M22c", family="gaussian", 
     est.method="fastgrid2"); plot(fit.0)
     
+
+# examples of aux.fit
+fit.0=glm(yy~zz+ns(xx,df=3), data, family="binomial")
+fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", 
+    est.method="smoothapprox", var.type="all", verbose=verbose, aux.fit=fit.0, 
+    lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
 
 
 }

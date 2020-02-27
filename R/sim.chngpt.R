@@ -1,15 +1,17 @@
 # threshold.type
 # segmented2 differs from segmented in parameterization, it is the model studied in Cheng 2008
-# quadupperhinge and quadhinge differ from upperhinge and hinge in that they have a quadratic term
+# M20 and M02 differ from upperhinge and hinge in that they have a quadratic term
 expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 sim.chngpt = function (
     mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear","logistic"), 
-    threshold.type=c("NA","step","hinge","segmented","segmented2","stegmented"
-        ,"upperhinge","quadupperhinge","quadhinge","cubicupperhinge","cubichinge"
-        ,"M21","M12","M22","M22c","M31","M13","M33c"),
+    threshold.type=c("NA",
+          "hinge","M02","M03", # hinge models
+          "upperhinge","M20","M30",# upper hinge models
+          "M21","M12","M22","M22c","M31","M13","M33c", # segmented models with higher order trends
+          "segmented","segmented2","step","stegmented"), # segmented2 is the model studied in Cheng (2008)
     b.transition=Inf,
     family=c("binomial","gaussian"), 
-    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm"), # gam1 is a hack to allow e. be different
+    x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm","unif"), # gam1 is a hack to allow e. be different
     e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, mu.z=0, 
     alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
     n, seed, 
@@ -38,8 +40,11 @@ sim.chngpt = function (
     if(x.distr=="imb") { # imbalance
         x=c(rnorm(n-round(n/3), mu.x, sd.x), mu.x-abs(rnorm(round(n/3), 0, sd.x)))
         z=rep(1,n)
-    } else if(x.distr=="lin") { # unif
+    } else if(x.distr=="unif") { # unif
         x=runif(n)*4*sd.x + mu.x-2*sd.x
+        z=rnorm(n, mean=mu.z, 1)
+    } else if(x.distr=="lin") { # linearly evenly spaced
+        x=seq(0,1,length=n)*4*sd.x + mu.x-2*sd.x
         z=rnorm(n, mean=mu.z, 1)
     } else if(x.distr=="mix") { # mixture
         x=c(rnorm(n*.6, mu.x, sd.x), rep(mu.x-2*sd.x, n*.4))
@@ -92,6 +97,7 @@ sim.chngpt = function (
     
     
     x.gt.e = expit.2pl(x, e=e., b=b.transition)  # 1 if x>e., 0 if x<e.
+    x.gt.e[is.nan(x.gt.e)]=0# otherwise we would get NA in the simulated data
     x.lt.e = 1-x.gt.e # 1 if x>e., 0 if x<e.
 #    # test. note that when x==e., returns NaN
 #    expit.2pl(c(.9,1,1.1), e=1, b=Inf)
@@ -111,24 +117,26 @@ sim.chngpt = function (
         if(is.null(alpha) | inherits(alpha, "try-error")) stop("alpha not found, please check beta or provide a null") 
         
         X=cbind(1,     z,        x,   x.gt.e,   if(threshold.type=="segmented2") x.gt.e*x else x.gt.e*(x-e.),     z*x,   z*x.gt.e,   z*x.gt.e*(x-e.), x.lt.e*(x-e.), (x.lt.e*(x-e.))^2, (x.gt.e*(x-e.))^2, (x.lt.e*(x-e.))^3, (x.gt.e*(x-e.))^3)
-        coef.=c(intercept=alpha, z=coef.z, x=0, x.gt.e=0, x.hinge=0,                                                        z.x=0, z.x.gt.e=0, z.x.hinge=0,     x.uhinge=0,     x.uhinge.quad=0,   x.hinge.quad=0,     x.uhinge.cubic=0,   x.hinge.cubic=0)
+        coef.=c(intercept=alpha, z=coef.z, x=0, x.gt.e=0, x.hinge=0,                                              z.x=0, z.x.gt.e=0, z.x.hinge=0,     x.uhinge=0,     x.uhinge.quad=0,   x.hinge.quad=0,     x.uhinge.cubic=0,   x.hinge.cubic=0)
         if (mean.model=="thresholded") { 
             if (threshold.type=="step") {
                 coef.[1:5]=c(alpha, coef.z,          0,    beta,     0) 
             } else if (threshold.type=="hinge") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,  beta) 
-            } else if (threshold.type=="quadhinge") {
+            } else if (threshold.type=="M02") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.hinge"]=beta[1];  coef.["x.hinge.quad"]=beta[2]
-            } else if (threshold.type=="cubichinge") {
+            } else if (threshold.type=="M03") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.hinge"]=beta[1];  coef.["x.hinge.quad"]=beta[2];  coef.["x.hinge.cubic"]=beta[3]
             } else if (threshold.type=="upperhinge") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.uhinge"]=beta 
-            } else if (threshold.type=="quadupperhinge") {
+            } else if (threshold.type=="M20") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.uhinge"]=beta[1]; coef.["x.uhinge.quad"]=beta[2]
-            } else if (threshold.type=="cubicupperhinge") {
+            } else if (threshold.type=="M30") {
                 coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x.uhinge"]=beta[1]; coef.["x.uhinge.quad"]=beta[2]; coef.["x.uhinge.cubic"]=beta[3]
             } else if (threshold.type=="segmented") {
-                coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) 
+                if(length(beta)==1) coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) else {
+                coef.[1:5]=c(alpha, coef.z,          0,       0,     0); coef.["x"]=beta[1]; coef.["x.hinge"]=beta[2]
+                }
             } else if (threshold.type=="segmented2") {
                 coef.[1:5]=c(alpha, coef.z,  -log(.67),       0,  beta) 
             } else if (threshold.type=="M12") {
@@ -242,9 +250,11 @@ sim.chngpt = function (
     } else if(family=="gaussian") {
         if (!heteroscedastic) {
             rnorm(n, linear.predictors, sd)
-        } else {
+        } else if (heteroscedastic==1) {
             rnorm(n, linear.predictors, sd*abs(linear.predictors))
-        }
+        } else if (heteroscedastic==2) {
+            rnorm(n, linear.predictors, sd/2+sd/2*sqrt(abs(linear.predictors)))            
+        } else stop("wrong value for heteroscedastic")
     }
     
     dat=data.frame (
@@ -296,6 +306,8 @@ sim.chngpt = function (
     } else {
         dat$sampling.p=rep(1, nrow(dat))
     }
+    
+    names(coef.) = name.conversion.2(names(coef.))
     
     attr(dat, "coef")=coef.
     attr(dat, "chngpt")=e.

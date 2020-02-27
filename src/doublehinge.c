@@ -43,8 +43,8 @@
 SEXP double_hinge_fit(
      SEXP u_X, SEXP u_Y, 
      SEXP u_chngpts_1, SEXP u_chngpts_2, 
-     SEXP u_lower_y, SEXP u_upper_y,
-     SEXP u_nBoot)
+     SEXP u_lower_y, SEXP u_upper_y
+)
 {
      
     double* X = REAL(u_X);
@@ -53,7 +53,6 @@ SEXP double_hinge_fit(
     double* chngpts_2=REAL(u_chngpts_2);    
     double lower_y = asReal(u_lower_y);
     double upper_y = asReal(u_upper_y);
-    int nBoot = asInteger(u_nBoot);
     
     int n_1=length(u_chngpts_1);
     int n_2=length(u_chngpts_2);
@@ -61,12 +60,9 @@ SEXP double_hinge_fit(
     
     int i, j, k;
     double x, y_hat, mse, e_1, e_2;    
-    
-//	if (nBoot<0.1) {
-//    // a single search
-      
+       
     // allocate memory for return variables and other variables
-    SEXP _coef=PROTECT(allocVector(REALSXP, 3*(nBoot+1)));// p slopes, 1 threshold
+    SEXP _coef=PROTECT(allocVector(REALSXP, 4));// 2 thresholds, 1 slope, 1 mse
     double *coef=REAL(_coef);    
     double * mses = (double *) malloc(n_1 * n_2 * sizeof(double));
     
@@ -110,37 +106,66 @@ SEXP double_hinge_fit(
     coef[0]=e_1; 
     coef[1]=e_2; 
     coef[2]=(upper_y-lower_y)/(e_2-e_1); 
+    coef[3]=mse_min;
     
     
-
-/*
-    	// these variables are reused within each bootstrap replicate
-    	vector<int> index(n);
-        Matrix <double,Row,Concrete> Xb(n,p), Yb(n,1), Xbreg(n,p+1); // Xbreg is used in regression, it contains the quadratic term
-    	vector<double> Wb(n); 
-    	double e_hat;
-    	
-        for (int b=0; b<nBoot; b++) {        
-            // create bootstrap dataset, note that index is 1-based
-            SampleReplace(n, n, &(index[0]));
-            // Step 1: sort
-            sort (index.begin(), index.end());
-            
-            for (i=0; i<n; i++) { //note that index need to -1 to become 0-based
-                Xb(i,_)=X(index[i]-1,_); 
-                Yb(i)  =Y(index[i]-1); 
-                Wb[i]  =W[index[i]-1]; 
-            } 
-//            for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); Wb[i]=W[i]; } // debug use, can be used to compare with non-boot
-            //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
-*/            
-    
-
     UNPROTECT(1);
     free(mses);
     return _coef;
     
 }
 
+
+SEXP double_hinge_fit_2(
+     SEXP u_X, SEXP u_Y, 
+     SEXP u_lower_y, SEXP u_upper_y
+)
+{
+     
+    double* X = REAL(u_X);
+    double* Y=REAL(u_Y); 
+    double lower_y = asReal(u_lower_y);
+    double upper_y = asReal(u_upper_y);
+    
+    // allocate memory for return variables and other variables
+    SEXP _coef=PROTECT(allocVector(REALSXP, 4));// 2 thresholds, 1 slope, 1 mse
+    double *coef=REAL(_coef);        
+
+    int i, j, k, n=length(u_X);    
+    double y_hat, mse, e_1, e_2, e_1_min=X[0], e_2_min=X[1], mse_min=INFINITY;
+    
+    for(i=0; i<n; i++) {
+    for(j=i+1; j<n; j++) {
+        e_1=X[i];
+        e_2=X[j];
+        mse=0;
+        for(k=0; k<n; k++) {
+            if (k<=i) {
+                y_hat=lower_y;
+            } else if (k>=j) {
+                y_hat=upper_y;
+            } else {     
+                y_hat=lower_y+(upper_y-lower_y)*(X[k]-e_1)/(e_2-e_1);
+            }
+            mse+=pow(Y[k]-y_hat, 2);
+        }
+        if(mse<mse_min) {
+            mse_min=mse;
+            e_1_min=e_1;
+            e_2_min=e_2;
+        }
+    }
+    }
+        
+    coef[0]=e_1_min; 
+    coef[1]=e_2_min; 
+    coef[2]=(upper_y-lower_y)/(e_2_min-e_1_min); 
+    coef[3]=mse_min;
+    
+    
+    UNPROTECT(1);
+    return _coef;
+    
+}
 
 #endif

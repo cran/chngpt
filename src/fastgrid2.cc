@@ -137,6 +137,11 @@ SEXP fastgrid2_gaussian(
                              thresholdIdx, thresholds, nThresholds, 
                              Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
                              logliks); 
+        } else if(model==204) {
+               M20c_search (Z, Y, x, w, 
+                             thresholdIdx, thresholds, nThresholds, 
+                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                             logliks); 
         } else if(model==22) {
                M22_search (Z, Y, x, w, 
                              thresholdIdx, thresholds, nThresholds, 
@@ -179,6 +184,7 @@ SEXP fastgrid2_gaussian(
         if        (model==5)  { p_coef=p+1; 
         } else if (model==10) { p_coef=p+1;
         } else if (model==20) { p_coef=p+2;
+        } else if (model==204){ p_coef=p+1;
         } else if (model==22) { p_coef=p+4;
         } else if (model==224){ p_coef=p+3;
         } else if (model==30) { p_coef=p+3;
@@ -206,6 +212,7 @@ SEXP fastgrid2_gaussian(
                 wb[i]  =w[index[i]-1]; 
             } 
             //for (i=0; i<n; i++) {for (j=0; j<p-1; j++)  PRINTF("%f ", Zb(i,j)); PRINTF("%f %f %f ", Yb(i,0), xb[i], wb[i]); PRINTF("\n");} 
+            //if(b==757 | b==0) {for (i=0; i<n; i++) PRINTF("%d,", index[i]); PRINTF("\n");}
             
             for(i=0; i<nThresholds; i++) thresholds[i]=xb[thresholdIdx[i]-1];
             //PRINTF("thresholds: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", thresholds[i]); PRINTF("\n");
@@ -229,6 +236,11 @@ SEXP fastgrid2_gaussian(
                                  logliks);                              
             } else if(model==20) {
                    e_hat=M20_search(Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 logliks); 
+            } else if(model==204) {
+                   e_hat=M20c_search(Zb, Yb, xb, wb, 
                                  thresholdIdx, thresholds, nThresholds, 
                                  Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
                                  logliks); 
@@ -280,6 +292,11 @@ SEXP fastgrid2_gaussian(
                     if(x[index[i]-1]<e_hat) Xbreg(i,p-1) =x[index[i]-1]- e_hat; else Xbreg(i,p-1) = 0;// (x-e)-                    
                     Xbreg(i,p)=pow(Xbreg(i,p-1),2);// (x-e)-^2
                 
+                } else if (model==204) {                    
+                    if(x[index[i]-1]<e_hat) Xbreg(i,p-2) =x[index[i]-1]- e_hat; else Xbreg(i,p-2) = 0;// (x-e)-                    
+                    Xbreg(i,p-1)=pow(Xbreg(i,p-2),2);// (x-e)-^2
+                    Xbreg(i,p-2) =x[index[i]-1]; // x
+                
                 } else if (model==22) {                    
                     if(x[index[i]-1]<e_hat) Xbreg(i,p-1) =x[index[i]-1]- e_hat; else Xbreg(i,p-1) = 0;// (x-e)-                    
                     Xbreg(i,p)=pow(Xbreg(i,p-1),2);// (x-e)-^2
@@ -292,6 +309,7 @@ SEXP fastgrid2_gaussian(
                     Xbreg(i,p-1) =x[index[i]-1]- e_hat; // x-e                    
                     if(x[index[i]-1]<e_hat) Xbreg(i,p)  =pow(Xbreg(i,p-1),2); else Xbreg(i,p)=0;// (x-e)-^2                    
                     if(x[index[i]-1]>e_hat) Xbreg(i,p+1)=pow(Xbreg(i,p-1),2); else Xbreg(i,p+1)=0;// (x-e)+^2                       
+                    Xbreg(i,p-1) =x[index[i]-1]; // x
                        
                 } else if (model==30) {                       
                     if(x[index[i]-1]<e_hat) Xbreg(i,p-1) =x[index[i]-1]- e_hat; else Xbreg(i,p-1) = 0;//(x-e)-
@@ -303,6 +321,7 @@ SEXP fastgrid2_gaussian(
                     Xbreg(i,p)=pow(Xbreg(i,p-1),2);// (x-e)^2                    
                     if(x[index[i]-1]<e_hat) Xbreg(i,p+1)=pow(Xbreg(i,p-1),3); else Xbreg(i,p+1)=0;// (x-e)-^3                    
                     if(x[index[i]-1]>e_hat) Xbreg(i,p+2)=pow(Xbreg(i,p-1),3); else Xbreg(i,p+2)=0;// (x-e)+^3
+                    Xbreg(i,p-1) =x[index[i]-1]; // x
                     
                 } else PRINTF("wrong \n");               
                  

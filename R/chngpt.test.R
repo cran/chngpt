@@ -62,7 +62,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     data.sorted=data[order(chngpt.var),]    
     
     # change point candidates
-    if (is.null(chngpts)) chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,chngpts.cnt)
+    if (is.null(chngpts)) chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,chngpts.cnt,min.max.not.allowed=TRUE)
     # avoid having chngpts starting at the ends
     if(chngpts[1]==chngpt.var.sorted[1]) {
         chngpts.new=chngpts[-1]
