@@ -163,8 +163,10 @@ SEXP fastgrid_gaussian(
      SEXP u_X, SEXP u_Y, 
      SEXP u_W,
      SEXP u_thresholdIdx, SEXP u_skipping,
-     SEXP u_nBoot, SEXP u_nSub)
-{
+     SEXP u_nBoot, 
+     SEXP u_nSub,
+     SEXP u_withReplacement
+){
     double* uX_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y);
     double* W_dat=REAL(u_W);    

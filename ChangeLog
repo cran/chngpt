@@ -240,3 +240,9 @@
     * Modify convert.coef() to include adjustment of intercept
     * Modify plot.chngptm() so that it works properly for step model
     * Add * next to p value in summary.chngptm print out to indicate that it is not a true p value
+
+2020-04-27
+    * Modify chngptm() and fastgrid2.cc to include adjustment of intercept
+
+2020-05-13
+    * Update vignette

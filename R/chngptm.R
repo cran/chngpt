@@ -1,3 +1,4 @@
+# would be nice to add support for the chngpts parameters, which allows finding values in between observed x's
 # tol=1e-4; maxit=1e2; verbose=TRUE; est.method="fastgrid"; var.type="bootstrap"; lb.quantile=.1; ub.quantile=.9; grid.search.max=500; weights=NULL; chngpt.init=NULL; alpha=0.05; b.transition=Inf; search.bound=10; ci.bootstrap.size=500; m.out.of.n=0; aux.fit=NULL; offset=NULL
 # family="gaussian"; type="M22c"; threshold.type="M22c"; formula.1=y ~ z; formula.2=~x; data=dat; formula.strat=NULL
 #family can be coxph or any glm family, but variance estimate is only available for binomial and gaussian (only model-based for latter)
@@ -13,9 +14,9 @@ chngptm = function(formula.1, formula.2, family, data,
   est.method=c(
     "default","fastgrid2","fastgrid","grid","smoothapprox"), 
   var.type=c("default","none","robust","model","bootstrap","all"), aux.fit=NULL,  # robusttruth is for development only
-  lb.quantile=.1, ub.quantile=.9, grid.search.max=Inf, 
+  lb.quantile=.1, ub.quantile=.9, grid.search.max=Inf,# chngpts=NULL,
   test.inv.ci=TRUE, boot.test.inv.ci=FALSE, # test.inv.ci is passed to local functions, boot.test.inv.ci is global within this function
-  ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, m.out.of.n=0, 
+  ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, m.out.of.n=0, subsampling=0, 
   b.transition=Inf,# controls whether threshold model or smooth transition model
   tol=1e-4, maxit=1e2, chngpt.init=NULL, search.bound=10,
   keep.best.fit=TRUE, # best.fit is needed for making prediction and plotting
@@ -28,6 +29,9 @@ chngptm = function(formula.1, formula.2, family, data,
     var.type<-match.arg(var.type)    
     est.method<-match.arg(est.method)    
     if (est.method=="fastgrid") est.method="fastgrid2" # keep fastgrid only for backward compatibility
+    
+    if (m.out.of.n>0 & subsampling>0) stop("Only one of m.out.of.n and subsampling can be greater than 0. subsampling is without replacement, and m.out.of.n is with replacement.")
+    n.sub=m.out.of.n+subsampling
     
     if(!is.character(family)) stop("Please enter a string as family, e.g. \"gaussian\"")
     family=tolower(family)
@@ -223,14 +227,16 @@ chngptm = function(formula.1, formula.2, family, data,
     
     if (verbose) {
         myprint(family, threshold.type, imodel, est.method, var.type)
-        if (var.type=="bootstrap") myprint(var.type, m.out.of.n) 
+        if (var.type=="bootstrap") myprint(var.type, m.out.of.n, subsampling) 
         myprint(has.itxn, p.z, p.2.itxn, p)
         myprint(has.quad, has.cubic)
         print(formula.new)
     }
         
     # threshold candidates
-    chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,n.chngpts=grid.search.max, stratified.by.sorted=stratified.by.sorted)
+#    if(is.null(chngpts)) 
+        chngpts=get.chngpts(chngpt.var.sorted,lb.quantile,ub.quantile,n.chngpts=grid.search.max, stratified.by.sorted=stratified.by.sorted)
+#    }
     if(verbose) myprint(chngpts)
     
     grid.search=function(){
@@ -294,7 +300,8 @@ chngptm = function(formula.1, formula.2, family, data,
                     , as.integer(attr(chngpts,"index"))
                     , ifelse(verbose>1, as.integer(verbose), 0)
                     , 0 # bootstrap size
-                    , 0 # subsampling sample size
+                    , 0 # subsampling or m.out.of.n sample size
+                    , 0 # false
                 )  
                 #print(logliks)
             } else {
@@ -495,7 +502,7 @@ chngptm = function(formula.1, formula.2, family, data,
         coef.hat=c(coef(best.fit), "chngpt"=e.final)
         
     } else stop("wrong est.method") # end if grid/smoothapprox
-
+    
     if(!stratified) {
         names(coef.hat)[length(coef.hat)]="chngpt"
         new.names=name.conversion(threshold.type, chngpt.var.name, names(coef.hat), hinge.to.upperhinge)
@@ -854,7 +861,8 @@ chngptm = function(formula.1, formula.2, family, data,
                         , as.integer(attr(chngpts,"index"))
                         , ifelse(verbose>1, as.integer(verbose), 0)
                         , ci.bootstrap.size
-                        , m.out.of.n # subsampling sample size
+                        , n.sub # subsampling or m.out.of.n sample size
+                        , m.out.of.n>0 # with replacement
                     )     
                 } else {
                     f.name="twoD_"%.%family
@@ -887,7 +895,7 @@ chngptm = function(formula.1, formula.2, family, data,
                 boot.out=boot::boot(data.sorted, R=ci.bootstrap.size, sim = "ordinary", stype = "i", parallel = ifelse(ncpus==1,"no","multicore"), ncpus=ncpus, statistic=function(dat, ii){
                     # this function is run R+1 times, the first time is the data itself without resampling
                     #print(ii); print(dat[sort(ii),c("z","x","y")])
-                    if (m.out.of.n>0) ii=ii[1:(4*sqrt(n))] # m out of n bootstrap # but this is wrong, because subsampling requires without replacement
+                    if (m.out.of.n>0) ii=ii[1:m.out.of.n] # m out of n bootstrap with replacement, one rule of thumb 4*sqrt(n)
                     # use chngpt.init so that the mle will be less likely to be inferior to the model conditional on e.hat, but it does not always work
                     # using chngpt.init makes bootstrap much faster though
                     # for studentized bootstrap interval, need variance estimates as well, however, stud performs pretty badly
@@ -983,7 +991,7 @@ chngptm = function(formula.1, formula.2, family, data,
 #                #outs$stud= cbind(outs$stud,  if(!inherits(ci.out,"bootci")) c(NA,NA) else ci.out$student[1,4:5])
 #            }
 #            colnames(outs$perc)<-colnames(outs$basic)<-names(coef.hat) # <-colnames(outs$abc)
-
+    
             outs$perc=sapply (1:length(coef.hat), function(i) {
                 quantile(boot.samples[,i], c(alpha/2,1-alpha/2), na.rm=TRUE)
             })
@@ -1193,7 +1201,7 @@ get.chngpts=function (chngpt.var.sorted, lb.quantile, ub.quantile, n.chngpts, st
 #    chngpts=(chngpts[1:(length(chngpts)-1)]+chngpts[-1])/2
 #    # old from chngpt.test, chngpts are mostly between observed values
 #    chngpts=quantile(chngpt.var, seq(lb.quantile,ub.quantile,length=chngpts.cnt)) 
-get.chngpts (c(1:5,5:10), lb.quantile=.1, ub.quantile=.9, n.chngpts=Inf)
+#get.chngpts (c(1:5,5:10), lb.quantile=.1, ub.quantile=.9, n.chngpts=Inf)
 
 
 ## make.chngpt.var creates thresholded covariates. 
@@ -1212,6 +1220,9 @@ make.chngpt.var=function(x, e, threshold.type, data=NULL, b.transition=Inf, stra
             out=transition
         } else if (threshold.type %in% c("upperhinge", "M20", "M30", "M40", "M21", "M21c", "M31")) {
             out=(1-transition)*(x-e)
+        # this is needed for predict    
+        } else if (threshold.type %in% c("hinge", "M02", "M03", "M04", "M12", "M12c", "M13")) {
+            out=transition*(x-e)
         } else if (threshold.type %in% c("segmented","hinge")) {
         # hinge is needed here b/c this function is also called by chngpt.test
 #        } else if (threshold.type %in% c("hinge","M02","M03","M04","segmented", "M12", "M13")) {
@@ -1236,7 +1247,7 @@ make.chngpt.var=function(x, e, threshold.type, data=NULL, b.transition=Inf, stra
                 data$x.lt.e   = out[,1]
                 data$x.gt.e   = out[,2]
                 data$x.mi.e   = out[,3]
-            } else if (threshold.type %in% c("M21c")) {
+            } else if (threshold.type %in% c("M21c","M12c")) {# this is a little weird for M12c, but seems to work
                 data$x.lt.e   = out
             } else {
                 data$x.mod.e = out

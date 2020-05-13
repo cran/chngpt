@@ -32,7 +32,8 @@ chngptm (formula.1, formula.2, family, data, type = c("hinge",
          0.1, ub.quantile = 0.9, grid.search.max = Inf,
          test.inv.ci = TRUE, boot.test.inv.ci = FALSE,
          ci.bootstrap.size = 1000, alpha = 0.05, save.boot =
-         TRUE, m.out.of.n = 0, b.transition = Inf, tol = 1e-04,
+         TRUE, m.out.of.n = 0, subsampling=0, 
+         b.transition = Inf, tol = 1e-04,
          maxit = 100, chngpt.init = NULL, search.bound = 10,
          keep.best.fit = TRUE, ncpus = 1, verbose = FALSE, ...)
          
@@ -92,7 +93,8 @@ lincomb(object, comb, alpha=0.05)
   \item{x}{chngptm fit object.}
   \item{object}{chngptm fit object.}
   \item{\dots}{arguments passed to glm or coxph}
-  \item{m.out.of.n}{whether to perform m out of n bootstrap}
+  \item{m.out.of.n}{sample size for m-out-of-n bootstrap, default 0 for not doing this type of bootstrap}
+  \item{subsampling}{sample size for subsampling bootstrap, default 0 for not doing this type of bootstrap}
 
   \item{boot.test.inv.ci}{whether to get test inversion CI under bootstrap}
   \item{search.bound}{bounds for search for sloping parameters}
@@ -118,6 +120,7 @@ When est.method is smoothapprox, Newton-Raphson is done with initial values chos
 If var.method is bootstrap, summary of fitted model contains p values for each estimated slope. These p values are approximate p-values, obtained assuming that the bootstrap distributions are normal. 
 
 When var.method is bootstrap and the OS is not Windows, the boot package we use under the hood takes advantage of \code{ncpus} cores through parallel::mclapply. 
+
 
 }
 \value{
@@ -157,6 +160,7 @@ fit.1.a=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat.1, type="seg
     , ci.bootstrap.size=10)
 summary(fit.1.a)
 plot(fit.1.a)
+# fit.1.a$vcov$boot.samples
 
 
 # threshold logistic regression
@@ -238,6 +242,7 @@ fit.0=glm(yy~zz+ns(xx,df=3), data, family="binomial")
 fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hinge", 
     est.method="smoothapprox", var.type="all", verbose=verbose, aux.fit=fit.0, 
     lb.quantile=0.1, ub.quantile=0.9, tol=1e-4, maxit=1e3)
+
 
 
 }

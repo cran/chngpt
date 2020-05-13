@@ -103,4 +103,6 @@ If lower.y and upper.y are not supplied, min(y) is taken as the function value w
 
 If the function is expected to be decreasing between the two thresholds, lower.y and upper.y should be supplied to ensure the correct fit.
 
+mse is residual sum of squares
+
 }

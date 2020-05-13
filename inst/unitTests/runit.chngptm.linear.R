@@ -69,10 +69,24 @@ for (type in c("hinge","M02")) {
 }
 
 
-print("########  step model m out of n subsampling")
+print("########  step model m out of n bootstrap")
 dat=sim.chngpt("thresholded", threshold.type="step", family="gaussian", n=20, seed=1, beta=-log(.67), alpha=1)
 est.method="fastgrid2"
 fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", m.out.of.n=10, ci.bootstrap.size=10, verbose=verbose)
+if (verbose) plot(fit.0); fit.0
+out=c(
+  fit.0$logliks[1],
+  diff(fit.0$logliks)[1:3],
+  fit.0$coefficients,
+  fit.0$vcov$boot.samples[1,]
+)    
+checkEqualsNumeric(out, c(35.52723714,-0.15529784,-0.18206414,0.02324697,0.99337520,0.38349876,0.48532422,4.67409558,1.3862616,0.1185507,0.5859363,6.4998895), tolerance=tolerance)
+
+
+print("########  step model subsampling bootstrap")
+dat=sim.chngpt("thresholded", threshold.type="step", family="gaussian", n=20, seed=1, beta=-log(.67), alpha=1)
+est.method="fastgrid2"
+fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", subsampling=10, ci.bootstrap.size=10, verbose=verbose)
 if (verbose) plot(fit.0); fit.0
 out=c(
   fit.0$logliks[1],

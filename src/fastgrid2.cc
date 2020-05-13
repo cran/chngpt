@@ -54,8 +54,9 @@ SEXP fastgrid2_gaussian(
      SEXP u_thresholdIdx, 
      SEXP u_verbose,
      SEXP u_nBoot, 
-     SEXP u_nSub)
-{
+     SEXP u_nSub,
+     SEXP u_withReplacement
+){
 
     int model = asInteger(u_model);
     
@@ -72,6 +73,7 @@ SEXP fastgrid2_gaussian(
     int nThresholds=length(u_thresholdIdx);
     int nSub = asInteger(u_nSub);
     if (nSub==0) nSub=n;
+    int withReplacement=asInteger(u_withReplacement); 
     //PRINTF("thresholdIdx: "); for (int i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
         
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe or MCMCpack MCMCmetrop1R.cc
@@ -345,7 +347,7 @@ SEXP fastgrid2_gaussian(
         return _coef;
         
     } else {
-        // subsampling m-out-of-n bootstrap
+        // subsampling bootstrap
               
         int p_coef=0;
         if(model==5) { 
@@ -367,7 +369,7 @@ SEXP fastgrid2_gaussian(
         int nThresholdsb, minThresholdIdx=thresholdIdx[0], maxThresholdIdx=thresholdIdx[nThresholds-1];
 
         for (int b=0; b<nBoot; b++) {        
-            SampleNoReplace(nSub, n, &(index[0]), &(index2[0]));
+            if(withReplacement>0) SampleReplace (nSub, n, &(index[0])); else SampleNoReplace (nSub, n, &(index[0]), &(index2[0]));
             // Step 1: sort
             sort (index.begin(), index.end());
             
