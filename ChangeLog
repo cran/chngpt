@@ -246,3 +246,6 @@
 
 2020-05-13
     * Update vignette
+
+2020-05-21
+    * Remove std:terminate at request of BDR

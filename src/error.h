@@ -215,7 +215,8 @@ namespace scythe
 #ifdef SCYTHE_RPACK
         error("Aborting Scythe C++ execution");
 #else
-        std::terminate ();
+        error("Aborting Scythe C++ execution");
+//        std::terminate ();// violates CRAN policy
 #endif
       }
     }

@@ -3,6 +3,10 @@ double.hinge=function(x, y, lower.y=NULL, upper.y=NULL,
     var.type=c("none","bootstrap"), ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, ncpus=1
 ) {
     
+    not.missing=!is.na(x) & !is.na(y)
+    x=x[not.missing]
+    y=y[not.missing]
+    
     var.type<-match.arg(var.type)    
     
     if(is.null(lower.y)) lower.y=min(y)
@@ -85,7 +89,7 @@ plot.double.hinge=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", lty=1, a
     out=list()
     if(which==1) {
     # scatterplot with lines
-        plot(fit$x, fit$y, xlab="", ylab="")
+        plot(fit$x, fit$y, xlab="", ylab="", xlim=xlim)
         lines(x=c(min(fit$x,na.rm=T), fit$coefficients["lower.x"], fit$coefficients["upper.x"], max(fit$x,na.rm=T)), y=c(fit$lower.y, fit$lower.y, fit$upper.y, fit$upper.y), col=lcol, lwd=lwd)    
         
     } else if (which==2) {
