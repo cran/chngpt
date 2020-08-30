@@ -249,3 +249,57 @@
 
 2020-05-21
     * Remove std:terminate at request of BDR
+
+2020-05-24
+    * Allow random intercepts
+
+2020-06-05
+    * For threshold lmer models, select threshold based on logLik
+    * Allow individual lines to be plotted based on threshold lmer model fit
+
+2020-06-11
+    * Add logistic.slope to sim.chngpt
+
+2020-06-13
+    * Change to if(b.transition==Inf) transition[is.nan(transition)]=1 to see if it makes any difference for convergence rate
+
+2020-06-14
+    * Change back to if(b.transition==Inf) transition[is.nan(transition)]=0
+
+2020-06-24
+    * Fix implementation for stratified model
+    * Implement M111, three phase segmented model
+    * Add sim.twophase.ran.inte; add unit testing code for random intercept threshold models
+
+2020-06-25
+    * Add plot functionality for M111
+    * Fix ub.quantile and lb.quantile issue for M12c
+    * Add M111 to vignette
+
+2020-06-26
+    * Fix plot.chngpt for three-phase models 
+    * Change default bootstrap CI type from symm to perc in summary.chngpt
+    
+2020-07-01
+    * Add logLik.chngptm
+    * Add examples of lrtest and lincomb to chngptm man and to vignette
+    * Add random intercept model to vignette
+    * Improve vignette
+
+2020-08-06
+    * M111_search: Add a hack to get around openblas problem for collinear matrix inversion 
+
+2020-08-10
+    * M111_search: Use a different implementation of matrix inversion that does not depend on blas
+
+2020-08-10
+    * M111_search: Use an alternative way to compute crit that is more numerically stable when highly collinear
+    * M111_search: bootstrap may have duplicate threshold candidates, which could cause problems. this is now taken care of
+    * M111_search: Removing the hack of skipping if crit 20 percent larger than the previous since it does not work for small datasets
+    * fixed a bug related to REML
+
+2020-08-28
+    * Add extractAIC, AIC
+
+2020-08-29
+    * Make examples run faster by reducing ci.bootstrap.size

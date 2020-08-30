@@ -109,5 +109,13 @@ double M33c_search(
     vector<double>& xrcusumR, vector<double>& x2rcusumR, Matrix<double,Row>& xBcusumR, Matrix<double,Row>& x2BcusumR, 
     double* logliks);
 
+double M111_search(
+    Matrix<double,Row>& B, Matrix<double,Row>& r, vector<double>& x, vector<double>& w, 
+    int * thresholdIdx, vector<double>& thresholds, int nThresholds,
+    // forward cumulative sum
+    Matrix<double,Row>& Bcusum, vector<double>& rcusum, vector<double>& Wcusum, vector<double>& xcusum, 
+    vector<double>& x2cusum,// vector<double>& x3cusum, vector<double>& x4cusum, vector<double>& x5cusum, 
+    double* ehatvec, int verbose);
+
 
 #endif /* fastgrid_H */

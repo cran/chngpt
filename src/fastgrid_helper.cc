@@ -172,7 +172,7 @@ Eigen eigen (const Matrix<>& A, bool vectors=true)
     return resobj;
 }
 
-
+// get B and r and save in Z and Y
 void _preprocess(Matrix<double, Row>& Z, Matrix<double, Row>& Y) {
     int p=Z.cols();
     Matrix<> A = invpd(crossprod(Z));
@@ -181,6 +181,9 @@ void _preprocess(Matrix<double, Row>& Z, Matrix<double, Row>& Y) {
     for (int j=0; j<p; j++) A_eig(j,j)=sqrt(Aeig.values(j));
     Y = Y - Z * A * (t(Z) * Y);                       // save r in Y
     Z = Z * (Aeig.vectors * A_eig * t(Aeig.vectors)); // save B in Z
+    //PRINTF("A\n"); for (i=0; i<p; i++) {for (j=0; j<p; j++)  PRINTF("%f ", A(i,j)); PRINTF("\n");}            
+    //PRINTF("eigen values\n"); for (j=0; j<p; j++) PRINTF("%f ", Aeig.values(j)); PRINTF("\n");
+    //PRINTF("B\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++) PRINTF("%f ", B(i,j)); PRINTF("\n");}            
 }
 //            // R code:    
 //            A <- solve(t(Z.sorted) %*% Z.sorted)
@@ -190,6 +193,9 @@ void _preprocess(Matrix<double, Row>& Z, Matrix<double, Row>& Y) {
 //            A.sqrt <- a.eig$vectors %*% diag(sqrt(a.eig$values)) %*% solve(a.eig$vectors)
 //            B = Z.sorted %*% A.sqrt  
          
+
+
+
 
 
 #endif /* fastgrid_H */

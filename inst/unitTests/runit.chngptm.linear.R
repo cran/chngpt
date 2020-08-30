@@ -9,7 +9,47 @@ tolerance=1e-1
 # R.Version()$system is needed b/c 32 bit system gives different results from 64 bit system
 if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_checkReproducibility")) & R.Version()$system %in% c("x86_64, mingw32","x86_64, linux-gnu")) tolerance=1e-6 
 print(paste0("tol: ", tolerance), quote=FALSE)
-verbose = FALSE
+
+verbose = 0
+
+# M111
+est.methods=c("fastgrid","grid")
+dat = sim.threephase(n = 20, seed=10)
+out=NULL
+for (est.method in est.methods) {
+    fit.0=chngptm(y~z, ~x, type="M111", data=dat, family="gaussian", est.method=est.method, var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose); fit.0
+    if(verbose) plot(fit.0)
+    out=cbind(out, c(
+      fit.0$coefficients
+      , fit.0$vcov$boot.samples[1,]
+    ))
+}
+colnames(out)=est.methods
+if(verbose) print(out)
+for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
+
+
+
+print("########  random intercept")
+dat=sim.twophase.ran.inte(threshold.type="segmented", n=50, seed=1)
+fit = chngptm (formula.1=y~z+(1|id), formula.2=~x, family="gaussian", dat, type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=1)
+checkEqualsNumeric(fit$coefficients, c(2.7154145,0.3514853,1.7894006,2.5695986,5.1571429), tolerance=tolerance)    
+checkEqualsNumeric(fit$vcov$boot.samples[1,], c(3.799664,0.3901292,1.5940243,2.2716004,5.1571429), tolerance=tolerance)    
+plot(fit)
+
+
+print("########  segmented")
+type="segmented"    
+dat = sim.chngpt(mean.model="thresholded", threshold.type=type, n=200, seed=1, beta=c(2,2),       x.distr="lin", e.=5, family="gaussian", alpha=0, sd=3, coef.z=1)
+attr(dat,"coef")
+plot(y~x, dat)
+fit = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat,  type=type, est.method="fastgrid2", var.type="bootstrap", ci.bootstrap.size=100, verbose=verbose)
+fit
+plot(fit)
+checkEqualsNumeric(coef(fit), c(-0.6677877,0.8992538,2.2789307,1.9569163), tolerance=tolerance)    
+est=lincomb(fit, comb=c(0,0,1,1), alpha=0.05); print(est)
+
+
 
 
 print("########  M12c")
@@ -307,25 +347,28 @@ if(verbose) print(out)
 checkEqualsNumeric(out, c(544.7867707,1.3788716,2.1591613,-4.6760790,0.3340772,1.1283779,1.5775026,4.8043910,-4.6452678,0.3701558,1.1152278,1.7350673,4.9145547), tolerance=tolerance)    
 
 
-## stratified
-#for (type in c("segmented","hinge")) {
-##type="upperhinge"
-#    print(type)
-#    dat=sim.chngpt("quadratic", n=20, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="gaussian")
-#    est.methods=c("fastgrid2","grid")
-#    out=sapply(est.methods, function(est.method){
-#        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type=type, formula.strat=~I(z>0), est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, verbose=verbose)
-#        c(
-#          fit.0$logliks[1],
-#          diff(fit.0$logliks),
-#          fit.0$coefficients,
-#          fit.0$vcov$boot.samples[1,]
-#        )
-#    })    
-#    out
-#    for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
-#}
-
-
-
+# stratified
+# segmented is not working because it is not clear how the model should be 
+for (type in c("hinge","upperhinge")) {
+#type="hinge"; est.method="grid"
+    print(type)
+    dat=sim.chngpt("quadratic", n=20, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="gaussian")
+    est.methods=c("fastgrid2","grid")    
+    out=NULL
+    for (est.method in est.methods) {
+        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type=type, formula.strat=~I(z>0), est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, verbose=verbose)
+        out=cbind(out, c(
+          fit.0$logliks[1],
+          diff(fit.0$logliks),
+          fit.0$coefficients,
+          fit.0$vcov$boot.samples[1,]
+        ))
+    }
+    colnames(out)=est.methods
+    #print(out)
+    for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
 }
+
+
+
+}# end of test function

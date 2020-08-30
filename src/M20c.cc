@@ -83,7 +83,8 @@ double M20c_search(
     
     // threshold x (stored in the last column of B) at the first threshold value
     // (x-e)-
-    for(i=0; i<thresholdIdx[0]; i++) x[i]=x[i]-thresholds[0];  for(i=thresholdIdx[0]; i<n; i++) x[i]=0; 
+    for(i=0; i<thresholdIdx[0]; i++) x[i]=x[i]-thresholds[0];  
+    for(i=thresholdIdx[0]; i<n; i++) x[i]=0; 
 //    PRINTF("thresholds[0] %f ", thresholds[0]); PRINTF("\n");  
 //    for (i=0; i<n; i++) PRINTF("%f ", r(i)); PRINTF("\n");    
 //    for (j=0; j<n; j++) PRINTF("%f ", B(j,p-1)); PRINTF("\n");    

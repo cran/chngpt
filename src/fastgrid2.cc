@@ -42,9 +42,8 @@ using namespace scythe;
 
 extern "C" {
 
-  // For fastgrid,
   // assume X and Y are sorted in chngptvar from small to large
-  // assume last col of X is chngptvar, which will be updated as move through the grid
+  // assume last col of X is chngptvar
   // thresholdIdx are 1-based index, which define the grid of thresholds
 SEXP fastgrid2_gaussian(
      SEXP u_model,
@@ -59,6 +58,7 @@ SEXP fastgrid2_gaussian(
 ){
 
     int model = asInteger(u_model);
+    int ncut = model==111?2:1; 
     
     double* X_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y); 
@@ -77,7 +77,26 @@ SEXP fastgrid2_gaussian(
     //PRINTF("thresholdIdx: "); for (int i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
         
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe or MCMCpack MCMCmetrop1R.cc
+//PRINTF("DEBUG n %i p %i \n", n, p); 
+
+// works okay under volta
+//R version 3.5.3 (2019-03-11)
+//Platform: x86_64-pc-linux-gnu (64-bit)
+//Running under: Ubuntu 14.04.5 LTS
+//
+//Matrix products: default
+//BLAS/LAPACK: /app/easybuild/software/OpenBLAS/0.2.18-GCC-5.4.0-2.26-LAPACK-3.6.1/lib/libopenblas_prescottp-r0.2.18.so
+
+//but not under rhino
+//R version 3.6.2 (2019-12-12)
+//Platform: x86_64-pc-linux-gnu (64-bit)
+//Running under: Ubuntu 18.04.4 LTS
+//
+//Matrix products: default
+//BLAS/LAPACK: /app/software/OpenBLAS/0.3.7-GCC-8.3.0/lib/libopenblas_haswellp-r0.3.7.so
+
     Matrix<double,Col,Concrete> Xcol (n, p, X_dat); //column major     
+//PRINTF("DEBUG 0\n"); 
     Matrix<double,Row,Concrete> X(Xcol); // convert to row major so that creating bootstrap datasets can be faster and to pass to _grid_search
     Matrix<double,Row,Concrete> Y(n, 1, Y_dat); // define as a matrix instead of vector b/c will be used in matrix operation    
     vector<double> w(W_dat, W_dat + n);
@@ -106,82 +125,97 @@ SEXP fastgrid2_gaussian(
     vector<double> x2cusum (nsmall), x3cusum (nsmall), xrcusum (nsmall), x4cusum (nsmall), x5cusum (nsmall), x2rcusum (nsmall), rcusumR(nsmall);
     vector<double> WcusumR(nsmall), xcusumR(nsmall), x2cusumR(nsmall), x3cusumR(nsmall), x4cusumR(nsmall), x5cusumR(nsmall), xrcusumR(nsmall), x2rcusumR(nsmall); 
 
-
     if (nBoot<0.1) {
-    // a single search
+    // a single search        
+        if(model==111) {
+            SEXP _ehatvec=PROTECT(allocVector(REALSXP, 2));
+            double *ehatvec=REAL(_ehatvec);
+            if (p>1) _preprocess(Z,Y);
+            for(i=0; i<nThresholds; i++) thresholds[i]=x[thresholdIdx[i]-1];
+            M111_search (Z, Y, x, w, 
+                         thresholdIdx, thresholds, nThresholds, 
+                         Bcusum, rcusum, Wcusum, xcusum,
+                         x2cusum,
+                         ehatvec, verbose); 
+            UNPROTECT(1);
+            return _ehatvec;        
+            
+        } else {
+            SEXP _logliks=PROTECT(allocVector(REALSXP, nThresholds));
+            double *logliks=REAL(_logliks);       
     
-        SEXP _logliks=PROTECT(allocVector(REALSXP, nThresholds));
-        double *logliks=REAL(_logliks);       
-
-        // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
-        double yhy = 0;
-        
-        // Step 2. Compute B and r, which are saved in Z and Y
-        if (p>1) {
-            yhy = ((t(Y) * Z) * invpd(crossprod(Z)) * (t(Z) * Y))(0);
-            _preprocess(Z,Y);
+            // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
+            double yhy = 0;
+            
+            // Step 2. Compute B and r, which are saved in Z and Y
+            if (p>1) {
+                yhy = ((t(Y) * Z) * invpd(crossprod(Z)) * (t(Z) * Y))(0);
+                _preprocess(Z,Y);
+            }
+                
+            for(i=0; i<nThresholds; i++) thresholds[i]=x[thresholdIdx[i]-1];
+            if(model==5) { 
+                   Mstep_search(Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds,
+                                 Bcusum, rcusum, Wcusum,
+                                 logliks);                              
+            } else if(model==10) {
+                   M10_search(Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds,
+                                 Bcusum, rcusum, Wcusum, xcusum,
+                                 logliks);                              
+            } else if(model==20) {
+                   M20_search (Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 logliks); 
+            } else if(model==204) {
+                   M20c_search (Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 logliks); 
+            } else if(model==22) {
+                   M22_search (Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
+                                 logliks); 
+            } else if(model==224) {
+                   M22c_search(Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds,
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
+                                 BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
+                                 logliks); 
+            } else if(model==30) {
+                   M30_search (Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
+                                 logliks); 
+            } else if(model==334) {
+                   M33c_search (Z, Y, x, w, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
+                                 BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, x4cusumR, x5cusumR, xrcusumR, x2rcusumR, xBcusumR, x2BcusumR, 
+                                 logliks); 
+            } else PRINTF("wrong \n");
+            
+            
+            for(i=0; i<nThresholds; i++) logliks[i]=logliks[i]+yhy; 
+            if(verbose>0) {PRINTF("search logliks: ");  for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");}            
+            UNPROTECT(1);
+            return _logliks;
         }
-            
-        for(i=0; i<nThresholds; i++) thresholds[i]=x[thresholdIdx[i]-1];
-
-        if(model==5) { 
-               Mstep_search(Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds,
-                             Bcusum, rcusum, Wcusum,
-                             logliks);                              
-        } else if(model==10) {
-               M10_search(Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds,
-                             Bcusum, rcusum, Wcusum, xcusum,
-                             logliks);                              
-        } else if(model==20) {
-               M20_search (Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds, 
-                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
-                             logliks); 
-        } else if(model==204) {
-               M20c_search (Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds, 
-                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
-                             logliks); 
-        } else if(model==22) {
-               M22_search (Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds, 
-                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
-                             BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
-                             logliks); 
-        } else if(model==224) {
-               M22c_search(Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds,
-                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, xrcusum, xBcusum, 
-                             BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, xrcusumR, xBcusumR, 
-                             logliks); 
-        } else if(model==30) {
-               M30_search (Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds, 
-                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
-                             logliks); 
-        } else if(model==334) {
-               M33c_search (Z, Y, x, w, 
-                             thresholdIdx, thresholds, nThresholds, 
-                             Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
-                             BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, x4cusumR, x5cusumR, xrcusumR, x2rcusumR, xBcusumR, x2BcusumR, 
-                             logliks); 
-        } else PRINTF("wrong \n");
-        
-            
-        for(i=0; i<nThresholds; i++) logliks[i]=logliks[i]+yhy; 
-        if(verbose>0) {PRINTF("search logliks: ");  for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");}
-        
-        UNPROTECT(1);
-        return _logliks;
 
     } else if (nSub==n) {
     // Efron bootstrap
 
         //output variables: logliks will not be returned to R, estimates from each bootstrap copy will be stored in coef and returned
+        // for getting results from M111
+        double * ehatvec = (double *) malloc(ncut * sizeof(double));//stores the index of the largest likelihood
+        // for getting results from other models
         double * logliks = (double *) malloc((nThresholds) * sizeof(double));
         
+        // p is the number of other covariates + 1
         int p_coef=0;
         if        (model==5)  { p_coef=p+1; 
         } else if (model==10) { p_coef=p+1;
@@ -191,12 +225,13 @@ SEXP fastgrid2_gaussian(
         } else if (model==224){ p_coef=p+3;
         } else if (model==30) { p_coef=p+3;
         } else if (model==334){ p_coef=p+4;
+        } else if (model==111){ p_coef=p+3;
         } else PRINTF("wrong \n");;
         
         SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p_coef)));
         double *coef=REAL(_coef);    
 
-        Matrix <double,Row,Concrete> Zb(n,p-1), Xbreg(n,p_coef-1), Yb(n,1);
+        Matrix <double,Row,Concrete> Zb(n,p-1), Xbreg(n,p_coef-ncut), Yb(n,1);
         vector<double> wb(n), xb(n);
         vector<int> index(n);         
         double e_hat=0;
@@ -207,7 +242,7 @@ SEXP fastgrid2_gaussian(
             // Step 1: sort
             sort (index.begin(), index.end());
             
-            for (i=0; i<n; i++) { //note that index need to -1 to become 0-based
+            for (i=0; i<n; i++) { //note that index need to minus 1 to become 0-based
                 Zb(i,_)=Z(index[i]-1,_); 
                 Yb(i,0)=Y(index[i]-1,0); 
                 xb[i]  =x[index[i]-1];    
@@ -269,13 +304,23 @@ SEXP fastgrid2_gaussian(
                                  Bcusum, rcusum, Wcusum, xcusum, x2cusum, x3cusum, x4cusum, x5cusum, xrcusum, x2rcusum,  xBcusum, x2Bcusum, 
                                  BcusumR, rcusumR, WcusumR, xcusumR, x2cusumR, x3cusumR, x4cusumR, x5cusumR, xrcusumR, x2rcusumR, xBcusumR, x2BcusumR, 
                                  logliks); 
+            } else if(model==111) {
+                   M111_search (Zb, Yb, xb, wb, 
+                                 thresholdIdx, thresholds, nThresholds, 
+                                 Bcusum, rcusum, Wcusum, xcusum,
+                                 x2cusum,
+                                 ehatvec, verbose); 
             } else PRINTF("wrong \n");
             
             if(verbose>0) {
-                for(i=0; i<nThresholds; i++) logliks[i]=logliks[i]+yhyb; 
-                PRINTF("boot logliks: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");
+                if(model==111) {  
+                    PRINTF("est thresholds: "); for(i=0; i<2; i++) PRINTF("%f ", ehatvec[i]); PRINTF("\n");
+                } else {
+                    for(i=0; i<nThresholds; i++) logliks[i]=logliks[i]+yhyb; 
+                    PRINTF("boot logliks: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", logliks[i]); PRINTF("\n");
+                }
             }
-    
+                    
             // fit model at the selected threshold and save results in coef 
             // since Xb and Yb are changed during search, we need to copy from X 
             for (i=0; i<n; i++) { 
@@ -325,25 +370,35 @@ SEXP fastgrid2_gaussian(
                     if(x[index[i]-1]>e_hat) Xbreg(i,p+2)=pow(Xbreg(i,p-1),3); else Xbreg(i,p+2)=0;// (x-e)+^3
                     Xbreg(i,p-1) =x[index[i]-1]; // x
                     
+                } else if(model==111) {                    
+                    if(x[index[i]-1]<ehatvec[0]) Xbreg(i,p-1) =x[index[i]-1]- ehatvec[0]; else Xbreg(i,p-1) = 0; // (x-e)- 
+                    if(x[index[i]-1]<ehatvec[1]) Xbreg(i,p)   =x[index[i]-1]- ehatvec[1]; else Xbreg(i,p) = 0; // (x-f)- 
+                
                 } else PRINTF("wrong \n");               
                  
                 // add weight to thresholded covariates
-                for (j=p-1; j<p_coef-1; j++) Xbreg(i,j)=Xbreg(i,j)*wb[i];
-            }
-            
+                for (j=p-1; j<p_coef-ncut; j++) Xbreg(i,j)=Xbreg(i,j)*wb[i];
+            }            
             
             Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
-            for (int j=0; j<p_coef-1; j++) coef[b*p_coef+j]=beta_hat[j];                         
-            coef[(b+1)*p_coef-1] = e_hat;
+            if(model==111) {
+                for (int j=0; j<p_coef-ncut; j++) coef[b*p_coef+j]=beta_hat[j];                         
+                coef[(b+1)*p_coef-2] = *ehatvec;
+                coef[(b+1)*p_coef-1] = *(ehatvec+1);
+            } else {
+                for (int j=0; j<p_coef-1; j++) coef[b*p_coef+j]=beta_hat[j];                         
+                coef[(b+1)*p_coef-1] = e_hat;
+            }
             
-            //PRINTF("Xbreg\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xbreg(i,j)); PRINTF("\n");} 
-            //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
-            //for (int j=0; j<p_coef-1; j++) PRINTF("%f ", beta_hat[j]); PRINTF("\n");
-            //for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
+//            PRINTF("Xbreg\n"); for (i=0; i<n; i++) {for (j=0; j<p+ncut-1; j++)  PRINTF("%f ", Xbreg(i,j)); PRINTF("\n");} 
+//            PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
+//            for (int j=0; j<p_coef-ncut; j++) PRINTF("%f ", beta_hat[j]); PRINTF("\n");
+//            //for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
         }
         
         UNPROTECT(1);
         free(logliks);
+        free(ehatvec);
         return _coef;
         
     } else {

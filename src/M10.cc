@@ -35,8 +35,10 @@ using namespace scythe;
 
 
 double M10_search(
+    //input
     Matrix<double, Row>& B, Matrix<double, Row>& r, vector<double>& x, vector<double>& w, 
     int * thresholdIdx, vector<double>& thresholds, int nThresholds,
+    //output
     Matrix<double,Row>& Bcusum, vector<double>& rcusum, vector<double>& Wcusum, vector<double>& xcusum, 
     double* logliks)
 {
@@ -50,15 +52,15 @@ double M10_search(
     int n=B.rows();
     int p=B.cols()+1;
     
-    if(p>1) Bcusum(0,_) = B(0,_)* w[0];    // if we take out the if condition, there will be memory issue when p is 1
     xcusum[0] = x[0]* w[0]* w[0];    
     rcusum[0] = r(0)* w[0];        
     Wcusum[0] = w[0]* w[0];    
+    if(p>1) Bcusum(0,_) = B(0,_)* w[0];    // if we take out the if condition, there will be memory issue when p is 1
     for (i=1; i<n; i++) {
-        if(p>1) Bcusum(i,_)    = Bcusum(i-1,_)    + B(i,_)* w[i]; // B is prescaled
-        xcusum[i]      = xcusum[i-1]      + x[i]* w[i]* w[i];     // x is not prescaled, which is why w is multiplied twice
-        rcusum[i]      = rcusum[i-1]      + r(i)* w[i];           // r is prescaled
-        Wcusum[i]      = Wcusum[i-1]      + w[i]* w[i];           // w is sqrt of true weights
+        xcusum[i]           = xcusum[i-1]      + x[i]* w[i]* w[i];     // x is not prescaled, which is why w is multiplied twice
+        rcusum[i]           = rcusum[i-1]      + r(i)* w[i];           // r is prescaled
+        Wcusum[i]           = Wcusum[i-1]      + w[i]* w[i];           // w is sqrt of true weights
+        if(p>1) Bcusum(i,_) = Bcusum(i-1,_)    + B(i,_)* w[i];         // B is prescaled
     }
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Bcusum(i,j)); PRINTF("\n");}        
     //for (i=0; i<n; i++) PRINTF("%f ", rcusum[i]); PRINTF("\n");

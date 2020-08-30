@@ -1,22 +1,30 @@
 Package: chngpt
 LazyLoad: yes
 LazyData: yes
-Version: 2020.5-21
+Version: 2020.8-29
 Title: Estimation and Hypothesis Testing for Threshold Regression
-Authors@R: c(person("Youyi", "Fong", role = "cre", email = "youyifong@gmail.com"), person("Adam", "Elder", role = "aut", email = "eldera3@uw.edu"), person("Hyunju", "Son", role = "aut", email = "hson@uw.edu"), person("Zonglin", "He", role = "aut", email = "nkhezl@gmail.com"), person("Tao", "Yang", role = "aut", email = "tyang23@fredhutch.org"))
-Maintainer: Youyi Fong <youyifong@gmail.com>
+Authors@R: c(person("Youyi", "Fong", role = "cre", email = "youyifong@gmail.com"),
+    person("Qianqian", "Chen", role = "aut", email = "qc25@uw.edu"),
+    person("Shuangcheng", "Hua", role = "aut", email = "shuangch.hua@gmail.com"),
+    person("Hyunju", "Son", role = "aut", email = "hson@uw.edu"),
+    person("Adam", "Elder", role = "aut", email = "eldera3@uw.edu"),
+    person("Tao", "Yang", role = "aut", email = "tyang23@fredhutch.org"),
+    person("Zonglin", "He", role = "aut", email = "nkhezl@gmail.com") )
 Depends: R (>= 3.5.0)
 Suggests: R.rsp, RUnit, mvtnorm
-Imports: survival, splines, kyotil, boot, MASS, methods
+Imports: survival, splines, kyotil, boot, MASS, methods, lme4
 VignetteBuilder: R.rsp
 Description: Threshold regression models are also called two-phase regression, broken-stick regression, split-point regression, structural change models, and regression kink models, with and without interaction terms. Methods for both continuous and discontinuous threshold models are included, but the support for the former is much greater. This package is described in Fong, Huang, Gilbert and Permar (2017) <DOI:10.1186/s12859-017-1863-x>. 
 License: GPL (>= 2)
 NeedsCompilation: yes
-Packaged: 2020-05-22 05:03:52 UTC; Youyi
+Packaged: 2020-08-29 22:06:29 UTC; Youyi
 Author: Youyi Fong [cre],
-  Adam Elder [aut],
+  Qianqian Chen [aut],
+  Shuangcheng Hua [aut],
   Hyunju Son [aut],
-  Zonglin He [aut],
-  Tao Yang [aut]
+  Adam Elder [aut],
+  Tao Yang [aut],
+  Zonglin He [aut]
+Maintainer: Youyi Fong <youyifong@gmail.com>
 Repository: CRAN
-Date/Publication: 2020-05-22 05:40:02 UTC
+Date/Publication: 2020-08-30 05:20:07 UTC

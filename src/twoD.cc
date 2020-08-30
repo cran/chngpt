@@ -47,9 +47,9 @@ using namespace scythe;
 
 extern "C" {
 
-//variables such as Xcusum are defined outside this function since when bootstrapping, we do not want to allocate the memory over and over again
+//variables such as Bcusum are defined outside this function since when bootstrapping, we do not want to allocate the memory over and over again
 int _twoD_search(
-    Matrix<double,Row>& B, vector<double>& r, vector<double>& x,
+    Matrix<double,Row>& B, Matrix<double,Row>& r, vector<double>& x,
     vector<double>& w, 
     vector<int>& stratified_by,
     int n, int p, 
@@ -58,63 +58,72 @@ int _twoD_search(
     vector<int>& thresholdIdx1, vector<int>& thresholdIdx2, 
     vector<double>& thresholds1, vector<double>& thresholds2, 
     Matrix<double,Row>& Bcusum, vector<double>& rcusum, vector<double>& Wcusum, vector<double>& xcusum,
-    bool isUpperHinge,
     double* logliks)
 {
 
     const int TH=2; // assume there are two thresholds
     
     // loop index
-    int i,j,t1,t2,iB,k;    
+    int i,j,t1,t2,k;    
        
-    //PRINTF("thresholds1\n"); for (int i=0; i<nThresholds1; i++) PRINTF("%f ", thresholds1[i]); PRINTF("\n");
-    //PRINTF("thresholds2\n"); for (int i=0; i<nThresholds2; i++) PRINTF("%f ", thresholds2[i]); PRINTF("\n"); 
+//    PRINTF("thresholds1\n"); for (int i=0; i<nThresholds1; i++) PRINTF("%f ", thresholds1[i]); PRINTF("\n");
+//    PRINTF("thresholds2\n"); for (int i=0; i<nThresholds2; i++) PRINTF("%f ", thresholds2[i]); PRINTF("\n"); 
+//    PRINTF("thresholdIdx1\n"); for (int i=0; i<nThresholds1; i++) PRINTF("%i ", thresholdIdx1[i]); PRINTF("\n");
+//    PRINTF("thresholdIdx2\n"); for (int i=0; i<nThresholds2; i++) PRINTF("%i ", thresholdIdx2[i]); PRINTF("\n"); 
         
     // save a copy of x for potential later use, e.g. if we do threshold thinning b/c x gets updated in Step 4
     vector<double> x_cpy(n);
     for(i=0; i<n; i++) x_cpy[i] = x[i];
     
-    // for hinge or segmented, compute cusum of B and r in the reverse order
-    // for upperhinge, compute cusum of B and r in the forward order
-    if (!isUpperHinge) {
-        // first group from 1 to n0: u==0
-        Bcusum(n0-1,_) = B(n0-1,_)*w[n0-1]; 
-        rcusum[n0-1] = r[n0-1]*w[n0-1];     
-        xcusum[n0-1] = x[n0-1]*w[n0-1];     
-        Wcusum[n0-1] = w[n0-1];             
-        //          
-        for (i=n0-2; i>=0; i--) {
-            Bcusum(i,_) = Bcusum(i+1,_) + B(i,_)* w[i]; 
-            rcusum[i]   = rcusum[i+1]   + r[i]* w[i]; 
-            xcusum[i]   = xcusum[i+1]   + x[i]* w[i]; 
-            Wcusum[i]   = Wcusum[i+1]   + w[i]; 
-        }
-        // second group from n0+1 to n: u==1
-        Bcusum(n-1,_) = B(n-1,_)*w[n -1]; 
-        rcusum[n-1] = r[n-1]*w[n -1];     
-        xcusum[n-1] = x[n-1]*w[n -1];     
-        Wcusum[n-1] = w[n-1];   
-        //          
-        for (i=n-2; i>=n0; i--) {
-            Bcusum(i,_) = Bcusum(i+1,_) + B(i,_)* w[i]; 
-            rcusum[i]   = rcusum[i+1]   + r[i]* w[i]; 
-            xcusum[i]   = xcusum[i+1]   + x[i]* w[i]; 
-            Wcusum[i]   = Wcusum[i+1]   + w[i]; 
-        }
-    } else {
-    // upperhinge model
-//        Bcusum(0,_) = B(0,_)* w[0];    
-//        rcusum[0] = r(0)* w[0];        
-//        Wcusum[0] = w[0];              
-//        x_r_cusum[0]   = x[0] * r(0)* w[0];        
-//        x_B_cusum(0,_) = x[0] * B(0,_)* w[0];    
-//        for (i=1; i<n; i++) {
-//            Bcusum(i,_)    = Bcusum(i-1,_)    + B(i,_)* w[i]; 
-//            rcusum[i]      = rcusum[i-1]      + r[i]* w[i]; 
-//            Wcusum[i]      = Wcusum[i-1]      + w[i]; 
-//            x_r_cusum[i]   = x_r_cusum[i-1]   + x[i]* r[i]* w[i]; 
-//            x_B_cusum(i,_) = x_B_cusum(i-1,_) + x[i]* B(i,_)* w[i]; 
+//    if (!isUpperHinge) {
+//        // first group from 1 to n0: u==0
+//        Bcusum(n0-1,_) = B(n0-1,_)*w[n0-1]; 
+//        rcusum[n0-1] = r[n0-1]*w[n0-1];     
+//        xcusum[n0-1] = x[n0-1]*w[n0-1];     
+//        Wcusum[n0-1] = w[n0-1];             
+//        //          
+//        for (i=n0-2; i>=0; i--) {
+//            Bcusum(i,_) = Bcusum(i+1,_) + B(i,_)* w[i]; 
+//            rcusum[i]   = rcusum[i+1]   + r[i]* w[i]; 
+//            xcusum[i]   = xcusum[i+1]   + x[i]* w[i]; 
+//            Wcusum[i]   = Wcusum[i+1]   + w[i]; 
 //        }
+//        // second group from n0+1 to n: u==1
+//        Bcusum(n-1,_) = B(n-1,_)*w[n -1]; 
+//        rcusum[n-1] = r[n-1]*w[n -1];     
+//        xcusum[n-1] = x[n-1]*w[n -1];     
+//        Wcusum[n-1] = w[n-1];   
+//        //          
+//        for (i=n-2; i>=n0; i--) {
+//            Bcusum(i,_) = Bcusum(i+1,_) + B(i,_)* w[i]; 
+//            rcusum[i]   = rcusum[i+1]   + r[i]* w[i]; 
+//            xcusum[i]   = xcusum[i+1]   + x[i]* w[i]; 
+//            Wcusum[i]   = Wcusum[i+1]   + w[i]; 
+//        }
+//    } else {
+      
+    // upperhinge model
+    // first group from 1 to n0: u==0        
+    xcusum[0] = x[0]* w[0]* w[0];    
+    rcusum[0] = r(0)* w[0];        
+    Wcusum[0] = w[0]* w[0];    
+    if(p>1) Bcusum(0,_) = B(0,_)* w[0];    // if we take out the if condition, there will be memory issue when p is 1
+    for (i=1; i<n0; i++) {
+        xcusum[i]           = xcusum[i-1]      + x[i]* w[i]* w[i];     // x is not prescaled, which is why w is multiplied twice
+        rcusum[i]           = rcusum[i-1]      + r(i)* w[i];           // r is prescaled
+        Wcusum[i]           = Wcusum[i-1]      + w[i]* w[i];           // w is sqrt of true weights
+        if(p>1) Bcusum(i,_) = Bcusum(i-1,_)    + B(i,_)* w[i];         // B is prescaled
+    }
+    // second group from n0+1 to n: u==1
+    xcusum[n0] = x[n0]* w[n0]* w[n0];    
+    rcusum[n0] = r(n0)* w[n0];        
+    Wcusum[n0] = w[n0]* w[n0];    
+    if(p>1) Bcusum(n0,_) = B(n0,_)* w[n0];    // if we take out the if condition, there will be memory issue when p is 1
+    for (i=n0; i<n; i++) {
+        xcusum[i]           = xcusum[i-1]      + x[i]* w[i]* w[i];     // x is not prescaled, which is why w is multiplied twice
+        rcusum[i]           = rcusum[i-1]      + r(i)* w[i];           // r is prescaled
+        Wcusum[i]           = Wcusum[i-1]      + w[i]* w[i];           // w is sqrt of true weights
+        if(p>1) Bcusum(i,_) = Bcusum(i-1,_)    + B(i,_)* w[i];         // B is prescaled
     }
     //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Bcusum(i,j)); PRINTF("\n");}        
     
@@ -123,18 +132,20 @@ int _twoD_search(
     double delta;
     
     // Step 3: Initialize vv, vr and vB 
-    if (!isUpperHinge) {
-        // (x-e)+
-        for(i=0;  i<thresholdIdx1[0]; i++) x[i]=0;  
-        for(i=thresholdIdx1[0]; i<n0; i++) x[i]=x[i]-thresholds1[0]; 
-        for(i=n0; i<thresholdIdx2[0]; i++) x[i]=0;  
-        for(i=thresholdIdx2[0]; i<n ; i++) x[i]=x[i]-thresholds2[0]; 
-    } else {
-//        // (x-e)-
-//        for(i=0; i<thresholdIdx[0]; i++) x[i]=x[i]-thresholds[0];  
-//        for(i=thresholdIdx[0]; i<n; i++) x[i]=0; 
-    }
-    //for (i=0; i<n; i++) {PRINTF("%f ", x_cpy[i]); PRINTF("%f ", xcusum[i]); PRINTF("%f ", x[i]); PRINTF("%f ", r[i]); PRINTF("\n");}
+//    if (!isUpperHinge) {
+//        // (x-e)+
+//        for(i=0;  i<thresholdIdx1[0]; i++) x[i]=0;  
+//        for(i=thresholdIdx1[0]; i<n0; i++) x[i]=x[i]-thresholds1[0]; 
+//        for(i=n0; i<thresholdIdx2[0]; i++) x[i]=0;  
+//        for(i=thresholdIdx2[0]; i<n ; i++) x[i]=x[i]-thresholds2[0]; 
+//    } else {
+      
+    // (x-e)-
+    for(i=0;  i<thresholdIdx1[0]; i++) x[i]=x[i]-thresholds1[0];  
+    for(i=thresholdIdx1[0]; i<n0; i++) x[i]=0; 
+    for(i=n0; i<thresholdIdx2[0]; i++) x[i]=x[i]-thresholds2[0];  
+    for(i=thresholdIdx2[0]; i<n ; i++) x[i]=0;     
+//    PRINTF("x_cpy, xcusum, x, r\n"); for (i=0; i<n; i++) {PRINTF("%f ", x_cpy[i]); PRINTF("%f ", xcusum[i]); PRINTF("%f ", x[i]); PRINTF("%f ", r[i]); PRINTF("\n");}
     
     // we may be able to make this more efficient by changing summation index since we know some of the x's are 0
     // vv is v'v
@@ -148,9 +159,11 @@ int _twoD_search(
     }
     // save a copy for updating across the first row
     vv2=vv; vr2=vr; vB2=vB; 
-    //for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", vv(i,j)); PRINTF("\n");}
-    //for (i=0; i<TH; i++) PRINTF("%f ", vr[i]); PRINTF("\n");
-    //for (i=0; i<TH; i++) {for (j=0; j<p; j++) PRINTF("%f ", vB(i,j)); PRINTF("\n");}
+//    PRINTF("vv2:\n"); for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", vv2(i,j)); PRINTF("\n");}
+//    for (i=0; i<TH; i++) PRINTF("%f ", vr[i]); PRINTF("\n");
+//    for (i=0; i<TH; i++) {for (j=0; j<p; j++) PRINTF("%f ", vB(i,j)); PRINTF("\n");}
+    //Matrix <double,Row,Concrete> dtmp=vv - vB * t(vB);
+    //for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", dtmp(i,j)); PRINTF("\n");}
     
     int which=0, chosen;
     double crit, crit_max;
@@ -167,17 +180,30 @@ int _twoD_search(
         if(t2>0) {
             // Step 5a for updating across the first row: update vv2, vr2 and vB2
             delta= thresholds2[t2]-thresholds2[t2-1]; 
-            if (!isUpperHinge) {
-                iB = thresholdIdx2[t2]-1; 
-                k  = n-thresholdIdx2[t2]+1; // the current threshold is the kth largest                     
-                vv2(1,1) -= 2 * delta * (xcusum[iB] - k*thresholds2[t2-1]) -  k * pow(delta,2); 
-                vr2(1,0) -= delta * rcusum[iB];
-                for (j=0; j<p; j++) vB2(1,j) -= delta * Bcusum(iB,j);                 
-            } else {
-                // upperhinge model
-            }
-            // copy to vv/vr/vB for updating columns
-            vv=vv2; vr=vr2; vB=vB2; 
+//            if (!isUpperHinge) {
+//                iB = thresholdIdx2[t2]-1; 
+//                k  = n-thresholdIdx2[t2]+1; // the current threshold is the kth largest                     
+//                vv2(1,1) -= 2 * delta * (xcusum[iB] - k*thresholds2[t2-1]) -  k * pow(delta,2); 
+//                vr2(1,0) -= delta * rcusum[iB];
+//                for (j=0; j<p; j++) vB2(1,j) -= delta * Bcusum(iB,j);                 
+//            } else {
+
+            k  = thresholdIdx2[t2-1]; // k is 1-based index of x, e_t = x_k
+//            if (t2==1){
+//                PRINTF("vv2:\n"); for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", vv2(i,j)); PRINTF("\n");}
+//            }
+            vv2(1,1) -= 2*delta*(xcusum[k-1]-xcusum[n0-1] - (Wcusum[k-1]-Wcusum[n0-1])*thresholds2[t2-1]) - (Wcusum[k-1]-Wcusum[n0-1]) * pow(delta,2);            
+            vr2(1,0) -= delta * (rcusum[k-1]-rcusum[n0-1]);
+            for (j=0; j<p; j++) vB2(1,j) -= delta * (Bcusum(k-1,j)-Bcusum(n0-1,j)); //j<p not j<p-1 b/c Bcusum here has a different dimension from fastgrid2.cc            
+            vv=vv2; vr=vr2; vB=vB2; // copy to vv/vr/vB for updating columns
+//            if (t2==1){
+//                PRINTF("delta %f\n", delta); 
+//                PRINTF("vv\n"); for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", vv(i,j)); PRINTF("\n");}
+//                PRINTF("vr\n"); for (i=0; i<TH; i++) PRINTF("%f ", vr[i]); PRINTF("\n");
+//                PRINTF("vB\n"); for (i=0; i<TH; i++) {for (j=0; j<p; j++) PRINTF("%f ", vB(i,j)); PRINTF("\n");}
+//                Matrix <double,Row,Concrete> dtmp=vB * t(vB);
+//                PRINTF("vB * t(vB)\n"); for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", dtmp(i,j)); PRINTF("\n");}
+//            }                            
 
             // Step 5b: Compute criterion function
             crit = (t(vr2) * invpd(vv2 - vB2 * t(vB2)) * vr2)[0];
@@ -189,21 +215,26 @@ int _twoD_search(
         for(t1=1; t1<nThresholds1; t1++) {         
             // Step 5a for updating columns: update vv, vr and vB
             delta= thresholds1[t1]-thresholds1[t1-1]; 
-            if (!isUpperHinge) {
-                iB = thresholdIdx1[t1]-1; 
-                k  = n0-thresholdIdx1[t1]+1; // the current threshold is the kth largest                     
-                vv(0,0) -= 2 * delta * (xcusum[iB] - k*thresholds1[t1-1]) -  k * pow(delta,2); 
-                vr(0,0) -= delta * rcusum[iB];
-                for (j=0; j<p; j++) vB(0,j) -= delta * Bcusum(iB,j);                 
-            } else {
-//                // upperhinge model                                   
-//                // e.g, when t=1, we are at the second threshold, we want to update vv, vr and vB for e_2
-//                //            t=1 and t+1=2 
-//                k  = thresholdIdx[t-1]; // k is 1-based index of x, e_t = x_k
-//                vv -= 2*delta*(Bcusum(k-1,p-1) - k*thresholds[t-1]) - k * pow(delta,2);            
-//                vr -= delta * rcusum[k-1];
-//                for (j=0; j<p-1; j++) vB[j] -= delta * Bcusum(k-1,j);     
-            }
+//            if (!isUpperHinge) {
+//                iB = thresholdIdx1[t1]-1; 
+//                k  = n0-thresholdIdx1[t1]+1; // the current threshold is the kth largest                     
+//                vv(0,0) -= 2 * delta * (xcusum[iB] - k*thresholds1[t1-1]) -  k * pow(delta,2); 
+//                vr(0,0) -= delta * rcusum[iB];
+//                for (j=0; j<p; j++) vB(0,j) -= delta * Bcusum(iB,j);                 
+//            } else {
+              
+            // upperhinge model                                   
+            k  = thresholdIdx1[t1-1]; // k is 1-based index of x, e_t = x_k
+            vv(0,0) -= 2*delta*(xcusum[k-1] - Wcusum[k-1]*thresholds1[t1-1]) - Wcusum[k-1]*pow(delta,2);            
+            vr(0,0) -= delta * rcusum[k-1];
+            for (j=0; j<p; j++) vB(0,j) -= delta * Bcusum(k-1,j);     
+//            if (t1==1 && t2==0){
+//                PRINTF("vv\n"); for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", vv(i,j)); PRINTF("\n");}
+//                PRINTF("vr\n"); for (i=0; i<TH; i++) PRINTF("%f ", vr[i]); PRINTF("\n");
+//                PRINTF("vB\n"); for (i=0; i<TH; i++) {for (j=0; j<p; j++) PRINTF("%f ", vB(i,j)); PRINTF("\n");}
+//                Matrix <double,Row,Concrete> dtmp=vB * t(vB);
+//                PRINTF("vB * t(vB)\n"); for (i=0; i<TH; i++) {for (j=0; j<TH; j++) PRINTF("%f ", dtmp(i,j)); PRINTF("\n");}
+//            }                            
             
             // Step 5b: Compute criterion function
             crit = (t(vr) * invpd(vv - vB * t(vB)) * vr)[0];
@@ -217,38 +248,38 @@ int _twoD_search(
     
 }
 
-// X gets written over when the function is done
-void _preprocess2(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>& r) {
-    int i,j; 
-    int p=X.cols();    
-    int n=X.rows();    
-    
-//// R code:    for reference only
-//    A <- solve(t(Z.sorted) %*% Z.sorted)
-//    H <- Z.sorted %*% A %*% t(Z.sorted)
-//    r <- as.numeric((diag(n)-H) %*% y.sorted)
-//    a.eig <- eigen(A)   
-//    A.sqrt <- a.eig$vectors %*% diag(sqrt(a.eig$values)) %*% solve(a.eig$vectors)
-//    B = Z.sorted %*% A.sqrt
-                
-    Matrix<> A = invpd(crossprod(X));
-    
-    Matrix <> resid = Y - X * A * (t(X) * Y);
-    // copy to r
-    for (i=0; i<n; i++) r[i]=resid[i];
-    
-    // eigen decomposition to get B
-    Eigen Aeig = eigen(A);
-    Matrix <double,Row,Concrete> A_eig (p, p, true, 0);
-    for (j=0; j<p; j++) A_eig(j,j)=sqrt(Aeig.values(j));
-    Matrix<> B = X * (Aeig.vectors * A_eig * t(Aeig.vectors));    
-    // Do this last: replace the first p column of X with B
-    for (j=0; j<p; j++) X(_,j)=B(_,j);
-    
-    //PRINTF("A\n"); for (i=0; i<p; i++) {for (j=0; j<p; j++)  PRINTF("%f ", A(i,j)); PRINTF("\n");}            
-    //PRINTF("eigen values\n"); for (j=0; j<p; j++) PRINTF("%f ", Aeig.values(j)); PRINTF("\n");
-    //PRINTF("B\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++) PRINTF("%f ", B(i,j)); PRINTF("\n");}            
-}
+//// X gets written over when the function is done
+//void _preprocess2(Matrix<double,Row>& X, Matrix<double,Row>& Y, vector<double>& r) {
+//    int i,j; 
+//    int p=X.cols();    
+//    int n=X.rows();    
+//    
+////// R code:    for reference only
+////    A <- solve(t(Z.sorted) %*% Z.sorted)
+////    H <- Z.sorted %*% A %*% t(Z.sorted)
+////    r <- as.numeric((diag(n)-H) %*% y.sorted)
+////    a.eig <- eigen(A)   
+////    A.sqrt <- a.eig$vectors %*% diag(sqrt(a.eig$values)) %*% solve(a.eig$vectors)
+////    B = Z.sorted %*% A.sqrt
+//                
+//    Matrix<> A = invpd(crossprod(X));
+//    
+//    Matrix <> resid = Y - X * A * (t(X) * Y);
+//    // copy to r
+//    for (i=0; i<n; i++) r[i]=resid[i];
+//    
+//    // eigen decomposition to get B
+//    Eigen Aeig = eigen(A);
+//    Matrix <double,Row,Concrete> A_eig (p, p, true, 0);
+//    for (j=0; j<p; j++) A_eig(j,j)=sqrt(Aeig.values(j));
+//    Matrix<> B = X * (Aeig.vectors * A_eig * t(Aeig.vectors));    
+//    // Do this last: replace the first p column of X with B
+//    for (j=0; j<p; j++) X(_,j)=B(_,j);
+//    
+//    //PRINTF("A\n"); for (i=0; i<p; i++) {for (j=0; j<p; j++)  PRINTF("%f ", A(i,j)); PRINTF("\n");}            
+//    //PRINTF("eigen values\n"); for (j=0; j<p; j++) PRINTF("%f ", Aeig.values(j)); PRINTF("\n");
+//    //PRINTF("B\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++) PRINTF("%f ", B(i,j)); PRINTF("\n");}            
+//}
          
 
 
@@ -265,7 +296,8 @@ SEXP twoD_gaussian(
      //SEXP u_thresholdIdx1, SEXP u_thresholdIdx2, 
      SEXP u_lb, SEXP u_ub, 
      SEXP u_nBoot, 
-     SEXP u_isUpperHinge) {
+     SEXP u_verbose
+){
      
     double* X_dat = REAL(u_X);
     double* x_dat = REAL(u_x);
@@ -279,8 +311,8 @@ SEXP twoD_gaussian(
 //    int n1 = asInteger(u_n1);
     double lb = asReal(u_lb);
     double ub = asReal(u_ub);
+    int verbose=asInteger(u_verbose); 
     int nBoot = asInteger(u_nBoot);
-    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
     
     const int n = nrows(u_X);
     const int p = ncols(u_X); // number of predictors, not including the thresholed variable since u_added is separated out
@@ -294,10 +326,10 @@ SEXP twoD_gaussian(
     vector<double> x(x_dat, x_dat + n); // this does not need to be converted into vectors, but better to do so for consistency with bootstrap code
     vector<int> stratified_by(stratified_by_dat, stratified_by_dat + n); // this does not need to be converted into vectors, but better to do so for consistency with bootstrap code
     vector<double> W(W_dat, W_dat + n); // this does not need to be converted into vectors, but better to do so for consistency with bootstrap code
-    vector<double> r(n); // residual vector
+    //vector<double> r(n); // residual vector
     
     // these variables are reused within each bootstrap replicate
-    Matrix <double,Row,Concrete> Xcusum(n, p);
+    Matrix <double,Row,Concrete> Bcusum(n, p);
     vector<double> rcusum(n), Wcusum(n), xcusum(n); 
     
     int i,j;
@@ -331,18 +363,19 @@ SEXP twoD_gaussian(
         double *logliks=REAL(_logliks);       
         
         // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
-        // this needs to be done before step 2 since X gets changed by _preprocess2
+        // this needs to be done before step 2 since X gets changed by _preprocess
         double yhy = ((t(Y) * X) * invpd(crossprod(X)) * (t(X) * Y))(0);
+        //PRINTF("yhy: %.4f\n", yhy);  
         
         // Step 1. Sort
         // Data input should be already sorted.
          
         // Step 2. Compute B and r. X is replaced by B when the function is done.
-        _preprocess2(X, Y, r);
+        _preprocess(X, Y);
         //PRINTF("B\n"); for (int i=0; i<n; i++) {for (int j=0; j<p; j++) PRINTF("%f ", X(i,j)); PRINTF("\n");}
         //PRINTF("Y\n"); for (int i=0; i<n; i++) PRINTF("%f ", Y(i)); PRINTF("\n"); 
         
-        _twoD_search(X, r, x,
+        _twoD_search(X, Y, x,
                         W, 
                         stratified_by,
                         n, p, 
@@ -350,13 +383,12 @@ SEXP twoD_gaussian(
                         nThresholds1, nThresholds2,
                         thresholdIdx1, thresholdIdx2, 
                         thresholds1, thresholds2, 
-                        Xcusum, rcusum, Wcusum, xcusum, 
-                        isUpperHinge,
+                        Bcusum, rcusum, Wcusum, xcusum, 
                         logliks); 
+                        
         for(i=0; i<nThresholds1*nThresholds2; i++) logliks[i]=logliks[i]+yhy; 
-        //PRINTF("yhy: %.4f\n", yhy);  
-        //for(int t1=0; t1<nThresholds1; t1++) { {for(int t2=0; t2<nThresholds2; t2++) PRINTF("%.4f ", logliks[t1+n1*t2]);} PRINTF("\n");}
-            
+        if(verbose>0) for(int t1=0; t1<nThresholds1; t1++) { {for(int t2=0; t2<nThresholds2; t2++) PRINTF("%.4f ", logliks[t1+n1*t2]);} PRINTF("\n");}
+        
         UNPROTECT(1);
         return _logliks;
 
@@ -373,7 +405,7 @@ SEXP twoD_gaussian(
         
         // these variables are reused within each bootstrap replicate
         vector<int> index(n);
-        Matrix <double,Row,Concrete> Xb(n,p), Yb(n,1), Xeb(n,p+2);
+        Matrix <double,Row,Concrete> Zb(n,p), Yb(n,1), Xbreg(n,p+2);
         vector<double> xb(n), Wb(n), rb(n); 
         vector<int> stratified_by_b(n);
         double e_hat, f_hat;
@@ -387,7 +419,7 @@ SEXP twoD_gaussian(
             sort (index.begin(), index.end());
             
             for (i=0; i<n; i++) { //note that index need to -1 to become 0-based
-                Xb(i,_)=X(index[i]-1,_); 
+                Zb(i,_)=X(index[i]-1,_); 
                 Yb[i]  =Y[index[i]-1]; 
                 xb[i]  =x[index[i]-1]; 
                 Wb[i]  =W[index[i]-1]; 
@@ -395,8 +427,8 @@ SEXP twoD_gaussian(
             } 
             //for (i=0; i<n; i++) PRINTF("%f ", xb[i]); PRINTF("\n");
             //for (i=0; i<n; i++) PRINTF("%d ", stratified_by_b[i]); PRINTF("\n");
-            //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
-            //for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); Wb[i]=W[i]; } // debug use, can be used to compare with non-boot
+            //for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Zb(i,j)); PRINTF("\n");} 
+            //for (i=0; i<n; i++) { Zb(i,_)=X(i,_); Yb(i)=Y(i); Wb[i]=W[i]; } // debug use, can be used to compare with non-boot
             
             // define thresholds and thresholdIdx
             // these need to be redefined for every bootstrap replicate b/c n0 and n1 could change in bootstrap
@@ -422,10 +454,10 @@ SEXP twoD_gaussian(
             //for (i=0; i<nThresholds2; i++) PRINTF("%f ", thresholds2[i]); PRINTF("\n"); 
     
             // Step 2:
-            _preprocess2(Xb, Yb, rb);            
+            _preprocess(Zb, Yb);            
             
             // Step 3-5
-            chosen = _twoD_search(Xb, rb, xb,
+            chosen = _twoD_search(Zb, Yb, xb,
                         Wb, 
                         stratified_by_b,
                         n, p, 
@@ -433,8 +465,7 @@ SEXP twoD_gaussian(
                         nThresholds1, nThresholds2, 
                         thresholdIdx1, thresholdIdx2, 
                         thresholds1, thresholds2, 
-                        Xcusum, rcusum, Wcusum, xcusum, 
-                        isUpperHinge,
+                        Bcusum, rcusum, Wcusum, xcusum, 
                         logliks); 
             e_hat=thresholds1[chosen % nThresholds1];
             f_hat=thresholds2[chosen / nThresholds1];
@@ -443,40 +474,32 @@ SEXP twoD_gaussian(
 
             // fit model at the selected threshold and save results in coef
             
-            // after _preprocess2, Xb have changed, thus we need to copy from X again
+            // after _preprocess2, Zb and Yb have changed, thus we need to copy from X and Y again
             for (i=0; i<n; i++) { 
-                for (j=0; j<p; j++)
-                    Xeb(i,j)=X(index[i]-1,j); 
+                Yb(i,0)=Y(index[i]-1,0); 
+                for (j=0; j<p; j++) Xbreg(i,j)=X(index[i]-1,j); 
             }
-            // after search, xb have changed, thus we need to copy from x again
-            if (!isUpperHinge) {
-                // (x-e)+
-                for(i=0; i<n0; i++) {
-                    Xeb(i,p) = x[index[i]-1]<e_hat?0:x[index[i]-1]-e_hat;  
-                    Xeb(i,p+1) = 0; 
-                }
-                for(i=n0; i<n; i++) {
-                    Xeb(i,p) = 0; 
-                    Xeb(i,p+1) = x[index[i]-1]<f_hat?0:x[index[i]-1]-f_hat;                  
-                }
-            } else {
-//                // (x-e)-
-//                for(i=0; i<n; i++) 
-//                    if(Xb(i,p-1)<e_hat) Xb(i,p-1) -= e_hat; else Xb(i,p-1) = 0;  
+            for(i=0; i<n0; i++) {
+                Xbreg(i,p) = x[index[i]-1]>e_hat?0:x[index[i]-1]-e_hat;  
+                Xbreg(i,p+1) = 0; 
             }
-            //PRINTF("Xeb\n"); for (i=0; i<n; i++) {for (j=0; j<p+2; j++)  PRINTF("%f ", Xeb(i,j)); PRINTF("\n");} 
+            for(i=n0; i<n; i++) {
+                Xbreg(i,p) = 0; 
+                Xbreg(i,p+1) = x[index[i]-1]>f_hat?0:x[index[i]-1]-f_hat;                  
+            }
+            //PRINTF("Xbreg\n"); for (i=0; i<n; i++) {for (j=0; j<p+2; j++)  PRINTF("%f ", Xbreg(i,j)); PRINTF("\n");} 
             //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
-            //PRINTF("Xb\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Xb(i,j)); PRINTF("\n");} 
+            //PRINTF("Zb\n"); for (i=0; i<n; i++) {for (j=0; j<p; j++)  PRINTF("%f ", Zb(i,j)); PRINTF("\n");} 
             //PRINTF("Yb\n"); for (i=0; i<n; i++) PRINTF("%f ", Yb(i)); PRINTF("\n");
-//            for (i=0; i<n; i++) { Xb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
+//            for (i=0; i<n; i++) { Zb(i,_)=X(i,_); Yb(i)=Y(i); } // debug use
             
                         
-            Matrix <> beta_hat = invpd(crossprod(Xeb)) * (t(Xeb) * Yb);
+            Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
             //PRINTF("beta_jat\n"); for (i=0; i<p+2; i++) PRINTF("%f ", beta_hat[i]); PRINTF("\n");
             
-            for (j=0; j<p+2; j++) coef[b*(p+2)+j]=beta_hat[j];            
-            coef[b*(p+2)+p+2] = e_hat;
-            coef[b*(p+2)+p+3] = f_hat;
+            for (j=0; j<p+2; j++) coef[b*(p+4)+j]=beta_hat[j];            
+            coef[b*(p+4)+p+2] = e_hat;
+            coef[b*(p+4)+p+3] = f_hat;
 
         } 
          

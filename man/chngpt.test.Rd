@@ -119,6 +119,8 @@ A list of class htest and chngpt.test
 }
 \references{
 
+Fong, Y., Huang, Y., Gilbert, P., Permar S. (2017) chngpt: threshold regression model estimation and inference, BMC Bioinformatics, 18(1):454.
+
 Fong Y, Di C, and Permar S. (2015) Change-Point Testing in Logistic Regression Models with Interaction Term. Statistics in Medicine. 34:1483--1494
 
 Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for change-point estimation in logistic regression. Statistics in Medicine. 22:13141

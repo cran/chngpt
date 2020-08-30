@@ -9,6 +9,8 @@
 \alias{plot.chngptm}
 \alias{print.chngptm}
 \alias{summary.chngptm}
+\alias{logLik.chngptm}
+\alias{AIC.chngptm}
 \alias{lincomb}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{
@@ -21,21 +23,22 @@ Estimate change point logistic model
 \usage{
 
 chngptm (formula.1, formula.2, family, data, type = c("hinge",
-         "M02", "M03", "M04", "upperhinge", "M20", "M30",
-         "M40", "M21", "M12", "M21c", "M12c", "M22", "M22c",
-         "M31", "M13", "M33c", "segmented", "segmented2",
-         "step", "stegmented"), formula.strat = NULL, weights =
-         NULL, offset = NULL, est.method = c("default",
-         "fastgrid2", "fastgrid", "grid", "smoothapprox"),
-         var.type = c("default", "none", "robust", "model",
-         "bootstrap", "all"), aux.fit = NULL, lb.quantile =
-         0.1, ub.quantile = 0.9, grid.search.max = Inf,
-         test.inv.ci = TRUE, boot.test.inv.ci = FALSE,
-         ci.bootstrap.size = 1000, alpha = 0.05, save.boot =
-         TRUE, m.out.of.n = 0, subsampling=0, 
-         b.transition = Inf, tol = 1e-04,
-         maxit = 100, chngpt.init = NULL, search.bound = 10,
-         keep.best.fit = TRUE, ncpus = 1, verbose = FALSE, ...)
+ "M01", "M02", "M03", "M04", "upperhinge", "M10",
+ "M20", "M30", "M40", "M21", "M12", "M21c", "M12c",
+ "M22", "M22c", "M31", "M13", "M33c", "segmented",
+ "M11", "segmented2", "M111", "step", "stegmented"),
+ formula.strat = NULL, weights = NULL, offset = NULL,
+ REML = TRUE, re.choose.by.loglik = FALSE, est.method =
+ c("default", "fastgrid2", "fastgrid", "grid",
+ "smoothapprox"), var.type = c("default", "none",
+ "robust", "model", "bootstrap", "all"), aux.fit =
+ NULL, lb.quantile = 0.1, ub.quantile = 0.9,
+ grid.search.max = Inf, test.inv.ci = TRUE,
+ boot.test.inv.ci = FALSE, ci.bootstrap.size = 1000,
+ alpha = 0.05, save.boot = TRUE, m.out.of.n = 0,
+ subsampling = 0, b.transition = Inf, tol = 1e-04,
+ maxit = 100, chngpt.init = NULL, search.bound = 10,
+ keep.best.fit = TRUE, ncpus = 1, verbose = FALSE, ...)
          
 chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
     ...)
@@ -45,15 +48,18 @@ chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
 \method{vcov}{chngptm} (object, var.type=NULL, ...)
 \method{print}{chngptm} (x, ...)
 \method{plot}{chngptm} (x, which = NULL, xlim = NULL, lwd = 2, lcol = "red",
-                 lty = 1, add = FALSE, add.points = TRUE, add.ci =
-                 TRUE, breaks = 20, mark.chngpt = FALSE, xlab = NULL,
-                 ylab = NULL, ...) 
+ lty = 1, add = FALSE, add.points = TRUE, add.ci =
+ TRUE, breaks = 20, mark.chngpt = TRUE, xlab = NULL,
+ ylab = NULL, plot.individual.line = FALSE, main = "",
+ ...) 
 \method{summary}{chngptm} (object, var.type = NULL, expo = FALSE,
  show.slope.post.threshold = FALSE, verbose = FALSE,
- boot.type = "symm", ...)
+ boot.type = "perc", ...)
+\method{logLik}{chngptm} (object, ...)
+\method{AIC}{chngptm} (object, ...)
  
 
-lincomb(object, comb, alpha=0.05)
+lincomb(object, comb, alpha = 0.05, boot.type = "perc")
 
 }
 
@@ -112,16 +118,20 @@ lincomb(object, comb, alpha=0.05)
   \item{comb}{a vector of combination coefficients that will be used to form an inner product with the estimated slope}
   \item{expo}{If family is binomial and expo is TRUE, coefficients summary will be shown on the scale of odds ratio instead of slopes}
 
+  \item{REML}{mixed model fitting - should the estimates be chosen to optimize the REML criterion for a fixed threshold}
+  \item{re.choose.by.loglik}{mixed model fitting - should the estimates be chosen to optimize likelihood (REML nor not) or goodness of fit}
+  \item{plot.individual.line}{boolean}
+  \item{main}{character string}
 }
 \details{
-Without lb.quantile and ub.quantile, finite sample performance of estimator drops considerably!
-When est.method is smoothapprox, Newton-Raphson is done with initial values chosen by change point hypothesis testing. The testing procedure may be less subjective to finite sample volatility. 
-
-If var.method is bootstrap, summary of fitted model contains p values for each estimated slope. These p values are approximate p-values, obtained assuming that the bootstrap distributions are normal. 
-
-When var.method is bootstrap and the OS is not Windows, the boot package we use under the hood takes advantage of \code{ncpus} cores through parallel::mclapply. 
-
-
+Without lb.quantile and ub.quantile, finite sample performance of estimator drops considerably!\cr
+When est.method is smoothapprox, Newton-Raphson is done with initial values chosen by change point hypothesis testing. The testing procedure may be less subjective to finite sample volatility. \cr
+\cr
+If var.method is bootstrap, summary of fitted model contains p values for each estimated slope. These p values are approximate p-values, obtained assuming that the bootstrap distributions are normal. \cr
+\cr
+When var.method is bootstrap and the OS is not Windows, the boot package we use under the hood takes advantage of \code{ncpus} cores through parallel::mclapply. \cr
+\cr
+lincomb can be used to get the estimate and CI for a linear combination of slopes. 
 }
 \value{
 A an object of type chngptm with the following components
@@ -132,7 +142,9 @@ A an object of type chngptm with the following components
 }
 \references{
 
-Fong, Y. (2018) Fast bootstrap confidence intervals for continuous threshold linear regression. Journal of Computational and Graphical Statistics, in press.
+Fong, Y., Huang, Y., Gilbert, P., Permar S. (2017) chngpt: threshold regression model estimation and inference, BMC Bioinformatics, 18(1):454.
+
+Fong, Y. (2019) Fast bootstrap confidence intervals for continuous threshold linear regression, Journal of Computational and Graphical Statistics, 28(2):466-470.
 
 Fong, Y., Di, C., Huang, Y., Gilbert, P. (2017) Model-robust inference for continuous threshold regression models, Biometrics, 73(2):452-462.
 
@@ -141,13 +153,15 @@ Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for 
 }
 \examples{
 
+# also see the vignette for examples
     
 # threshold linear regression
+# for actual use, set ci.bootstrap.size to default or higher
 types=c("hinge", "segmented", "M02", "M03")
 for (type in types) {
     fit=chngptm(formula.1=logratio~1, formula.2=~range, lidar, type=type, family="gaussian", 
-        var.type="bootstrap")
-    summary(fit)
+        var.type="bootstrap", ci.bootstrap.size=100)
+    print(summary(fit))
     plot(fit)
 }
 
@@ -161,6 +175,19 @@ fit.1.a=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat.1, type="seg
 summary(fit.1.a)
 plot(fit.1.a)
 # fit.1.a$vcov$boot.samples
+
+\dontrun{
+# likelihood test, combination of slopes
+dat=sim.chngpt("thresholded", "segmented", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4,
+    family="gaussian")
+fit=chngptm(y~z, ~x, family="gaussian", dat, type="segmented", ci.bootstrap.size=100)
+fit.0=lm(y~1,dat)
+# likelihood ratio test using lmtest::lrtest
+library(lmtest)
+lrtest(fit, fit.0)
+# estimate the slope after threshold using lincomb function in the chngpt package
+lincomb(fit, c(0,0,1,1))
+}
 
 
 # threshold logistic regression
@@ -207,6 +234,8 @@ fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="segmented",
     family="gaussian", var.type="bootstrap", ci.bootstrap.size=10)
 summary(fit)
 
+
+
 # interaction, upperhinge model, bootstrap
 fit=chngptm(formula.1=mpg ~ hp, formula.2=~hp*drat, mtcars, type="M10", 
     family="gaussian", var.type="bootstrap", ci.bootstrap.size=10)
@@ -246,5 +275,13 @@ fit = chngptm (formula.1=yy~zz, formula.2=~xx, family="binomial", data, type="hi
 
 
 }
+
+# example of random intercept
+dat=sim.twophase.ran.inte(threshold.type="segmented", n=50, seed=1)
+fit = chngptm (formula.1=y~z+(1|id), formula.2=~x, family="gaussian", dat, 
+    type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=1)
+plot(fit)
+
+
 
 }

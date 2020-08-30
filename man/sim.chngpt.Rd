@@ -1,4 +1,6 @@
 \name{sim.chngpt}
+\alias{sim.twophase.ran.inte}
+\alias{sim.threephase}
 \alias{sim.chngpt}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{
@@ -22,8 +24,15 @@ sim.chngpt(mean.model = c("thresholded", "thresholdedItxn",
  "fixnorm", "unif"), e. = NULL, mu.x = 4.7, sd.x =
  NULL, sd = 0.3, mu.z = 0, alpha = NULL,
  alpha.candidate = NULL, coef.z = log(1.4), beta =
- NULL, beta.itxn = NULL, n, seed, weighted = FALSE,
- heteroscedastic = FALSE, verbose = FALSE)
+ NULL, beta.itxn = NULL, logistic.slope = 15, n, seed,
+ weighted = FALSE, heteroscedastic = FALSE, verbose =
+ FALSE)
+
+sim.twophase.ran.inte(threshold.type, n, seed)
+
+sim.threephase(n, seed, gamma = 1, e = 3, beta_e = 5, f = 7, beta_f = 2, coef.z = 1)
+
+
 
 }
 %- maybe also 'usage' for other objects documented here.
@@ -85,7 +94,24 @@ string. Possible values: norm (normal distribution), gam (gamma distribution). g
   \item{alpha.candidate}{
 Candidate values of alpha, used in code to determine alpha values
 }
-
+  \item{e}{
+%%     ~~Describe \code{e} here~~
+}
+  \item{beta_e}{
+%%     ~~Describe \code{beta_e} here~~
+}
+  \item{f}{
+%%     ~~Describe \code{f} here~~
+}
+  \item{beta_f}{
+%%     ~~Describe \code{beta_f} here~~
+}
+  \item{logistic.slope}{
+%%     ~~Describe \code{beta_f} here~~
+}
+  \item{gamma}{
+%%     ~~Describe \code{beta_f} here~~
+}
   \item{heteroscedastic}{Boolean.}
 
 }

@@ -14,6 +14,7 @@ sim.chngpt = function (
     x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm","unif"), # gam1 is a hack to allow e. be different
     e.=NULL, mu.x=4.7, sd.x=NULL, sd=0.3, mu.z=0, 
     alpha=NULL, alpha.candidate=NULL, coef.z=log(1.4), beta=NULL, beta.itxn=NULL, 
+    logistic.slope=15,
     n, seed, 
     weighted=FALSE, # sampling weights
     heteroscedastic=FALSE,
@@ -41,7 +42,7 @@ sim.chngpt = function (
         x=c(rnorm(n-round(n/3), mu.x, sd.x), mu.x-abs(rnorm(round(n/3), 0, sd.x)))
         z=rep(1,n)
     } else if(x.distr=="unif") { # unif
-        x=runif(n)*4*sd.x + mu.x-2*sd.x
+        x=runif(n)*4*sd.x + mu.x-2*sd.x # under quadratic, 4*1.4  +  4.7-2*1.4
         z=rnorm(n, mean=mu.z, 1)
     } else if(x.distr=="lin") { # linearly evenly spaced
         x=seq(0,1,length=n)*4*sd.x + mu.x-2*sd.x
@@ -184,7 +185,7 @@ sim.chngpt = function (
         
     } else if (mean.model=="logistic") { 
     # from Banerjee and McKeague
-        X=cbind(1,     z,        expit(15*(x-.5)))
+        X=cbind(1,     z,        expit(logistic.slope*(x-.5)))
         coef.=c(alpha=0, z=coef.z, x=1)
     
     } else if (mean.model=="quadratic") { 
@@ -312,4 +313,39 @@ sim.chngpt = function (
     attr(dat, "coef")=coef.
     attr(dat, "chngpt")=e.
     dat
+}
+
+
+sim.twophase.ran.inte=function(threshold.type, n, seed) {
+    tmp = sim.chngpt(mean.model="thresholded", threshold.type=threshold.type, n=n, seed=seed, beta=c(2,2), x.distr="lin", e.=5, family="gaussian", alpha=0, sd=3, coef.z=1)    
+    g=16 # number of clusters
+    w=rnorm(g,sd=10)
+    w=c(rep(w, each=floor(n/g)), rep(last(w), n-g*floor(n/g)))
+    id=c(rep(1:g, each=floor(n/g)), rep(g, n-g*floor(n/g)))
+    scramble=sample(n)
+    dat = cbind(tmp, w=w[scramble], id=id[scramble])
+    dat$y=dat$y+dat$w    
+    attr(dat,"coef")=attr(tmp,"coef")
+    attr(dat,"chngpt")=attr(tmp,"chngpt")
+    dat
+}
+
+
+# three phase data
+sim.threephase = function(n, seed, gamma = 1, e = 3, beta_e = 5, f = 7, beta_f = 2, coef.z=1){
+  ## This function generates data using a simple data generating mechanism for validation purposes.
+  ## The default true model is Y = Z + 5*(X - 3)_ + 2*(X - 7)_ + 1*X + epsilon
+  set.seed(seed)
+  x <- runif(n = n, min = -1, max = 10)
+  z <- runif(n = n, min =  -4, max = 4) 
+  y <- 0
+  dat = data.frame(y,z,x)
+    
+  dat[x<e,]$y = beta_e*(dat[x<e,]$x - e) + beta_f*(dat[x<e,]$x - f) + gamma*(dat[x<e,]$x)
+  dat[x>=e & x<f,]$y = 0*(dat[x>=e & x<f,]$x - e) + beta_f*(dat[x>=e & x<f,]$x - f) + gamma*(dat[x>=e & x<f,]$x)
+  dat[x>=f,]$y = 0*(dat[x>=f,]$x - e) + 0*(dat[x>=f,]$x - f) + gamma*(dat[x>=f,]$x)
+  # for simplicity, here we assume epsilon is zero
+  dat$y = dat$y + coef.z*z # + rnorm(n = n)
+  
+  return(dat)
 }
