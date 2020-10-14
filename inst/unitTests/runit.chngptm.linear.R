@@ -12,6 +12,21 @@ print(paste0("tol: ", tolerance), quote=FALSE)
 
 verbose = 0
 
+
+# autoregressive errors
+dat=sim.chngpt(mean.model="thresholded", threshold.type="M20", n=100, seed=1, mu.x=5, beta=c(10,1),x.distr="lin", e.=5, family="gaussian", alpha=0, sd=3, coef.z=log(1.4), heteroscedastic=FALSE, ar=.5)
+fit=  chngptm(y~z, ~x, type="M20", data=dat, family="gaussian", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose, bootstrap.type="sieve")
+checkEqualsNumeric(fit$vcov$boot.samples[1,], c(1.882445, 0.09883493,     4.70625,    -0.3412223, 5.937374), tolerance=tolerance)    
+fit=  chngptm(y~z, ~x, type="M20", data=dat, family="gaussian", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose, bootstrap.type="wild")
+checkEqualsNumeric(fit$vcov$boot.samples[1,], c(0.7984787,-0.3663074,7.2876752,0.4433051,5.6787879), tolerance=tolerance)    
+fit=  chngptm(y~z, ~x, type="M20", data=dat, family="gaussian", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose, bootstrap.type="wildsieve")
+checkEqualsNumeric(fit$vcov$boot.samples[1,], c(1.0655015,1.6554599,8.0428826,0.5240296,5.5494949), tolerance=tolerance)    
+fit=  chngptm(y~z, ~x, type="M20", data=dat, family="gaussian", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose, bootstrap.type="awb")
+checkEqualsNumeric(fit$vcov$boot.samples[1,], c(1.3466068,1.5963537,7.9991371,0.5712195,5.6141414), tolerance=tolerance)    
+
+
+# the following mismatches and need to be figured out
+# even 2020 8 29 code don't work for some reason
 # M111
 est.methods=c("fastgrid","grid")
 dat = sim.threephase(n = 20, seed=10)
@@ -29,7 +44,6 @@ if(verbose) print(out)
 for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
 
 
-
 print("########  random intercept")
 dat=sim.twophase.ran.inte(threshold.type="segmented", n=50, seed=1)
 fit = chngptm (formula.1=y~z+(1|id), formula.2=~x, family="gaussian", dat, type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=1)
@@ -44,8 +58,7 @@ dat = sim.chngpt(mean.model="thresholded", threshold.type=type, n=200, seed=1, b
 attr(dat,"coef")
 plot(y~x, dat)
 fit = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat,  type=type, est.method="fastgrid2", var.type="bootstrap", ci.bootstrap.size=100, verbose=verbose)
-fit
-plot(fit)
+#fit; plot(fit)
 checkEqualsNumeric(coef(fit), c(-0.6677877,0.8992538,2.2789307,1.9569163), tolerance=tolerance)    
 est=lincomb(fit, comb=c(0,0,1,1), alpha=0.05); print(est)
 
@@ -57,7 +70,8 @@ type="M12c"
 est.methods=c("fastgrid2","grid")
 out=NULL
 for (est.method in est.methods) {
-    fit.0=chngptm(formula.1=pressure~-1, formula.2=~temperature, pressure, type=type, family="gaussian", est.method=est.method, var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose, weights=c(rep(1,9),rep(5,10)))
+    fit.0=chngptm(formula.1=pressure~-1, formula.2=~temperature, pressure, type=type, family="gaussian", est.method=est.method, 
+        var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose, weights=c(rep(1,9),rep(5,10)))
     if(verbose) plot(fit.0); fit.0
     out=cbind(out, c(
       fit.0$logliks[1],

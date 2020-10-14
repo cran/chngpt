@@ -11,22 +11,22 @@ Generate simulation datasets for change point Monte Carlo studies.
 }
 \usage{
 
-sim.chngpt(mean.model = c("thresholded", "thresholdedItxn",
+sim.chngpt (mean.model = c("thresholded", "thresholdedItxn",
  "quadratic", "quadratic2b", "cubic2b", "exp",
  "flatHyperbolic", "z2", "z2hinge", "z2segmented",
  "z2linear", "logistic"), threshold.type = c("NA",
- "hinge", "M02", "M03", "upperhinge", "M20", "M30",
+ "M01", "M02", "M03", "M10", "M20", "M30", "M11",
  "M21", "M12", "M22", "M22c", "M31", "M13", "M33c",
- "segmented", "segmented2", "step", "stegmented"),
- b.transition = Inf, family = c("binomial",
- "gaussian"), x.distr = c("norm", "norm3", "norm6",
- "imb", "lin", "mix", "gam", "zbinary", "gam1", "gam2",
- "fixnorm", "unif"), e. = NULL, mu.x = 4.7, sd.x =
- NULL, sd = 0.3, mu.z = 0, alpha = NULL,
- alpha.candidate = NULL, coef.z = log(1.4), beta =
- NULL, beta.itxn = NULL, logistic.slope = 15, n, seed,
- weighted = FALSE, heteroscedastic = FALSE, verbose =
- FALSE)
+ "hinge", "segmented", "upperhinge", "segmented2",
+ "step", "stegmented"), b.transition = Inf, family =
+ c("binomial", "gaussian"), x.distr = c("norm",
+ "norm3", "norm6", "imb", "lin", "mix", "gam",
+ "zbinary", "gam1", "gam2", "fixnorm", "unif"), e. =
+ NULL, mu.x = 4.7, sd.x = NULL, sd = 0.3, mu.z = 0,
+ alpha = NULL, alpha.candidate = NULL, coef.z =
+ log(1.4), beta = NULL, beta.itxn = NULL,
+ logistic.slope = 15, n, seed, weighted = FALSE,
+ heteroscedastic = FALSE, ar = FALSE, verbose = FALSE)
 
 sim.twophase.ran.inte(threshold.type, n, seed)
 
@@ -90,6 +90,9 @@ string. Possible values: norm (normal distribution), gam (gamma distribution). g
 }
   \item{sd}{
 %%     ~~Describe \code{b.} here~~
+}
+  \item{ar}{
+autocorrelation
 }
   \item{alpha.candidate}{
 Candidate values of alpha, used in code to determine alpha values

@@ -34,11 +34,13 @@ chngptm (formula.1, formula.2, family, data, type = c("hinge",
  "robust", "model", "bootstrap", "all"), aux.fit =
  NULL, lb.quantile = 0.1, ub.quantile = 0.9,
  grid.search.max = Inf, test.inv.ci = TRUE,
- boot.test.inv.ci = FALSE, ci.bootstrap.size = 1000,
- alpha = 0.05, save.boot = TRUE, m.out.of.n = 0,
- subsampling = 0, b.transition = Inf, tol = 1e-04,
- maxit = 100, chngpt.init = NULL, search.bound = 10,
- keep.best.fit = TRUE, ncpus = 1, verbose = FALSE, ...)
+ boot.test.inv.ci = FALSE, bootstrap.type =
+ c("nonparametric", "wild", "sieve", "wildsieve",
+ "awb"), m.out.of.n = 0, subsampling = 0, order.max =
+ 10, ci.bootstrap.size = 1000, alpha = 0.05, save.boot
+ = TRUE, b.transition = Inf, tol = 1e-04, maxit = 100,
+ chngpt.init = NULL, search.bound = 10, keep.best.fit =
+ TRUE, ncpus = 1, verbose = FALSE, ...)
          
 chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
     ...)
@@ -114,6 +116,8 @@ lincomb(object, comb, alpha = 0.05, boot.type = "perc")
   \item{offset}{offset}
   \item{lty}{lty}
   \item{boot.type}{lty}
+  \item{bootstrap.type}{assume independent errors or not}
+  \item{order.max}{order of autocorrelation for autocorrelated errors in sieve and wildsieve bootstrap}
   
   \item{comb}{a vector of combination coefficients that will be used to form an inner product with the estimated slope}
   \item{expo}{If family is binomial and expo is TRUE, coefficients summary will be shown on the scale of odds ratio instead of slopes}

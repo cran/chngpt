@@ -52,9 +52,11 @@ SEXP fastgrid2_gaussian(
      SEXP u_W,
      SEXP u_thresholdIdx, 
      SEXP u_verbose,
+     // bootstrap arguments
      SEXP u_nBoot, 
      SEXP u_nSub,
-     SEXP u_withReplacement
+     SEXP u_withReplacement,
+     SEXP u_sieveY
 ){
 
     int model = asInteger(u_model);
@@ -62,8 +64,11 @@ SEXP fastgrid2_gaussian(
     
     double* X_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y); 
-    double* W_dat=REAL(u_W);    
-
+    double* W_dat=REAL(u_W);  
+    bool sieveBoot = !isNull(u_sieveY);
+    double* sieveY_dat; 
+    if (sieveBoot) sieveY_dat=REAL(u_sieveY); else sieveY_dat=Y_dat; // the latter is just to get rid of no-initialization warning
+    
     int *thresholdIdx=INTEGER(u_thresholdIdx);
     int verbose=asInteger(u_verbose); 
     int nBoot = asInteger(u_nBoot);
@@ -236,23 +241,34 @@ SEXP fastgrid2_gaussian(
         vector<int> index(n);         
         double e_hat=0;
         
-        for (int b=0; b<nBoot; b++) {        
-            // create bootstrap dataset, note that index is 1-based
-            SampleReplace(n, n, &(index[0]));
-            // Step 1: sort
-            sort (index.begin(), index.end());
+        for (int b=0; b<nBoot; b++) {   
             
-            for (i=0; i<n; i++) { //note that index need to minus 1 to become 0-based
-                Zb(i,_)=Z(index[i]-1,_); 
-                Yb(i,0)=Y(index[i]-1,0); 
-                xb[i]  =x[index[i]-1];    
-                wb[i]  =w[index[i]-1]; 
-            } 
+            if (!sieveBoot) {
+                // create bootstrap dataset, note that index is 1-based
+                SampleReplace(n, n, &(index[0]));
+                // Step 1: sort
+                sort (index.begin(), index.end());                                
+                for (i=0; i<n; i++) { //note that index need to minus 1 to become 0-based
+                    Zb(i,_)=Z(index[i]-1,_); 
+                    Yb(i,0)=Y(index[i]-1,0); 
+                    xb[i]  =x[index[i]-1];    
+                    wb[i]  =w[index[i]-1]; 
+                } 
+            } else {   
+               // use sieveY_dat for Y, keep x the same
+                for (i=0; i<n; i++) { 
+                    index[i]=i+1;// needed because index is used later as well
+                    Zb(i,_)=Z(i,_); 
+                    Yb(i,0)=sieveY_dat[b*n+i]; 
+                    xb[i]  =x[i];    
+                    wb[i]  =w[i]; 
+                }             
+            }
             //for (i=0; i<n; i++) {for (j=0; j<p-1; j++)  PRINTF("%f ", Zb(i,j)); PRINTF("%f %f %f ", Yb(i,0), xb[i], wb[i]); PRINTF("\n");} 
-            //if(b==757 | b==0) {for (i=0; i<n; i++) PRINTF("%d,", index[i]); PRINTF("\n");}
+            //if(b==757 | b==0) {for (i=0; i<n; i++) PRINTF("%d,", index[i]); PRINTF("\n");}                
             
             for(i=0; i<nThresholds; i++) thresholds[i]=xb[thresholdIdx[i]-1];
-            //PRINTF("thresholds: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", thresholds[i]); PRINTF("\n");
+            if (verbose>=2) { PRINTF("thresholds: "); for(i=0; i<nThresholds; i++) PRINTF("%f ", thresholds[i]); PRINTF("\n");}
             
             // compute Y'HY. This is not needed to find e_hat, but good to have for comparison with other estimation methods
             double yhyb=0;
@@ -325,7 +341,11 @@ SEXP fastgrid2_gaussian(
             // since Xb and Yb are changed during search, we need to copy from X 
             for (i=0; i<n; i++) { 
                 
-                Yb(i,0)=Y(index[i]-1,0); 
+                if (sieveBoot) {
+                    Yb(i,0)=sieveY_dat[b*n+i]; 
+                } else {
+                    Yb(i,0)=Y(index[i]-1,0); 
+                }                
                 for (j=0; j<p-1; j++) Xbreg(i,j)=X(index[i]-1,j);
                 
                 // thresholded covariates

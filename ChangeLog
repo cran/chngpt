@@ -303,3 +303,19 @@
 
 2020-08-29
     * Make examples run faster by reducing ci.bootstrap.size
+
+2020-09-16
+    * M111_search: add fabs to the condition for duplicate thresholds, modify the check for duplicated thresholds
+
+2020-09-17
+    * add sieve bootstrap 
+
+2020-09-28
+    * add awb bootstrap 
+
+2020-10-6
+    * fix getFixedEf.chngptm
+    * improve summary.chngptm
+
+2020-10-12
+    * fix a bug related to sieveBoot in fastgrid2.cc

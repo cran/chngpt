@@ -161,11 +161,12 @@ double M111_search(
 
     // Step 4: Compute criterion function
     // We do not save the matrix of logLik because it takes O(n^2) memory
-    if ((thresholds[1]-thresholds[0])/thresholds[0]<rel_tol) {
-        crit=R_NegInf; // if two thresholds are identical in bootstrap
+    // if two thresholds are identical in bootstrap, skip
+    if (fabs((thresholds[1]-thresholds[0])/thresholds[0])<rel_tol) {
+        crit=R_NegInf; 
     } else {
         crit = get_crit(VV2, Vr2, VB2, p, R_NegInf, verbose);
-        if (verbose>=2 && crit==R_NegInf) PRINTF("%.20f %.20f %f\n", thresholds[1], thresholds[0], crit);                                         
+        if (verbose>=2) PRINTF("0 1 %.10f %.10f %f\n", thresholds[1], thresholds[0], crit);                                         
     }
     crit_max=crit;
     chosen1=0; chosen2=1; 
@@ -193,11 +194,11 @@ double M111_search(
         Vr2(1,0) += x_e*r[g] - delta*rcusum[g-1];
         for (j=0; j<p-1; j++) VB2(1,j) += x_e*B(g,j) - delta*Bcusum(g-1,j); 
         
-        if ((thresholds[s]-thresholds[s-1])/thresholds[s-1]<rel_tol) {
+        if (fabs((thresholds[s]-thresholds[0])/thresholds[0])<rel_tol) {
             crit=R_NegInf; // if two thresholds are identical in bootstrap
         } else {
             crit = get_crit(VV2, Vr2, VB2, p, crit_max, verbose);
-            if (verbose>=2 && crit==R_NegInf) PRINTF("%d %.20f %.20f %f\n", s, thresholds[s], thresholds[s-1], crit);                                         
+            if (verbose>=2) PRINTF("0 %d %.10f %.10f %f\n", s, thresholds[s], thresholds[0], crit);                                         
         }    
         if(crit>=crit_max) {
             chosen1=0; chosen2 = s; 
@@ -226,11 +227,11 @@ double M111_search(
             Vr(0,0) += x_e*r[k] - delta*rcusum[k-1];
             for (j=0; j<p-1; j++) VB(0,j) += x_e*B(k,j) - delta*Bcusum(k-1,j);
                                     
-            if ((thresholds[tt]-thresholds[tt-1])/thresholds[tt-1]<rel_tol) {
+            if (fabs((thresholds[s]-thresholds[tt])/thresholds[tt])<rel_tol) {
                 crit=R_NegInf; // if two thresholds are identical in bootstrap
             } else {
                 crit = get_crit(VV, Vr, VB, p, crit_max, verbose);
-                if (verbose>=2 && crit==R_NegInf) PRINTF("%d %d %.20f %.20f %f\n", tt, s, thresholds[tt], thresholds[tt-1], crit);                                         
+                if (verbose>=2) PRINTF("%d %d %.10f %.10f %f\n", tt, s, thresholds[tt], thresholds[s], crit);                                         
             }    
             if(crit>=crit_max) {            
                 chosen1 = tt; chosen2 = s; 

@@ -5,10 +5,10 @@ expit.2pl=function(x,e,b) sapply(x, function(x) 1/(1+exp(-b*(x-e))))
 sim.chngpt = function (
     mean.model=c("thresholded","thresholdedItxn","quadratic","quadratic2b","cubic2b","exp","flatHyperbolic","z2","z2hinge","z2segmented","z2linear","logistic"), 
     threshold.type=c("NA",
-          "hinge","M02","M03", # hinge models
-          "upperhinge","M20","M30",# upper hinge models
-          "M21","M12","M22","M22c","M31","M13","M33c", # segmented models with higher order trends
-          "segmented","segmented2","step","stegmented"), # segmented2 is the model studied in Cheng (2008)
+          "M01","M02","M03", # hinge models
+          "M10","M20","M30",# upper hinge models
+          "M11","M21","M12","M22","M22c","M31","M13","M33c", # segmented models with higher order trends
+          "hinge","segmented","upperhinge","segmented2","step","stegmented"), # segmented2 is the model studied in Cheng (2008)
     b.transition=Inf,
     family=c("binomial","gaussian"), 
     x.distr=c("norm","norm3","norm6","imb","lin","mix","gam","zbinary","gam1","gam2", "fixnorm","unif"), # gam1 is a hack to allow e. be different
@@ -18,6 +18,7 @@ sim.chngpt = function (
     n, seed, 
     weighted=FALSE, # sampling weights
     heteroscedastic=FALSE,
+    ar=FALSE,
     verbose=FALSE) 
 {
     
@@ -27,6 +28,11 @@ sim.chngpt = function (
     if (missing(threshold.type) & startsWith(mean.model,"thresholded")) stop("threshold.type mssing")
     if (missing(family)) stop("family mssing")
     threshold.type<-match.arg(threshold.type)    
+    if (threshold.type=="M01") threshold.type="hinge"
+    if (threshold.type=="M10") threshold.type="upperhinge"
+    if (threshold.type=="M11") threshold.type="segmented"
+    
+    
     mean.model<-match.arg(mean.model)    
     family<-match.arg(family)    
     x.distr<-match.arg(x.distr)    
@@ -249,13 +255,20 @@ sim.chngpt = function (
     y=if(family=="binomial") {
         rbern(n, expit(linear.predictors)) 
     } else if(family=="gaussian") {
-        if (!heteroscedastic) {
-            rnorm(n, linear.predictors, sd)
-        } else if (heteroscedastic==1) {
-            rnorm(n, linear.predictors, sd*abs(linear.predictors))
-        } else if (heteroscedastic==2) {
-            rnorm(n, linear.predictors, sd/2+sd/2*sqrt(abs(linear.predictors)))            
-        } else stop("wrong value for heteroscedastic")
+        linear.predictors +
+            if (!heteroscedastic & !ar) {
+                rnorm(n, 0, sd)
+            } else if (heteroscedastic & !ar) {
+                if (heteroscedastic==1) {
+                    rnorm(n, 0, sd*abs(linear.predictors))
+                } else if (heteroscedastic==2) {
+                    rnorm(n, 0, sd/2+sd/2*sqrt(abs(linear.predictors)))            
+                } else stop("wrong value for heteroscedastic")        
+            } else if (!heteroscedastic & ar){
+                rnorm.ar(n, sd, rho=ar)
+            } else {
+                rnorm.ar(n, sd, rho=ar) * (sd/2+sd/2*sqrt(abs(linear.predictors)))
+            }
     }
     
     dat=data.frame (
