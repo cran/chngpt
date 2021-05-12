@@ -4,7 +4,7 @@
 A non-nested hypothesis testing problem for threshold regression models
 }
 \description{
-Test a hinge model against a linear model.
+Test a hinge effect against a linear effect
 }
 \usage{
 hinge.test(formula, cov.interest, family = c("binomial", "gaussian"), data, thres = NA,

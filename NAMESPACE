@@ -5,7 +5,9 @@ export(sim.threephase, sim.twophase.ran.inte, sim.pastor, sim.my, sim.chngpt, li
 
 importFrom("methods", "hasArg")
 importFrom(kyotil, '%.%', rbern, expit, keepWarnings, myprint, concatList, mysapply, "tXDX", "interpolate", "last", getFixedEf, abline.pt.slope, contain, empty.plot, rnorm.ar)
+importFrom(parallel, mclapply)
 importFrom(MASS, mvrnorm)
+importFrom(RhpcBLASctl, blas_get_num_procs, blas_set_num_threads)
 importFrom(lme4, nobars, lmer, fixef)
 import(survival)
 importFrom("graphics", "abline", "plot", "axis", "lines", "par", "points", "hist")
@@ -17,11 +19,14 @@ importFrom("stats", "as.formula", "coef", "complete.cases", "cov2cor", "cov",
              "model.matrix", "na.pass", "optim", "pchisq", "pnorm",
              "predict", "pt", "qt", "quantile", "rbeta", "rgamma",
              "rnorm", "runif", "update", "density", "dnorm", "qchisq", "qnorm",
-             "smooth.spline", "vcov", "sigma", "resid", "lm.fit", "rbinom", "residuals","fitted")
+             "smooth.spline", "vcov", "sigma", "resid", "lm.fit", "rbinom", "residuals","fitted","deviance")
 importFrom("grDevices", "col2rgb", "rgb")
 importFrom("graphics", "title")
 importFrom("stats", "ar", "arima.sim", "na.exclude")
-  
+importFrom("RhpcBLASctl", "blas_get_num_procs", "blas_set_num_threads")
+
+
+
 S3method(AIC, chngptm)
 S3method(logLik, chngptm)
 S3method(coef, chngptm)

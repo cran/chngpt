@@ -7,6 +7,7 @@
 \alias{residuals.chngptm}
 \alias{vcov.chngptm}
 \alias{plot.chngptm}
+\alias{predict.chngptm}
 \alias{print.chngptm}
 \alias{summary.chngptm}
 \alias{logLik.chngptm}
@@ -14,10 +15,10 @@
 \alias{lincomb}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{
-Estimate change point logistic model
+Threshold Models Estimation
 }
 \description{
-Estimate change point logistic model
+Estimate threshold generalized linear models, Cox proportional hazards models, and linear mixed models. Supports 14 types of two-phase (one threshold) models and 1 type of three-phase (two thresholds) model.
 }
 
 \usage{
@@ -32,7 +33,7 @@ chngptm (formula.1, formula.2, family, data, type = c("hinge",
  c("default", "fastgrid2", "fastgrid", "grid",
  "smoothapprox"), var.type = c("default", "none",
  "robust", "model", "bootstrap", "all"), aux.fit =
- NULL, lb.quantile = 0.1, ub.quantile = 0.9,
+ NULL, lb.quantile = 0.05, ub.quantile = 0.95,
  grid.search.max = Inf, test.inv.ci = TRUE,
  boot.test.inv.ci = FALSE, bootstrap.type =
  c("nonparametric", "wild", "sieve", "wildsieve",
@@ -49,10 +50,13 @@ chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
 \method{residuals}{chngptm} (object, ...)
 \method{vcov}{chngptm} (object, var.type=NULL, ...)
 \method{print}{chngptm} (x, ...)
+\method{predict}{chngptm} (object, newdata = NULL, 
+ type = c("link", "response", "terms"), ...)
 \method{plot}{chngptm} (x, which = NULL, xlim = NULL, lwd = 2, lcol = "red",
  lty = 1, add = FALSE, add.points = TRUE, add.ci =
  TRUE, breaks = 20, mark.chngpt = TRUE, xlab = NULL,
  ylab = NULL, plot.individual.line = FALSE, main = "",
+ y.adj = NULL, auto.adj.y = FALSE, transform = NULL,
  ...) 
 \method{summary}{chngptm} (object, var.type = NULL, expo = FALSE,
  show.slope.post.threshold = FALSE, verbose = FALSE,
@@ -72,7 +76,8 @@ lincomb(object, comb, alpha = 0.05, boot.type = "perc")
   \item{formula.strat}{stratification formula}
   \item{family}{string. coxph or any valid argument that can be passed to glm. But variance estimate is only available for binomial and gaussian (only model-based for latter)}
   \item{data}{data frame.}
-  \item{type}{types of threshold effects. segmented2 differs from segmented in parameterization. }
+  \item{type}{type}
+  \item{transform}{transform}
   \item{b.transition}{Numeric. Controls whether threshold model or smooth transition model. Default to Inf, which correponds to threshold model}
   \item{est.method}{default: estimation algorithm will be chosen optimally; fastgrid2: a super fast grid search algorithm, limited to linear regression; grid: plain grid search, works for almost all models; smoothapprox: approximates the likelihood function using a smooth function, only works for some models. fastgrid = fastgrid2, kept for backward compatibility}
   \item{var.type}{string. Different methods for estimating covariance matrix and constructing confidence intervals}
@@ -99,6 +104,7 @@ lincomb(object, comb, alpha = 0.05, boot.type = "perc")
   \item{show.slope.post.threshold}{boolean}
 
   \item{x}{chngptm fit object.}
+  \item{newdata}{newdata}
   \item{object}{chngptm fit object.}
   \item{\dots}{arguments passed to glm or coxph}
   \item{m.out.of.n}{sample size for m-out-of-n bootstrap, default 0 for not doing this type of bootstrap}
@@ -107,6 +113,8 @@ lincomb(object, comb, alpha = 0.05, boot.type = "perc")
   \item{boot.test.inv.ci}{whether to get test inversion CI under bootstrap}
   \item{search.bound}{bounds for search for sloping parameters}
   \item{which}{an integer}
+  \item{y.adj}{y.adj}
+  \item{auto.adj.y}{auto.adj.y}
   \item{xlim}{xlim}
   \item{lwd}{lwd}
   \item{lcol}{line col}
@@ -116,7 +124,11 @@ lincomb(object, comb, alpha = 0.05, boot.type = "perc")
   \item{offset}{offset}
   \item{lty}{lty}
   \item{boot.type}{lty}
-  \item{bootstrap.type}{assume independent errors or not}
+  \item{bootstrap.type}{nonparametric: the default, classical Efron bootstrap, works for homoscedastic and heteroscedastic indepdendent errors; 
+                        sieve: works for homoscedastic autocorrelated errors; 
+                        wild: works for heteroscedastic independent errors; 
+                        wildsieve: works for heteroscedastic autocorrelated errors; 
+                        awb: autoregressive wild bootstrap, also works for heteroscedastic autocorrelated errors, but performance may not be as good as wildsieve}
   \item{order.max}{order of autocorrelation for autocorrelated errors in sieve and wildsieve bootstrap}
   
   \item{comb}{a vector of combination coefficients that will be used to form an inner product with the estimated slope}
@@ -146,13 +158,18 @@ A an object of type chngptm with the following components
 }
 \references{
 
-Fong, Y., Huang, Y., Gilbert, P., Permar S. (2017) chngpt: threshold regression model estimation and inference, BMC Bioinformatics, 18(1):454.
+Son, H, Fong, Y. (2020) Fast Grid Search and Bootstrap-based Inference for Continuous Two-phase Polynomial Regression Models, Environmetrics, in press.
+
+Elder, A., Fong, Y. (2020) Estimation and Inference for Upper Hinge Regression Models, Environmental and Ecological Statistics, 26(4):287-302.
 
 Fong, Y. (2019) Fast bootstrap confidence intervals for continuous threshold linear regression, Journal of Computational and Graphical Statistics, 28(2):466-470.
+
+Fong, Y., Huang, Y., Gilbert, P., Permar S. (2017) chngpt: threshold regression model estimation and inference, BMC Bioinformatics, 18(1):454.
 
 Fong, Y., Di, C., Huang, Y., Gilbert, P. (2017) Model-robust inference for continuous threshold regression models, Biometrics, 73(2):452-462.
 
 Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for change-point estimation in logistic regression. Statistics in Medicine. 22:13141
+
 
 }
 \examples{
@@ -161,12 +178,15 @@ Pastor-Barriuso, R. and Guallar, E. and Coresh, J. (2003) Transition models for 
     
 # threshold linear regression
 # for actual use, set ci.bootstrap.size to default or higher
+par(mfrow=c(2,2))
 types=c("hinge", "segmented", "M02", "M03")
 for (type in types) {
     fit=chngptm(formula.1=logratio~1, formula.2=~range, lidar, type=type, family="gaussian", 
         var.type="bootstrap", ci.bootstrap.size=100)
     print(summary(fit))
-    plot(fit)
+    for (i in 1:3) plot(fit, which=i)
+    out=predict(fit)
+    plot(lidar$range, out, main=type)
 }
 
 
@@ -219,6 +239,8 @@ fit.4=chngptm(formula.1=counts ~ 1, formula.2=~x, data=d.AD, family="poisson",
     type="segmented", var.type="bootstrap", verbose=1, ci.bootstrap.size=1)
 summary(fit.4)
 
+fit.4a=chngptm(formula.1=counts ~ 1, formula.2=~x, data=d.AD, family="quasipoisson", 
+    type="segmented", var.type="bootstrap", verbose=1, ci.bootstrap.size=1)
 
 
 
@@ -285,6 +307,13 @@ dat=sim.twophase.ran.inte(threshold.type="segmented", n=50, seed=1)
 fit = chngptm (formula.1=y~z+(1|id), formula.2=~x, family="gaussian", dat, 
     type="segmented", est.method="grid", var.type="bootstrap", ci.bootstrap.size=1)
 plot(fit)
+out=predict(fit, re.form=NA)
+plot(dat$x, out)
+out.1=predict(fit, type="response", re.form=NULL)# includes re
+plot(dat$x, out.1, type="p", xlab="x")
+
+
+
 
 
 

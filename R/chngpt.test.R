@@ -76,6 +76,7 @@ chngpt.test = function(formula.null, formula.chngpt, family=c("binomial","gaussi
     }
     M <- length(chngpts)  
     
+    
     if(has.itxn & type!="step") stop("interaction model for this type not implemented yet: "%.%type)
     if(verbose) {
         cat("Null: "); print(f.null)

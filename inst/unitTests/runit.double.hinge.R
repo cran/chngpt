@@ -12,7 +12,7 @@ verbose = FALSE
 
 
 dat=sim.pastor(seed=1)[1:200,]
-fit=double.hinge(x=-dat$x.star, y=dat$x.star.expit, var.type="bootstrap", ci.bootstrap.size=1e1)
+fit=double.hinge(x=-dat$x.star, y=dat$x.star.expit, var.type="bootstrap", ci.bootstrap.size=1e1, boot.ci.type="symmetric")
 plot.double.hinge(fit, lcol="red")
 checkEqualsNumeric(fit$coefficients, c(-0.5413842, -0.4572128, 11.8805124,   0.06287312), tolerance=tolerance)    
 checkEqualsNumeric(c(fit$ci.boot), c(-0.5475406,-0.5352278,-0.4615826,-0.4528430,10.4503459,13.3106790,0.02341853, 0.10232771), tolerance=tolerance)    

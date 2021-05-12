@@ -9,7 +9,6 @@ tolerance=1e-1
 # R.Version()$system is needed b/c 32 bit system gives different results from 64 bit system
 if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_checkReproducibility")) & R.Version()$system %in% c("x86_64, mingw32","x86_64, linux-gnu")) tolerance=1e-6 
 print(paste0("tol: ", tolerance), quote=FALSE)
-
 verbose = 0
 
 
@@ -25,8 +24,22 @@ fit=  chngptm(y~z, ~x, type="M20", data=dat, family="gaussian", est.method="fast
 checkEqualsNumeric(fit$vcov$boot.samples[1,], c(1.3466068,1.5963537,7.9991371,0.5712195,5.6141414), tolerance=tolerance)    
 
 
-# the following mismatches and need to be figured out
-# even 2020 8 29 code don't work for some reason
+print("########  segmented")
+type="segmented"    
+dat = sim.chngpt(mean.model="thresholded", threshold.type=type, n=200, seed=1, beta=c(2,2),       x.distr="lin", e.=5, family="gaussian", alpha=0, sd=3, coef.z=1)
+attr(dat,"coef")
+#plot(y~x, dat)
+fit = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat,  type=type, est.method="fastgrid2", var.type="bootstrap", ci.bootstrap.size=2, verbose=verbose)
+if(verbose) plot(fit); fit
+checkEqualsNumeric(coef(fit), c(-0.6677877,0.8992538,2.2789307,1.9569163), tolerance=tolerance)    
+est=lincomb(fit, comb=c(0,0,1,1), alpha=0.05); print(est)
+
+
+## test mclapply support for fastgrid, cannot do it on windows
+#dat = sim.threephase(n = 20, seed=10)
+#fit.0=chngptm(y~z, ~x, type="M111", data=dat, family="gaussian", est.method="fastgrid", var.type="bootstrap", ci.bootstrap.size=3, verbose=1, ncpus=3); fit.0
+
+
 # M111
 est.methods=c("fastgrid","grid")
 dat = sim.threephase(n = 20, seed=10)
@@ -51,18 +64,8 @@ checkEqualsNumeric(fit$coefficients, c(2.7154145,0.3514853,1.7894006,2.5695986,5
 checkEqualsNumeric(fit$vcov$boot.samples[1,], c(3.799664,0.3901292,1.5940243,2.2716004,5.1571429), tolerance=tolerance)    
 plot(fit)
 
-
-print("########  segmented")
-type="segmented"    
-dat = sim.chngpt(mean.model="thresholded", threshold.type=type, n=200, seed=1, beta=c(2,2),       x.distr="lin", e.=5, family="gaussian", alpha=0, sd=3, coef.z=1)
-attr(dat,"coef")
-plot(y~x, dat)
-fit = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat,  type=type, est.method="fastgrid2", var.type="bootstrap", ci.bootstrap.size=100, verbose=verbose)
-#fit; plot(fit)
-checkEqualsNumeric(coef(fit), c(-0.6677877,0.8992538,2.2789307,1.9569163), tolerance=tolerance)    
-est=lincomb(fit, comb=c(0,0,1,1), alpha=0.05); print(est)
-
-
+# also works for M20
+#fit = chngptm (formula.1=y~z+(1|id), formula.2=~x, family="gaussian", dat, type="M20", est.method="grid", var.type="bootstrap", ci.bootstrap.size=1)
 
 
 print("########  M12c")
@@ -126,7 +129,8 @@ for (type in c("hinge","M02")) {
 print("########  step model m out of n bootstrap")
 dat=sim.chngpt("thresholded", threshold.type="step", family="gaussian", n=20, seed=1, beta=-log(.67), alpha=1)
 est.method="fastgrid2"
-fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", m.out.of.n=10, ci.bootstrap.size=10, verbose=verbose)
+fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", m.out.of.n=10, ci.bootstrap.size=10, 
+    lb.quantile=.1, ub.quantile=.9, verbose=verbose)
 if (verbose) plot(fit.0); fit.0
 out=c(
   fit.0$logliks[1],
@@ -140,7 +144,8 @@ checkEqualsNumeric(out, c(35.52723714,-0.15529784,-0.18206414,0.02324697,0.99337
 print("########  step model subsampling bootstrap")
 dat=sim.chngpt("thresholded", threshold.type="step", family="gaussian", n=20, seed=1, beta=-log(.67), alpha=1)
 est.method="fastgrid2"
-fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", subsampling=10, ci.bootstrap.size=10, verbose=verbose)
+fit.0=chngptm(formula.1=y~z, formula.2=~x, family="gaussian", dat, type="step", est.method=est.method, var.type="bootstrap", subsampling=10, ci.bootstrap.size=10, verbose=verbose, 
+    lb.quantile=.1, ub.quantile=.9)
 if (verbose) plot(fit.0); fit.0
 out=c(
   fit.0$logliks[1],
@@ -213,12 +218,35 @@ for (type in c("M20","M02")) {
 }
 
 
+print("########  M12")
+for (type in c("M12")) {
+    dat=sim.chngpt(mean.model="thresholded", threshold.type=type, n=250, seed=1, beta=c(10,10,20), x.distr="norm", e.=6, b.transition=Inf, family="gaussian", alpha=0)
+    if (verbose) plot(y~x, dat)
+    est.methods=c("fastgrid2","grid")
+    out=NULL
+    for (est.method in est.methods) {
+        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type=type, est.method=est.method, var.type="none", save.boot=T, ci.bootstrap.size=1, verbose=verbose, weights=rep(c(1,5),each=nrow(dat)/2))
+        if(verbose) plot(fit.0); fit.0
+        out=cbind(out, c(
+          fit.0$logliks[1],
+          diff(fit.0$logliks)[1:3],
+          fit.0$coefficients,
+          fit.0$vcov$boot.samples[1,]
+        ))
+    }
+    colnames(out)=est.methods
+    if(verbose) print(out)
+    for (m in est.methods) checkEqualsNumeric(out[,"grid"], out[,m], tolerance=tolerance)    
+}
+
+
 print("########  M21 and M12")
 for (type in c("M21","M12")) {
     est.methods=c("fastgrid2","grid")
     out=NULL
     for (est.method in est.methods) {
-        fit.0=chngptm(formula.1=pressure~-1, formula.2=~temperature, pressure, type=type, family="gaussian", est.method=est.method, var.type="bootstrap", ci.bootstrap.size=1, verbose=verbose, weights=c(rep(1,9),rep(5,10)))
+        fit.0=chngptm(formula.1=pressure~-1, formula.2=~temperature, pressure, type=type, family="gaussian", est.method=est.method, var.type="bootstrap", ci.bootstrap.size=1, 
+            lb.quantile=.1, ub.quantile=.9, verbose=verbose, weights=c(rep(1,9),rep(5,10)))
         if(verbose) plot(fit.0); fit.0
         out=cbind(out, c(
           fit.0$logliks[1],
@@ -350,7 +378,8 @@ print("########  thinned thresholds, only for grid")
 est.method="grid"
 type="segmented"    
 dat=sim.chngpt("quadratic", n=60, seed=1, beta=log(0.4), x.distr="norm", e.=4.1, b.transition=Inf, family="gaussian")    
-fit = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat,  type=type, est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, grid.search.max=10, verbose=verbose)
+fit = chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat,  type=type, est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, grid.search.max=10, verbose=verbose, 
+    lb.quantile=.1, ub.quantile=.9)
 out=c(
       fit$logliks[1],
       diff(fit$logliks[1:3]),
@@ -370,7 +399,8 @@ for (type in c("hinge","upperhinge")) {
     est.methods=c("fastgrid2","grid")    
     out=NULL
     for (est.method in est.methods) {
-        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type=type, formula.strat=~I(z>0), est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, verbose=verbose)
+        fit.0=chngptm (formula.1=y~z, formula.2=~x, family="gaussian", dat, type=type, formula.strat=~I(z>0), est.method=est.method, var.type="bootstrap", save.boot=T, ci.bootstrap.size=1, verbose=verbose, 
+    lb.quantile=.1, ub.quantile=.9)
         out=cbind(out, c(
           fit.0$logliks[1],
           diff(fit.0$logliks),

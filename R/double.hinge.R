@@ -1,6 +1,6 @@
 # lb.quantile=.05; ub.quantile=.95; mid.x=NULL; lower.y=0; upper.y=1; mid.quantile.search.step=0.05
 double.hinge=function(x, y, lower.y=NULL, upper.y=NULL, 
-    var.type=c("none","bootstrap"), ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, ncpus=1
+    var.type=c("none","bootstrap"), ci.bootstrap.size=1000, alpha=0.05, save.boot=TRUE, ncpus=1, boot.ci.type=c("percentile","symmetric")
 ) {
     
     not.missing=!is.na(x) & !is.na(y)
@@ -8,6 +8,7 @@ double.hinge=function(x, y, lower.y=NULL, upper.y=NULL,
     y=y[not.missing]
     
     var.type<-match.arg(var.type)    
+    boot.ci.type<-match.arg(boot.ci.type)    
     
     if(is.null(lower.y)) lower.y=min(y)
     if(is.null(upper.y)) upper.y=max(y)
@@ -37,10 +38,15 @@ double.hinge=function(x, y, lower.y=NULL, upper.y=NULL,
         # restore rng state 
         assign(".Random.seed", save.seed, .GlobalEnv)             
         
-        # symmetric percentile CI as defined in Hansen (2017)
         ci.boot.symm=sapply (1:length(coef.hat), function(i) {
-            q.1=quantile(abs(boot.samples[,i]-coef.hat[i]), 1-alpha, na.rm=TRUE)
-            coef.hat[i]+c(-q.1, q.1)
+            if (boot.ci.type=="symmetric") {
+                # symmetric percentile CI as defined in Hansen (2017)
+                q.1=quantile(abs(boot.samples[,i]-coef.hat[i]), 1-alpha, na.rm=TRUE)
+                coef.hat[i]+c(-q.1, q.1)
+            } else if (boot.ci.type=="percentile") {
+                # percentile CI
+                quantile(boot.samples[,i], c(alpha/2, 1-alpha/2), na.rm=TRUE)
+            } else stop("boot.ci.type not supported")
         })                
         colnames(ci.boot.symm)<-names(coef.hat) 
         rownames(ci.boot.symm)<-c((alpha/2*100)%.%"%",(100-alpha/2*100)%.%"%") 

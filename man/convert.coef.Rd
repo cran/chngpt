@@ -1,4 +1,4 @@
-\name{convert.coef}
+\name{convert.coef predictx threshold.func}
 \alias{convert.coef}
 \alias{predictx}
 \alias{threshold.func}
@@ -6,14 +6,16 @@
 Helper functions 
 }
 \description{
-Some helper functions.
+Some helper functions. predictx returns confidence bands for predictions as functions of the change point variable. threshold.func returns thresholded covariates.
 }
 \usage{
 
 convert.coef(coef.0, threshold.type)
 
-predictx(fit, boot.type, alpha = 0.05, xx = NULL, verbose =
-         FALSE, return.boot = FALSE, include.intercept=FALSE)
+predictx(fit, boot.ci.type = c("perc", "basic", "symm"), alpha
+ = 0.05, xx = NULL, verbose = FALSE, return.boot =
+ FALSE, include.intercept = FALSE, get.simultaneous =
+ TRUE)
          
 threshold.func(threshold.type, coef, xx, x.name, include.intercept=FALSE)
 }
@@ -29,6 +31,9 @@ threshold.func(threshold.type, coef, xx, x.name, include.intercept=FALSE)
   \item{threshold.type}{
 %%     ~~Describe \code{threshold.type} here~~
 }
+  \item{get.simultaneous}{
+%%     ~~Describe \code{threshold.type} here~~
+}
   \item{return.boot}{
 %%     ~~Describe \code{threshold.type} here~~
 }
@@ -36,8 +41,8 @@ threshold.func(threshold.type, coef, xx, x.name, include.intercept=FALSE)
   \item{fit}{
 %%     ~~Describe \code{fit} here~~
 }
-  \item{boot.type}{
-%%     ~~Describe \code{boot.type} here~~
+  \item{boot.ci.type}{
+%%     ~~Describe \code{boot.ci.type} here~~
 }
   \item{alpha}{
 %%     ~~Describe \code{alpha} here~~

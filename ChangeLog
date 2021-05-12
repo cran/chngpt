@@ -319,3 +319,42 @@
 
 2020-10-12
     * fix a bug related to sieveBoot in fastgrid2.cc
+
+2020-10-19
+    * fix summary.chngptm to get show.slope.post.threshold to work again
+
+2020-10-25
+    * fix chngptm to replace logLik with deviance for quasipoisson fits
+
+2020-12-17
+    * fix documentation
+
+2020-2-4
+    * add y.adj=NULL, auto.adj.y=FALSE to plot.chngptm so that the fitted lines can be adjusted to go through the data points
+
+2020-2-7
+    * add transform to plot.chngpt
+
+2020-2-9
+    * add boot.ci.type to double.hinge
+    * update kyotil dependency with version number
+
+2020-3-3
+    * update chngptm to exit more gracefully when fastgrid fails due to singularity
+
+2020-3-16
+    * fix chngptm so that coef for M12 is not messed by due to hinge.to.upperhinge (line 666)
+
+2020-3-17
+    * change ub.quantile/lb.quantile from 90/10 to 95/5 percentile in chngptm
+
+2020-3-30
+    * fix a typo in threshold.func related to step model
+
+2020-4-7
+    * Add M111 to threshold.func()
+    * Support parallel processing in fastgrid
+
+2020-4-11
+    * Switch to QR decomposition for solving least squares to have more numerial stability
+    * In particular, B is no longer computed as  X (X**TX)^-1/2 , but as Q_1

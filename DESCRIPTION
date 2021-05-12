@@ -1,7 +1,7 @@
 Package: chngpt
 LazyLoad: yes
 LazyData: yes
-Version: 2020.10-12
+Version: 2021.5-12
 Title: Estimation and Hypothesis Testing for Threshold Regression
 Authors@R: c(person("Youyi", "Fong", role = "cre", email = "youyifong@gmail.com"),
     person("Qianqian", "Chen", role = "aut", email = "qc25@uw.edu"),
@@ -12,14 +12,15 @@ Authors@R: c(person("Youyi", "Fong", role = "cre", email = "youyifong@gmail.com"
     person("Zonglin", "He", role = "aut", email = "nkhezl@gmail.com"), 
     person("Simone", "Giannerini", role = "aut", email = "simone.giannerini@unibo.it")
     )
-Depends: R (>= 3.5.0)
+Depends: R (>= 3.6)
 Suggests: R.rsp, RUnit, mvtnorm
-Imports: survival, splines, kyotil, boot, MASS, methods, lme4
+Imports: survival, splines, kyotil (>= 2020.10-12), boot, MASS,
+        methods, lme4, parallel, RhpcBLASctl
 VignetteBuilder: R.rsp
-Description: Threshold regression models are also called two-phase regression, broken-stick regression, split-point regression, structural change models, and regression kink models, with and without interaction terms. Methods for both continuous and discontinuous threshold models are included, but the support for the former is much greater. This package is described in Fong, Huang, Gilbert and Permar (2017) <DOI:10.1186/s12859-017-1863-x>. 
+Description: Threshold regression models are also called two-phase regression, broken-stick regression, split-point regression, structural change models, and regression kink models, with and without interaction terms. Methods for both continuous and discontinuous threshold models are included, but the support for the former is much greater. This package is described in Fong, Huang, Gilbert and Permar (2017) <DOI:10.1186/s12859-017-1863-x> and the package vignette. 
 License: GPL (>= 2)
 NeedsCompilation: yes
-Packaged: 2020-10-13 19:05:53 UTC; Youyi
+Packaged: 2021-05-12 16:02:44 UTC; Youyi
 Author: Youyi Fong [cre],
   Qianqian Chen [aut],
   Shuangcheng Hua [aut],
@@ -30,4 +31,4 @@ Author: Youyi Fong [cre],
   Simone Giannerini [aut]
 Maintainer: Youyi Fong <youyifong@gmail.com>
 Repository: CRAN
-Date/Publication: 2020-10-14 05:30:14 UTC
+Date/Publication: 2021-05-12 16:42:19 UTC

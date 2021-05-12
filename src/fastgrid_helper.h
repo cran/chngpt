@@ -28,17 +28,26 @@
 using namespace scythe;
 using namespace std;
 
+//struct Eigen {
+//   Matrix<> values;
+//   Matrix<> vectors;
+//};
+//Eigen eigen (const Matrix<>& A, bool vectors=true);
+
 void SampleReplace(int k, int n, int *y);
 void SampleNoReplace(int k, int n, int *y, int *x);
 void make_symmetric(double* matrix, int rows);
 Matrix<> crossprod1(const Matrix<>& A);
+Matrix<> tcrossprod1(const Matrix<>& A);
+Matrix<> myqr_getQ (const Matrix<>& A);
+Matrix<> qr_solve (const Matrix<>& A, const Matrix<>& b);
 
-struct Eigen {
-   Matrix<> values;
-   Matrix<> vectors;
-};
-
-Eigen eigen (const Matrix<>& A, bool vectors=true);
+//struct Eigen {
+//   Matrix<> values;
+//   Matrix<> vectors;
+//};
+//
+//Eigen eigen (const Matrix<>& A, bool vectors=true);
 
 void _preprocess(Matrix<double, Row>& Z, Matrix<double, Row>& Y);
 

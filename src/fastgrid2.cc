@@ -40,6 +40,7 @@
 using namespace std;
 using namespace scythe;
 
+
 extern "C" {
 
   // assume X and Y are sorted in chngptvar from small to large
@@ -58,7 +59,7 @@ SEXP fastgrid2_gaussian(
      SEXP u_withReplacement,
      SEXP u_sieveY
 ){
-
+    double tmp=0;
     int model = asInteger(u_model);
     int ncut = model==111?2:1; 
     
@@ -154,8 +155,9 @@ SEXP fastgrid2_gaussian(
             
             // Step 2. Compute B and r, which are saved in Z and Y
             if (p>1) {
-                yhy = ((t(Y) * Z) * invpd(crossprod(Z)) * (t(Z) * Y))(0);
+                tmp=(t(Y) * Y)(0);
                 _preprocess(Z,Y);
+                yhy = tmp - (t(Y) * Y)(0);
             }
                 
             for(i=0; i<nThresholds; i++) thresholds[i]=x[thresholdIdx[i]-1];
@@ -272,10 +274,12 @@ SEXP fastgrid2_gaussian(
             
             // compute Y'HY. This is not needed to find e_hat, but good to have for comparison with other estimation methods
             double yhyb=0;
-            if(verbose>0 && p>1) yhyb = ((t(Yb) * Zb) * invpd(crossprod(Zb)) * (t(Zb) * Yb))(0);
     
-            // Compute B and r, which are saved in Z and Y
-            if (p>1) _preprocess(Zb,Yb);
+            if (p>1) {
+                if(verbose>0) tmp=(t(Yb) * Yb)(0);
+                _preprocess(Zb,Yb);
+                if(verbose>0) yhyb = tmp - (t(Yb) * Yb)(0);
+            }
 
             if(model==5) { 
                    e_hat=Mstep_search(Zb, Yb, xb, wb, 
@@ -400,7 +404,11 @@ SEXP fastgrid2_gaussian(
                 for (j=p-1; j<p_coef-ncut; j++) Xbreg(i,j)=Xbreg(i,j)*wb[i];
             }            
             
-            Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
+
+            Matrix <> beta_hat = qr_solve (Xbreg, Yb);
+//            PRINTF("qr_solve \n"); for (i=0; i<p+1; i++) PRINTF("%f ", beta_hat(i)); PRINTF("\n");
+//            Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
+//            PRINTF("invpd \n"); for (i=0; i<p+1; i++) PRINTF("%f ", beta_hat(i)); PRINTF("\n");
             if(model==111) {
                 for (int j=0; j<p_coef-ncut; j++) coef[b*p_coef+j]=beta_hat[j];                         
                 coef[(b+1)*p_coef-2] = *ehatvec;
@@ -505,7 +513,8 @@ SEXP fastgrid2_gaussian(
             }
             
             
-            Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
+            Matrix <> beta_hat = qr_solve (Xbreg, Yb);
+            //Matrix <> beta_hat = invpd(crossprod(Xbreg)) * (t(Xbreg) * Yb);
             for (int j=0; j<p_coef-1; j++) coef[b*p_coef+j]=beta_hat[j];                         
             coef[(b+1)*p_coef-1] = e_hat;
             

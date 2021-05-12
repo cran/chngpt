@@ -3,10 +3,10 @@
 \alias{chngpt.test}
 \alias{plot.chngpt.test}
 \title{
-Change Point Tests
+Threshold Model Hypothesis Testing
 }
 \description{
-Hypothesis testing for change point covariate in logistic regression and linear regression.
+Hypothesis testing for threshold models. Only linear models and logistic models are supported at this point.
 }
 \usage{
 
