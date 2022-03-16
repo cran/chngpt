@@ -358,3 +358,7 @@
 2020-4-11
     * Switch to QR decomposition for solving least squares to have more numerial stability
     * In particular, B is no longer computed as  X (X**TX)^-1/2 , but as Q_1
+
+2022-3-15
+    * Address warnings from debian-gcc
+	

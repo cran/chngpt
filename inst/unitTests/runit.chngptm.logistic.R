@@ -12,6 +12,10 @@ if((file.exists("D:/gDrive/3software/_checkReproducibility") | file.exists("~/_c
 print(tolerance)
 verbose = FALSE
 
+
+
+
+
 # two-phase polynomial models
 fit=chngptm(formula.1=y~birth, formula.2= ~ NAb_SF162LS, dat.mtct, type="segmented", family="binomial", var.type="none")
 checkEqualsNumeric(c(coef(fit),fit$chngpt), c(-3.1442857, 0.2040075, 0.5371311, -0.9231887, 6.0890449), tolerance=tolerance) 
@@ -86,6 +90,9 @@ fit.d = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="se
 fit.e = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="segmented", est.method="smoothapprox", var.type="none", weights=rep(1:2,each=30), verbose=verbose)
 checkEqualsNumeric(coef(fit.d), c(-8.4120932,0.8365985,1.9086715,135.5846880), tolerance=tolerance)    
 checkEqualsNumeric(coef(fit.e), c(-8.5621192,0.8431925,1.9465604,1713.3986973), tolerance=tolerance)    
+
+#fit.m111 = chngptm (formula.1=y~z, formula.2=~x, family="binomial", data,  type="M111", est.method="grid",         var.type="none", weights=rep(1:2,each=30), verbose=1)
+
 
 # cbind() in formula
 dat.2=sim.chngpt("thresholded", "step", n=200, seed=1, beta=1, alpha=-1, x.distr="norm", e.=4, family="binomial")

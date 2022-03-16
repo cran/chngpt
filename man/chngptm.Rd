@@ -52,12 +52,12 @@ chngptm.xy(x, y, type=c("step","hinge","segmented","segmented2","stegmented"),
 \method{print}{chngptm} (x, ...)
 \method{predict}{chngptm} (object, newdata = NULL, 
  type = c("link", "response", "terms"), ...)
-\method{plot}{chngptm} (x, which = NULL, xlim = NULL, lwd = 2, lcol = "red",
- lty = 1, add = FALSE, add.points = TRUE, add.ci =
- TRUE, breaks = 20, mark.chngpt = TRUE, xlab = NULL,
- ylab = NULL, plot.individual.line = FALSE, main = "",
- y.adj = NULL, auto.adj.y = FALSE, transform = NULL,
- ...) 
+\method{plot}{chngptm} (x, which = NULL, xlim = NULL, ylim = NULL, lwd = 2,
+         lcol = "red", lty = 1, add = FALSE, add.points = TRUE,
+         add.ci = TRUE, breaks = 20, mark.chngpt = TRUE, xlab =
+         NULL, ylab = NULL, plot.individual.line = FALSE, main
+         = "", y.adj = NULL, auto.adj.y = FALSE, transform =
+         NULL, ...)
 \method{summary}{chngptm} (object, var.type = NULL, expo = FALSE,
  show.slope.post.threshold = FALSE, verbose = FALSE,
  boot.type = "perc", ...)
@@ -116,6 +116,7 @@ lincomb(object, comb, alpha = 0.05, boot.type = "perc")
   \item{y.adj}{y.adj}
   \item{auto.adj.y}{auto.adj.y}
   \item{xlim}{xlim}
+  \item{ylim}{ylim}
   \item{lwd}{lwd}
   \item{lcol}{line col}
   \item{mark.chngpt}{mark.chngpt}

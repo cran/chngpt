@@ -26,7 +26,7 @@ double.hinge=function(x, y, lower.y=NULL, upper.y=NULL,
     if (var.type=="bootstrap") {
         # save rng state before set.seed in order to restore before exiting this function
         save.seed <- try(get(".Random.seed", .GlobalEnv), silent=TRUE) 
-        if (class(save.seed)=="try-error") {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
+        if (inherits(save.seed,"try-error")) {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
         set.seed(1)
         
         boot.out=boot::boot(x, R=ci.bootstrap.size, sim = "ordinary", stype = "i", parallel = ifelse(ncpus==1,"no","multicore"), ncpus=ncpus, statistic=function(dat, ii){

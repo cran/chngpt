@@ -601,7 +601,7 @@ chngptm = function(formula.1, formula.2, family, data,
                       upper = c(rep( search.bound,length(beta.init)), quantile(chngpt.var, ub.quantile)), 
                       method="L-BFGS-B", control = list(), hessian = TRUE))
                       
-                if(class(optim.out)=="try-error") {
+                if(inherits(optim.out,"try-error")) {
                     if (verbose) cat("error doing smoothapprox search, switch to grid search\n")
                     e.final=attr(grid.search(), "e.final")
                     glm.warn=attr(e.final,"glm.warn")
@@ -690,7 +690,7 @@ chngptm = function(formula.1, formula.2, family, data,
             
             # save rng state before set.seed in order to restore before exiting this function
             save.seed <- try(get(".Random.seed", .GlobalEnv), silent=TRUE) 
-            if (class(save.seed)=="try-error") {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
+            if (inherits(save.seed,"try-error")) {set.seed(1); save.seed <- get(".Random.seed", .GlobalEnv) }      
             
             if (fastgrid.ok & est.method%in%c("fastgrid","fastgrid2","gridC")) {
                 if (bootstrap.type=="nonparametric") {
@@ -1643,7 +1643,7 @@ logLik.chngptm=function(object,...) {
 }
 
 # which=1: scatterplot with fitted line, only works for simple regression
-plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", lty=1, add=FALSE, add.points=TRUE, add.ci=TRUE, breaks=20, mark.chngpt=TRUE, xlab=NULL, ylab=NULL, 
+plot.chngptm=function(x, which=NULL, xlim=NULL, ylim=NULL, lwd=2, lcol="red", lty=1, add=FALSE, add.points=TRUE, add.ci=TRUE, breaks=20, mark.chngpt=TRUE, xlab=NULL, ylab=NULL, 
     plot.individual.line=FALSE, main="", y.adj=NULL, auto.adj.y=FALSE, transform=NULL, ...) {
     
     has.boot.samples=FALSE
@@ -1776,8 +1776,9 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, lwd=2, lcol="red", lty=1, add=FA
         
             } # end twophase
         }# end for intercept
-    
-        if(!add) plot(data[[fit$chngpt.var]], y, xlim=xlim, xlab=ifelse(is.null(xlab),fit$chngpt.var,xlab), ylab=ifelse(is.null(ylab),yname,ylab), type="n", main=main, ..., ylim=range(out[[1]][,2], if(add.points) y))
+        
+        if (is.null(ylim)) ylim=range(out[[1]][,2], if(add.points) y)
+        if(!add) plot(data[[fit$chngpt.var]], y, xlim=xlim, xlab=ifelse(is.null(xlab),fit$chngpt.var,xlab), ylab=ifelse(is.null(ylab),yname,ylab), type="n", main=main, ..., ylim=ylim)
         if(add.points) points(data[[fit$chngpt.var]], y, ...)
         lines(out[[1]][,1], out[[1]][,2], lwd=lwd, col=lcol, lty=lty)
         #if(mark.chngpt) points(chngpt.est, yy[1], pch=19, col=lcol, cex=1.5)

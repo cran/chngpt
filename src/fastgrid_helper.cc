@@ -31,6 +31,8 @@ using namespace std;
 
 
 
+
+
 // modified from ide.h, but because there was lots of error when SCYTHE_LAPACK is defined, it cannot be used
 // modifications include removing of lapack
 Matrix<> qr_solve (const Matrix<>& A, const Matrix<>& b)
@@ -271,113 +273,118 @@ Matrix<> myqr_getQ (const Matrix<>& A)
 }
 
 
+struct Eigen {
+   Matrix<> values;
+   Matrix<> vectors;
+};
+
+Eigen eigen (const Matrix<>& A, bool vectors=true)
+{
+    SCYTHE_DEBUG_MSG("Using lapack/blas for eigen");
+    SCYTHE_CHECK_10(! A.isSquare(), scythe_dimension_error,
+        "Matrix not square");
+    SCYTHE_CHECK_10(A.isNull(), scythe_null_error,
+        "Matrix is NULL");
+    // Should be symmetric but rounding errors make checking for this
+    // difficult.
+
+    // Make a copy of A
+    Matrix<> AA = A;
+
+    // Get a point to the internal array and set up some vars
+    double* Aarray = AA.getArray(); // internal array points
+    int order = (int) AA.rows();    // input matrix is order x order
+    double dignored = 0;            // we do not use this option
+    int iignored = 0;               // or this one
+    double abstol = 0.0;            // tolerance (default)
+    int m;                          // output value
+    Matrix<> result;                // result matrix
+    char getvecs[1];                // are we getting eigenvectors?
+    if (vectors) {
+      getvecs[0] = 'V';
+      result = Matrix<>(order, order + 1, false);
+    } else {
+      result = Matrix<>(order, 1, false);
+      getvecs[0] = 'N';
+    }
+    double* eigenvalues = result.getArray(); // pointer to result array
+    int* isuppz = new int[2 * order];        // indices of nonzero eigvecs
+    double tmp;   // inital temporary value for getting work-space info
+    int lwork, liwork, *iwork, itmp; // stuff for workspace
+    double *work; // and more stuff for workspace
+    int info = 0;  // error code holder
+
+    // get optimal size for work arrays
+    lwork = -1;
+    liwork = -1;
+    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
+        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
+        eigenvalues + order, &order, isuppz, &tmp, &lwork, &itmp,
+        &liwork, &info);
+    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
+        "Internal error in LAPACK routine dsyevr");
+    lwork = (int) tmp;
+    liwork = itmp;
+    work = new double[lwork];
+    iwork = new int[liwork];
+
+    // do the actual operation
+    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
+        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
+        eigenvalues + order, &order, isuppz, work, &lwork, iwork,
+        &liwork, &info);
+    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
+        "Internal error in LAPACK routine dsyevr");
+
+    delete[] isuppz;
+    delete[] work;
+    delete[] iwork;
+    
+    Eigen resobj;
+    if (vectors) {
+      resobj.values = result(_, 0);
+      resobj.vectors = result(0, 1, result.rows() -1, result.cols() - 1);
+    } else {
+      resobj.values = result;
+    }
+
+    return resobj;
+}
+
+
 // replace Z and Y with B and r
 // B is Q_1, the first p columns of Q
 // H = Q_1 * Q_1' (https://stats.stackexchange.com/questions/139969/speeding-up-hat-matrices-like-xxx-1x-projection-matrices-and-other-as)
 void _preprocess(Matrix<double, Row>& Z, Matrix<double, Row>& Y) {
      
-    // compute Q
-    Matrix<> Q = myqr_getQ (Z);       
-    // assign Q to Z
-    int p=Z.cols(), n=Z.rows(); for (int i=0; i<n; i++) for (int j=0; j<p; j++) Z(i,j) = Q(i,j);
-    // compute resid
-    Y = Y - tcrossprod1(Q) * Y; 
-//    PRINTF("Z r\n"); for (int i=0; i<n; i++) {for (int j=0; j<p; j++)  PRINTF("%f ", Q(i,j));   PRINTF("%f ", Y(i,0));   PRINTF("\n");}                
+//    // if there are too many rows, this fails, probably due to the use of int myqr_getQ, which is necessary b/c 
+//    // F77_NAME(dgeqrf)(const int* m, const int* n, double* a, const int* lda,
+//    // compute Q
+//    Matrix<> Q = myqr_getQ (Z);       
+//    // assign Q to Z
+//    int p=Z.cols(); unsigned long n=Z.rows(); for (unsigned long i=0; i<n; i++) for (int j=0; j<p; j++) Z(i,j) = Q(i,j);
+//    // compute resid
+//    Y = Y - tcrossprod1(Q) * Y; 
+////    PRINTF("Z r\n"); for (int i=0; i<n; i++) {for (int j=0; j<p; j++)  PRINTF("%f ", Q(i,j));   PRINTF("%f ", Y(i,0));   PRINTF("\n");}                
      
      // the old implementation based on inverting X'X
-//    int p=Z.cols();
-//    Matrix<> A = invpd(crossprod(Z));
-//    Eigen Aeig = eigen(A);
-//    Matrix <double,Row,Concrete> A_eig (p, p, true, 0);
-//    for (int j=0; j<p; j++) A_eig(j,j)=sqrt(Aeig.values(j));
-//    Y = Y - Z * A * (t(Z) * Y);                       // save r in Y
-//    Z = Z * (Aeig.vectors * A_eig * t(Aeig.vectors)); // save B in Z    
-////    PRINTF("Z r\n"); for (int i=0; i<Z.rows(); i++) {for (int j=0; j<p; j++) PRINTF("%f ", Z(i,j));   PRINTF("%f ", Y(i,0)); PRINTF("\n");}            
+    int p=Z.cols();
+    Matrix<> A = invpd(crossprod(Z));
+    Eigen Aeig = eigen(A);
+    Matrix <double,Row,Concrete> A_eig (p, p, true, 0);
+    for (int j=0; j<p; j++) A_eig(j,j)=sqrt(Aeig.values(j));
+    Y = Y - Z * A * (t(Z) * Y);                       // save r in Y
+    Z = Z * (Aeig.vectors * A_eig * t(Aeig.vectors)); // save B in Z    
+//    PRINTF("Z r\n"); for (int i=0; i<Z.rows(); i++) {for (int j=0; j<p; j++) PRINTF("%f ", Z(i,j));   PRINTF("%f ", Y(i,0)); PRINTF("\n");}            
 
 }
 
 
 
 
+
+
+
+
+
 #endif /* fastgrid_H */
-
-
-//struct Eigen {
-//   Matrix<> values;
-//   Matrix<> vectors;
-//};
-//
-//Eigen eigen (const Matrix<>& A, bool vectors=true)
-//{
-//    SCYTHE_DEBUG_MSG("Using lapack/blas for eigen");
-//    SCYTHE_CHECK_10(! A.isSquare(), scythe_dimension_error,
-//        "Matrix not square");
-//    SCYTHE_CHECK_10(A.isNull(), scythe_null_error,
-//        "Matrix is NULL");
-//    // Should be symmetric but rounding errors make checking for this
-//    // difficult.
-//
-//    // Make a copy of A
-//    Matrix<> AA = A;
-//
-//    // Get a point to the internal array and set up some vars
-//    double* Aarray = AA.getArray(); // internal array points
-//    int order = (int) AA.rows();    // input matrix is order x order
-//    double dignored = 0;            // we do not use this option
-//    int iignored = 0;               // or this one
-//    double abstol = 0.0;            // tolerance (default)
-//    int m;                          // output value
-//    Matrix<> result;                // result matrix
-//    char getvecs[1];                // are we getting eigenvectors?
-//    if (vectors) {
-//      getvecs[0] = 'V';
-//      result = Matrix<>(order, order + 1, false);
-//    } else {
-//      result = Matrix<>(order, 1, false);
-//      getvecs[0] = 'N';
-//    }
-//    double* eigenvalues = result.getArray(); // pointer to result array
-//    int* isuppz = new int[2 * order];        // indices of nonzero eigvecs
-//    double tmp;   // inital temporary value for getting work-space info
-//    int lwork, liwork, *iwork, itmp; // stuff for workspace
-//    double *work; // and more stuff for workspace
-//    int info = 0;  // error code holder
-//
-//    // get optimal size for work arrays
-//    lwork = -1;
-//    liwork = -1;
-//    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
-//        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
-//        eigenvalues + order, &order, isuppz, &tmp, &lwork, &itmp,
-//        &liwork, &info);
-//    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
-//        "Internal error in LAPACK routine dsyevr");
-//    lwork = (int) tmp;
-//    liwork = itmp;
-//    work = new double[lwork];
-//    iwork = new int[liwork];
-//
-//    // do the actual operation
-//    dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
-//        &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
-//        eigenvalues + order, &order, isuppz, work, &lwork, iwork,
-//        &liwork, &info);
-//    SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
-//        "Internal error in LAPACK routine dsyevr");
-//
-//    delete[] isuppz;
-//    delete[] work;
-//    delete[] iwork;
-//    
-//    Eigen resobj;
-//    if (vectors) {
-//      resobj.values = result(_, 0);
-//      resobj.vectors = result(0, 1, result.rows() -1, result.cols() - 1);
-//    } else {
-//      resobj.values = result;
-//    }
-//
-//    return resobj;
-//}
-
-

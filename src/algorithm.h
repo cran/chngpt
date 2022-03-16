@@ -63,13 +63,21 @@ namespace scythe {
   template <typename T_type, matrix_order ORDER, matrix_style STYLE>
   class Matrix;
 
+template<class Arg1, class Arg2, class Result> 
+struct binary_function
+{
+    using first_argument_type = Arg1;
+    using second_argument_type = Arg2;
+    using result_type = Result;
+};
+
   /*! \brief A Functor encapsulating exponentiation.
    *
    * This function object wraps exponentiation operations for use in
    * generic algorithms.
    */
   template <typename T>
-  struct exponentiate : std::binary_function<T, T, T>
+  struct exponentiate : binary_function<T, T, T>
   {
     T operator() (T base, T exp) const
     {
@@ -83,7 +91,7 @@ namespace scythe {
    * generic algorithms, where a is some constant.
    */
   template <typename T>
-  struct ax_plus_b : std::binary_function<T,T,T>
+  struct ax_plus_b : binary_function<T,T,T>
   {
     T a_;
     ax_plus_b (T a) : a_ (a) {}
