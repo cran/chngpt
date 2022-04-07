@@ -176,7 +176,7 @@ chngptm = function(formula.1, formula.2, family, data,
     } else {
         # note that we have not actually checked stratification and upper hinge
         if(!threshold.type %in% c("hinge","upperhinge","segmented")) stop("stratification only implemented for hinge, upper hinge, and segmented threshold effects")
-        if(class(formula.strat)!="formula") stop("formula.strat needs to be a formula")
+        if(!inherits(formula.strat, "formula")) stop("formula.strat needs to be a formula")
         strat.dat=model.matrix(formula.strat, data)[,-1,drop=F]
         if (ncol(strat.dat)!=1) {str(strat.dat); stop("something is wrong with formula.strat") }
         stratified.by=strat.dat[,1]
@@ -1663,7 +1663,7 @@ plot.chngptm=function(x, which=NULL, xlim=NULL, ylim=NULL, lwd=2, lcol="red", lt
     fit=x
     linkinv=if (is.null(transform)) get(fit$family)()$linkinv else transform
     
-    has.re="lmerMod" %in% class(fit$best.fit)
+    has.re=inherits(fit$best.fit, "lmerMod")
     
     if(has.re) {
         data=fit$best.fit@frame
@@ -2095,7 +2095,7 @@ dev.upperhinge <- expression( (1-y) * ( alpha.z + (x-e)*beta*(1-1/(1+exp(-b*(x-e
 
 # check whether the MLE is considered good, return Boolean
 good.soln=function(fit, df=7, plot=FALSE) {
-    if (class(fit)[1]!="chngptm") {
+    if (!inherits(fit, "chngptm")) {
         warning("fit has to be of class chngptm")
         return (NA)
     }
@@ -2284,7 +2284,7 @@ predict.chngptm=function (object, newdata = NULL, type = c("link", "response", "
     type=match.arg(type)
     
     if (is.null(newdata)) {
-        if ("lmerMod" %in% class(object$best.fit)) {
+        if (inherits(object$best.fit, "lmerMod")) {
             newdata=attr(object$best.fit, "frame")
             if(type=="terms") stop("terms not a supported type for lmer fit")
         } else {

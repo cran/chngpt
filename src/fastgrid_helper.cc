@@ -19,6 +19,9 @@
 #include <float.h> //DBL_EPSILON
 #include <R_ext/Lapack.h>
 #include <Rmath.h>
+#ifndef FCONE
+# define FCONE
+#endif
 
 #define RUNIF runif
 #define PRINTF Rprintf
@@ -96,7 +99,7 @@ Matrix<> qr_solve (const Matrix<>& A, const Matrix<>& b)
     // Get workspace size
     lwork = -1;
     dormqr_("L", "T", &rows, &nrhs, &taudim, QRarray, &rows,
-                    tarray, barray, &rows, &tmp, &lwork, &info);
+                    tarray, barray, &rows, &tmp, &lwork, &info FCONE FCONE);
 
     SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
         "Internal error in LAPACK routine dormqr");
@@ -105,13 +108,13 @@ Matrix<> qr_solve (const Matrix<>& A, const Matrix<>& b)
     lwork = (int) tmp;
     work = new double[lwork];
     dormqr_("L", "T", &rows, &nrhs, &taudim, QRarray, &rows,
-                    tarray, barray, &rows, work, &lwork, &info);
+                    tarray, barray, &rows, work, &lwork, &info FCONE FCONE);
 
     SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
         "Internal error in LAPACK routine dormqr");
 
     dtrtrs_("U", "N", "N", &taudim, &nrhs, QRarray, &rows, barray,
-                    &rows, &info);
+                    &rows, &info FCONE FCONE FCONE);
 
     SCYTHE_CHECK_10(info > 0, scythe_type_error, "Matrix is singular");
     SCYTHE_CHECK_10(info < 0, scythe_lapack_internal_error,
@@ -191,7 +194,7 @@ Matrix<> crossprod1(const Matrix<>& A)
     //for (int i=0; i<rows*cols; i++) PRINTF("%f ", Apnt[i]); PRINTF("\n");       
 
     dsyrk_("L", "T", &cols, &rows, &one, Apnt, &rows, &zero, respnt,
-                   &cols);
+                   &cols FCONE FCONE);
     make_symmetric(respnt, cols); 
 
     return res;
@@ -214,7 +217,7 @@ Matrix<> tcrossprod1(const Matrix<>& A)
     //for (int i=0; i<rows*cols; i++) PRINTF("%f ", Apnt[i]); PRINTF("\n");       
 
     // several arguments are changed compared to crossprod1
-    dsyrk_("L", "N", &rows, &cols, &one, Apnt, &rows, &zero, respnt, &rows); 
+    dsyrk_("L", "N", &rows, &cols, &one, Apnt, &rows, &zero, respnt, &rows FCONE FCONE); 
     make_symmetric(respnt, rows); 
 
     return res;
@@ -320,7 +323,7 @@ Eigen eigen (const Matrix<>& A, bool vectors=true)
     dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
         &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
         eigenvalues + order, &order, isuppz, &tmp, &lwork, &itmp,
-        &liwork, &info);
+        &liwork, &info FCONE FCONE FCONE);
     SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
         "Internal error in LAPACK routine dsyevr");
     lwork = (int) tmp;
@@ -332,7 +335,7 @@ Eigen eigen (const Matrix<>& A, bool vectors=true)
     dsyevr_(getvecs, "A", "L", &order, Aarray, &order, &dignored,
         &dignored, &iignored, &iignored, &abstol, &m, eigenvalues, 
         eigenvalues + order, &order, isuppz, work, &lwork, iwork,
-        &liwork, &info);
+        &liwork, &info FCONE FCONE FCONE);
     SCYTHE_CHECK_10(info != 0, scythe_lapack_internal_error,
         "Internal error in LAPACK routine dsyevr");
 
