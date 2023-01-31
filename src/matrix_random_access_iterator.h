@@ -94,22 +94,28 @@ namespace scythe {
   template <typename T_type, matrix_order ORDER, matrix_order M_ORDER,
             matrix_style M_STYLE>
   class const_matrix_random_access_iterator
-    : public std::iterator<std::random_access_iterator_tag, T_type>
+//    : public std::iterator<std::random_access_iterator_tag, T_type>
   {
 		public:
-			/**** TYPEDEFS ***/
+            using iterator_category = std::random_access_iterator_tag;
+            using value_type = T_type;
+            using difference_type = T_type;
+            using pointer =  T_type*;
+            using reference =  T_type&;
+            
+            			/**** TYPEDEFS ***/
 			typedef const_matrix_random_access_iterator<T_type, ORDER, 
               M_ORDER, M_STYLE> self;
 
 			/* These are a little formal, but useful */
-			typedef typename std::iterator_traits<self>::value_type
-				value_type;
-			typedef typename std::iterator_traits<self>::iterator_category
-				iterator_category;
-			typedef typename std::iterator_traits<self>::difference_type
-				difference_type;
-			typedef typename std::iterator_traits<self>::pointer pointer;
-			typedef typename std::iterator_traits<self>::reference reference;
+//			typedef typename std::iterator_traits<self>::value_type
+//				value_type;
+//			typedef typename std::iterator_traits<self>::iterator_category
+//				iterator_category;
+//			typedef typename std::iterator_traits<self>::difference_type
+//				difference_type;
+//			typedef typename std::iterator_traits<self>::pointer pointer;
+//			typedef typename std::iterator_traits<self>::reference reference;
 
 		
 			/**** CONSTRUCTORS ****/

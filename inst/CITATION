@@ -1,12 +1,8 @@
-citHeader("To cite the chngpt package in publications use the following. To cite methodology behind the implementation, please see individual function manuals.")
-
-citEntry(entry="Article",
-         title = "chngpt: threshold regression model estimation and inference.",
-         author = personList(as.person("Youyi Fong"), as.person("Ying Huang"), as.person("Peter Gilbert"), as.person("Sallie Permar")),
-         journal      = "BMC Bioinformatics",
-         year         = "2017",
-	     volume       = "DOI:10.1186/s12859-017-1863-x",
-         textVersion = 
-         paste("Fong, Huang, Gilbert, Permar (2017).", 
-               "chngpt: threshold regression model estimation and inference. BMC Bioinformatics, DOI:10.1186/s12859-017-1863-x")
+bibentry(
+   bibtype = "Manual",
+   title = "chngpt: threshold regression model estimation and inference",
+   author = c(as.person("Youyi Fong"), as.person("Ying Huang"), as.person("Peter Gilbert"), as.person("Sallie Permar")),
+   journal      = "BMC Bioinformatics",
+   year         = "2017",
+   volume       = "DOI:10.1186/s12859-017-1863-x"
 )

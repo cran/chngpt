@@ -95,8 +95,10 @@ SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP u_nBoot, SEXP u_I)
     
     double* Xpnt = X.getArray();
     double* Xcolpnt = Xcol.getArray();
-    for (i=0; i<n*p; i++) PRINTF("%f ", Xcolpnt[i]); PRINTF("\n");       
-    for (i=0; i<n*p; i++) PRINTF("%f ", Xpnt[i]); PRINTF("\n");       
+    for (i=0; i<n*p; i++) PRINTF("%f ", Xcolpnt[i]); 
+    PRINTF("\n");       
+    for (i=0; i<n*p; i++) PRINTF("%f ", Xpnt[i]); 
+    PRINTF("\n");       
     PRINTF("%i %i\n",(int) X.rows(), (int) X.cols());       
     PRINTF("%i %i\n",(int) Xcol.rows(),(int) Xcol.cols());       
           

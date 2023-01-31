@@ -46,6 +46,8 @@
 #include "scythestat/error.h"
 #endif
 
+#define SCYTHE_PTHREAD
+
 #ifdef SCYTHE_PTHREAD
 #include <pthread.h>
 #endif

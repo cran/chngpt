@@ -2177,7 +2177,7 @@ namespace scythe {
 					T_type tmp = (*this)(0);
 					resize2Match(M);
           std::transform(M.template begin_f<ORDER>(), M.template end_f<ORDER>(),
-              begin_f(), std::bind1st(op, tmp, std::placeholders::_1));
+              begin_f(), std::bind(op, tmp, std::placeholders::_1));
 				} else if (M.size() == 1) { // nXm += 1x1
 					std::transform(begin_f(), end_f(), begin_f(),
 							std::bind(op, std::placeholders::_1, M(0)));

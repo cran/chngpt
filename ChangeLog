@@ -365,3 +365,11 @@
 2022-4-6
     * Takes care of blas issues related to FCONE
 
+2022-1-28
+    * replace bind1st with bind
+
+2022-1-29
+	*  deal with deprecation of std::iterator, -Wuse-after-free, -Wmisleading-indentation
+
+2022-1-30
+	*  citation file format change
