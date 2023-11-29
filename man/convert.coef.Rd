@@ -23,41 +23,41 @@ threshold.func(threshold.type, coef, xx, x.name, include.intercept=FALSE)
 \arguments{
 
   \item{include.intercept}{
-%%     ~~Describe \code{coef.0} here~~
+coef.0
 }
   \item{coef.0}{
-%%     ~~Describe \code{coef.0} here~~
+coef.0
 }
   \item{threshold.type}{
-%%     ~~Describe \code{threshold.type} here~~
+threshold.type
 }
   \item{get.simultaneous}{
-%%     ~~Describe \code{threshold.type} here~~
+threshold.type
 }
   \item{return.boot}{
-%%     ~~Describe \code{threshold.type} here~~
+threshold.type
 }
 
   \item{fit}{
-%%     ~~Describe \code{fit} here~~
+fit
 }
   \item{boot.ci.type}{
-%%     ~~Describe \code{boot.ci.type} here~~
+boot.ci.type
 }
   \item{alpha}{
-%%     ~~Describe \code{alpha} here~~
+alpha
 }
   \item{verbose}{
-%%     ~~Describe \code{verbose} here~~
+verbose
 }
 
   \item{coef}{
-%%     ~~Describe \code{coef} here~~
+coef
 }
   \item{xx}{
-%%     ~~Describe \code{xx} here~~
+xx
 }
   \item{x.name}{
-%%     ~~Describe \code{x.name} here~~
+x.name
 }
 }

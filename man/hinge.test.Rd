@@ -14,16 +14,16 @@ hinge.test(formula, cov.interest, family = c("binomial", "gaussian"), data, thre
 %- maybe also 'usage' for other objects documented here.
 \arguments{
   \item{formula}{
-%%     ~~Describe \code{formula} here~~
+formula
 }
   \item{cov.interest}{
-%%     ~~Describe \code{cov.interest} here~~
+cov.interest
 }
   \item{family}{
-%%     ~~Describe \code{family} here~~
+family
 }
   \item{data}{
-%%     ~~Describe \code{data} here~~
+data
 }
   \item{thres}{
 If supplied, this will be the threshold value to use in the hinge model.
@@ -47,7 +47,7 @@ If supplied, this will be the threshold value to use in the hinge model.
     number of inner bootstrap replicates for DB
   }
   \item{verbose}{
-%%     ~~Describe \code{verbose} here~~
+verbose
 }
 }
 \value{

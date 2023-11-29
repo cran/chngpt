@@ -13,21 +13,21 @@ performance.unit.test(formula.1, formula.2, family, data, B, I)
 %- maybe also 'usage' for other objects documented here.
 \arguments{
   \item{formula.1}{
-%%     ~~Describe \code{formula.1} here~~
+formula.1
 }
   \item{formula.2}{
-%%     ~~Describe \code{formula.2} here~~
+formula.2
 }
   \item{family}{
-%%     ~~Describe \code{family} here~~
+family
 }
   \item{data}{
-%%     ~~Describe \code{data} here~~
+data
 }
   \item{B}{
-%%     ~~Describe \code{B} here~~
+B
 }
   \item{I}{
-%%     ~~Describe \code{I} here~~
+I
 }
 }

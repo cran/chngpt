@@ -14,33 +14,33 @@ sim.hinge(threshold.type = c("NA", "hinge"), family = c("binomial", "gaussian"),
 %- maybe also 'usage' for other objects documented here.
 \arguments{
   \item{threshold.type}{
-%%     ~~Describe \code{threshold.type} here~~
+threshold.type
 }
   \item{family}{
-%%     ~~Describe \code{family} here~~
+family
 }
   \item{thres}{
-%%     ~~Describe \code{thres} here~~
+thres
 }
   \item{X.ditr}{
-%%     ~~Describe \code{X.ditr} here~~
+X.ditr
 }
   \item{mu.X}{
-%%     ~~Describe \code{mu.X} here~~
+mu.X
 }
   \item{coef.X}{
-%%     ~~Describe \code{coef.X} here~~
+coef.X
 }
   \item{cov.X}{
-%%     ~~Describe \code{cov.X} here~~
+cov.X
 }
   \item{eps.sd}{
-%%     ~~Describe \code{eps.sd} here~~
+eps.sd
 }
   \item{seed}{
-%%     ~~Describe \code{seed} here~~
+seed
 }
   \item{n}{
-%%     ~~Describe \code{n} here~~
+n
 }
 }

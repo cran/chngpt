@@ -626,7 +626,7 @@ namespace scythe
   inline void scythe_terminate ()
   {
 #ifdef SCYTHE_RPACK
-    Rprintf(serr->what());
+//    Rprintf(serr->what());
     error("Aborting Scythe C++ execution");
 #else
     std::cerr << serr->what() << std::endl;

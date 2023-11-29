@@ -80,25 +80,25 @@ An object of type chngpt.test.
 }
   \item{\dots}{arguments passed to or from methods}
   \item{by.percentile}{
-%%     ~~Describe \code{expr} here~~
+tbd
 }
   \item{both}{
-%%     ~~Describe \code{expr} here~~
+tbd
 }
   \item{main}{
-%%     ~~Describe \code{expr} here~~
+tbd
 }
   \item{prec.weights}{
-%%     ~~Describe \code{expr} here~~
+tbd
 }
   \item{p.val.method}{
-%%     ~~Describe \code{expr} here~~
+tbd
 }
   \item{boot.B}{
-%%     ~~Describe \code{expr} here~~
+tbd
 }
   \item{keep.fits}{
-%%     ~~Describe \code{expr} here~~
+tbd
 }
 
 }

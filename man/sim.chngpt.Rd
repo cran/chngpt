@@ -44,19 +44,19 @@ string. Types of threshold effect to simulate, only applicable when label does n
 string. Glm family.
 }
   \item{n}{
-%%     ~~Describe \code{n} here~~
+n
 }
   \item{mu.z}{
-%%     ~~Describe \code{n} here~~
+n
 }
   \item{seed}{
-%%     ~~Describe \code{seed} here~~
+seed
 }
   \item{weighted}{
-%%     ~~Describe \code{beta} here~~
+beta
 }
   \item{beta}{
-%%     ~~Describe \code{beta} here~~
+beta
 }
   \item{coef.z}{
 numeric. Coefficient for z.
@@ -80,16 +80,16 @@ numeric
 string. Possible values: norm (normal distribution), gam (gamma distribution). gam1 is a hack to allow e. be different
 }
   \item{e.}{
-%%     ~~Describe \code{e.} here~~
+e.
 }
   \item{verbose}{
   Boolean
 }
   \item{b.transition}{
-%%     ~~Describe \code{b.} here~~
+b.
 }
   \item{sd}{
-%%     ~~Describe \code{b.} here~~
+b.
 }
   \item{ar}{
 autocorrelation
@@ -98,22 +98,22 @@ autocorrelation
 Candidate values of alpha, used in code to determine alpha values
 }
   \item{e}{
-%%     ~~Describe \code{e} here~~
+e
 }
   \item{beta_e}{
-%%     ~~Describe \code{beta_e} here~~
+beta_e
 }
   \item{f}{
-%%     ~~Describe \code{f} here~~
+f
 }
   \item{beta_f}{
-%%     ~~Describe \code{beta_f} here~~
+beta_f
 }
   \item{logistic.slope}{
-%%     ~~Describe \code{beta_f} here~~
+beta_f
 }
   \item{gamma}{
-%%     ~~Describe \code{beta_f} here~~
+beta_f
 }
   \item{heteroscedastic}{Boolean.}
 

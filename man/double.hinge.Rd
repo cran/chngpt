@@ -26,71 +26,71 @@ double.hinge(x, y, lower.y = NULL, upper.y = NULL,
 }
 \arguments{
   \item{object}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{x}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{y}{
-%%     ~~Describe \code{y} here~~
+y
 }
   \item{lower.y}{
-%%     ~~Describe \code{lower.y} here~~
+lower.y
 }
   \item{upper.y}{
-%%     ~~Describe \code{upper.y} here~~
+upper.y
 }
   \item{var.type}{
-%%     ~~Describe \code{var.type} here~~
+var.type
 }
   \item{boot.ci.type}{
-%%     ~~Describe \code{var.type} here~~
+var.type
 }
   \item{ci.bootstrap.size}{
-%%     ~~Describe \code{ci.bootstrap.size} here~~
+ci.bootstrap.size
 }
   \item{alpha}{
-%%     ~~Describe \code{alpha} here~~
+alpha
 }
   \item{save.boot}{
-%%     ~~Describe \code{save.boot} here~~
+save.boot
 }
   \item{ncpus}{
-%%     ~~Describe \code{ncpus} here~~
+ncpus
 }
   \item{lcol}{
-%%     ~~Describe \code{ncpus} here~~
+ncpus
 }
   \item{lwd}{
-%%     ~~Describe \code{ncpus} here~~
+ncpus
 }
 
   \item{which}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{xlim}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{lty}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{add.points}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{add.ci}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{breaks}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{mark.chngpt}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{xlab}{
-%%     ~~Describe \code{x} here~~
+x
 }
   \item{ylab}{
-%%     ~~Describe \code{x} here~~
+x
 }
 
 
