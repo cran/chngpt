@@ -1,10 +1,10 @@
 0e492093bd87578a6b19d67d23c75c8b *ChangeLog
-012bdaf7ea3acf373c215e9ea353a833 *DESCRIPTION
+33dd83ba560d89771447949d3178ad33 *DESCRIPTION
 d72597d2556c6c7756f27e07569ee592 *NAMESPACE
 298f7e7509911b1e4dddff149d691b3c *R/antoch.test.R
 69ec36fba928c7a5156286810b3f52bd *R/chngpt.test.2.R
 6581496bf5ffbea30466bea7ea74cf11 *R/chngpt.test.R
-66bbcc5ed7c82b3f10233f6ed253e1cb *R/chngptm.R
+6cda6b195d3011386d84d8645ab7370f *R/chngptm.R
 d287614094187b81a8a34874ff651450 *R/double.hinge.R
 d512512b4e6c36eff0be379a104a2c80 *R/hinge.test.R
 d02e2ee092f6df2334a37fa24aa4f5a5 *R/onAttach.R
@@ -20,7 +20,7 @@ ee6e5c17e1479c09ab44d478b43ae080 *data/dat.mtct.rda
 7f71850e2bf4527628678b688a85077b *data/nutrition.rda
 ea25138d0df2c1eada8655acc16886da *data/sim.alphas.rda
 f9794e631245db7a207f72ea834783c8 *inst/CITATION
-1a2353e7a4a44218dceb3a29459b667a *inst/doc/chngpt-vignette.pdf
+cd2ed9807fc28969e8452116a4d983f9 *inst/doc/chngpt-vignette.pdf
 82e747aa9aeaf112cb1b9113ff6d881f *inst/doc/chngpt-vignette.pdf.asis
 a616e808bd826e929f56223020649675 *inst/unitTests/Makefile
 0c12c1ada770c9626aae4253db6d4e85 *inst/unitTests/report.html

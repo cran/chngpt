@@ -40,8 +40,7 @@ chngptm = function(formula.1, formula.2, family, data,
     RhpcBLASctl::blas_set_num_threads(1L)
     #stopifnot(blas_get_num_procs() == 1L) # Commented this out as it does not work as expected any more!
     RhpcBLASctl::omp_set_num_threads(1L)
-    stopifnot(RhpcBLASctl::omp_get_max_threads() == 1L)
-    
+
     
     if (var.type=="bootstrap" & ci.bootstrap.size %% ncpus != 0) stop("ci.bootstrap.size needs to be a multiple of ncpus")
     
