@@ -58,8 +58,8 @@ SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP u_nBoot, SEXP u_I)
     // put u_X and u_Y into Matrixes X and Y
     // note that the rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in MCMCpack MCMCmetrop1R.cc
     double* uX_dat = REAL(u_X);
-    const int n = nrows(u_X);
-    const int p = ncols(u_X);
+    const int n = Rf_nrows(u_X);
+    const int p = Rf_ncols(u_X);
     Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major 
     // convert to row major so that creating bootstrap datasets can be faster   
     Matrix<double,Row,Concrete> X(Xcol); // row major        
@@ -67,11 +67,11 @@ SEXP performance_unit_test(SEXP u_X, SEXP u_Y, SEXP u_nBoot, SEXP u_I)
     double *Y_dat=REAL(u_Y);
     Matrix <> Y (n, 1, Y_dat);
     // bootstrap replicate
-    int nBoot = asInteger(u_nBoot); nBoot=nBoot*1;
-    int I = asInteger(u_I); I=I*1;
+    int nBoot = Rf_asInteger(u_nBoot); nBoot=nBoot*1;
+    int I = Rf_asInteger(u_I); I=I*1;
 
     // output
-    SEXP _ans=PROTECT(allocVector(REALSXP, 1));
+    SEXP _ans=PROTECT(Rf_allocVector(REALSXP, 1));
     double *ans=REAL(_ans);    
     ans[0]=0; // to avoid compiler warning
     

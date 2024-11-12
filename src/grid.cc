@@ -140,14 +140,14 @@ SEXP gridC_gaussian(
     double* W_dat=REAL(u_W);    
 
     int *thresholdIdx=INTEGER(u_thresholdIdx);
-    int nBoot = asInteger(u_nBoot);
+    int nBoot = Rf_asInteger(u_nBoot);
 //    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
     
     int i,j;
 
-    const int n = nrows(u_X);
-    const int p = ncols(u_X); // number of predictors, including the thresholed variable
-    int nThresholds=length(u_thresholdIdx);
+    const int n = Rf_nrows(u_X);
+    const int p = Rf_ncols(u_X); // number of predictors, including the thresholed variable
+    int nThresholds=Rf_length(u_thresholdIdx);
     //for (i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
         
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe or MCMCpack MCMCmetrop1R.cc
@@ -161,7 +161,7 @@ SEXP gridC_gaussian(
     if (nBoot<0.1) {
     // a single search
     
-        SEXP _logliks=PROTECT(allocVector(REALSXP, nThresholds));
+        SEXP _logliks=PROTECT(Rf_allocVector(REALSXP, nThresholds));
         double *logliks=REAL(_logliks);        
         
         for(i=0; i<nThresholds; i++) thresholds[i]=X(thresholdIdx[i]-1,p-1);
@@ -181,7 +181,7 @@ SEXP gridC_gaussian(
     
       //  //output variables: logliks will not be returned to R, estimates from each bootstrap copy will be stored in coef and returned
         double * logliks = (double *) malloc((nThresholds) * sizeof(double));
-        SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p+1)));// p slopes, 1 threshold
+        SEXP _coef=PROTECT(Rf_allocVector(REALSXP, nBoot*(p+1)));// p slopes, 1 threshold
         double *coef=REAL(_coef);    
         
         // these variables are reused within each bootstrap replicate

@@ -60,26 +60,26 @@ SEXP fastgrid2_gaussian(
      SEXP u_sieveY
 ){
     double tmp=0;
-    int model = asInteger(u_model);
+    int model = Rf_asInteger(u_model);
     int ncut = model==111?2:1; 
     
     double* X_dat = REAL(u_X);
     double* Y_dat=REAL(u_Y); 
     double* W_dat=REAL(u_W);  
-    bool sieveBoot = !isNull(u_sieveY);
+    bool sieveBoot = !Rf_isNull(u_sieveY);
     double* sieveY_dat; 
     if (sieveBoot) sieveY_dat=REAL(u_sieveY); else sieveY_dat=Y_dat; // the latter is just to get rid of no-initialization warning
     
     int *thresholdIdx=INTEGER(u_thresholdIdx);
-    int verbose=asInteger(u_verbose); 
-    int nBoot = asInteger(u_nBoot);
+    int verbose=Rf_asInteger(u_verbose); 
+    int nBoot = Rf_asInteger(u_nBoot);
     
-    const int n = nrows(u_X);
-    const int p = ncols(u_X); 
-    int nThresholds=length(u_thresholdIdx);
-    int nSub = asInteger(u_nSub);
+    const int n = Rf_nrows(u_X);
+    const int p = Rf_ncols(u_X); 
+    int nThresholds=Rf_length(u_thresholdIdx);
+    int nSub = Rf_asInteger(u_nSub);
     if (nSub==0) nSub=n;
-    int withReplacement=asInteger(u_withReplacement); 
+    int withReplacement=Rf_asInteger(u_withReplacement); 
     //PRINTF("thresholdIdx: "); for (int i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
         
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe or MCMCpack MCMCmetrop1R.cc
@@ -134,7 +134,7 @@ SEXP fastgrid2_gaussian(
     if (nBoot<0.1) {
     // a single search        
         if(model==111) {
-            SEXP _ehatvec=PROTECT(allocVector(REALSXP, 2));
+            SEXP _ehatvec=PROTECT(Rf_allocVector(REALSXP, 2));
             double *ehatvec=REAL(_ehatvec);
             if (p>1) _preprocess(Z,Y);
             for(i=0; i<nThresholds; i++) thresholds[i]=x[thresholdIdx[i]-1];
@@ -147,7 +147,7 @@ SEXP fastgrid2_gaussian(
             return _ehatvec;        
             
         } else {
-            SEXP _logliks=PROTECT(allocVector(REALSXP, nThresholds));
+            SEXP _logliks=PROTECT(Rf_allocVector(REALSXP, nThresholds));
             double *logliks=REAL(_logliks);       
     
             // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
@@ -235,7 +235,7 @@ SEXP fastgrid2_gaussian(
         } else if (model==111){ p_coef=p+3;
         } else PRINTF("wrong \n");;
         
-        SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p_coef)));
+        SEXP _coef=PROTECT(Rf_allocVector(REALSXP, nBoot*(p_coef)));
         double *coef=REAL(_coef);    
 
         Matrix <double,Row,Concrete> Zb(n,p-1), Xbreg(n,p_coef-ncut), Yb(n,1);
@@ -437,7 +437,7 @@ SEXP fastgrid2_gaussian(
             p_coef=p+1; 
         } else PRINTF("wrong model in m-out-of-n bootstrap\n");;
                 
-        SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p_coef)));
+        SEXP _coef=PROTECT(Rf_allocVector(REALSXP, nBoot*(p_coef)));
         double *coef=REAL(_coef);    
 
         // redefine these variables with nSub rows

@@ -307,17 +307,17 @@ SEXP twoD_gaussian(
     int* stratified_by_dat = INTEGER(u_stratified_by);
 //    int *thresholdIdx1=INTEGER(u_thresholdIdx1);
 //    int *thresholdIdx2=INTEGER(u_thresholdIdx2);
-//    int n0 = asInteger(u_n0);
-//    int n1 = asInteger(u_n1);
-    double lb = asReal(u_lb);
-    double ub = asReal(u_ub);
-    int verbose=asInteger(u_verbose); 
-    int nBoot = asInteger(u_nBoot);
+//    int n0 = Rf_asInteger(u_n0);
+//    int n1 = Rf_asInteger(u_n1);
+    double lb = Rf_asReal(u_lb);
+    double ub = Rf_asReal(u_ub);
+    int verbose=Rf_asInteger(u_verbose); 
+    int nBoot = Rf_asInteger(u_nBoot);
     
-    const int n = nrows(u_X);
-    const int p = ncols(u_X); // number of predictors, not including the thresholed variable since u_added is separated out
-//    int nThresholds1=length(u_thresholdIdx1);
-//    int nThresholds2=length(u_thresholdIdx2);
+    const int n = Rf_nrows(u_X);
+    const int p = Rf_ncols(u_X); // number of predictors, not including the thresholed variable since u_added is separated out
+//    int nThresholds1=Rf_length(u_thresholdIdx1);
+//    int nThresholds2=Rf_length(u_thresholdIdx2);
     //PRINTF("thresholdIdx: "); for (int i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
         
     Matrix<double,Col,Concrete> Xcol (n, p, X_dat); //The rows and colns are organized in a way now that they can be directly casted into column major, and there is no need to do things as in the JSS paper on sycthe or MCMCpack MCMCmetrop1R.cc
@@ -359,7 +359,7 @@ SEXP twoD_gaussian(
         //for (i=0; i<nThresholds1; i++) PRINTF("%f ", thresholds1[i]); PRINTF("\n"); 
         //for (i=0; i<nThresholds2; i++) PRINTF("%f ", thresholds2[i]); PRINTF("\n"); 
     
-        SEXP _logliks=PROTECT(allocVector(REALSXP, nThresholds1*nThresholds2));
+        SEXP _logliks=PROTECT(Rf_allocVector(REALSXP, nThresholds1*nThresholds2));
         double *logliks=REAL(_logliks);       
         
         // compute Y'HY. this is not needed to find e_hat, but good to have for comparison with other estimation methods
@@ -400,7 +400,7 @@ SEXP twoD_gaussian(
         // logliks will not be returned to R, estimates from each bootstrap copy will be stored in coef and returned
         // to avoid allocating space for logliks for each bootstrap replicate, we allocate a big enough space just once
         double * logliks = (double *) malloc((n*n) * sizeof(double));
-        SEXP _coef=PROTECT(allocVector(REALSXP, nBoot*(p+2+2)));// p slopes, 2 thresholds and 2 threshold-related slopes
+        SEXP _coef=PROTECT(Rf_allocVector(REALSXP, nBoot*(p+2+2)));// p slopes, 2 thresholds and 2 threshold-related slopes
         double *coef=REAL(_coef);    
         
         // these variables are reused within each bootstrap replicate

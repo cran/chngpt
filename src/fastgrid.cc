@@ -172,13 +172,13 @@ SEXP fastgrid_gaussian(
     double* W_dat=REAL(u_W);    
 
     int *thresholdIdx=INTEGER(u_thresholdIdx);
-    int nBoot = asInteger(u_nBoot);
+    int nBoot = Rf_asInteger(u_nBoot);
 //    bool isUpperHinge=asLogical(u_isUpperHinge)==1;
     //for (int i=0; i<nThresholds; i++) PRINTF("%i ", thresholdIdx[i]); PRINTF("\n");
     
-    const int n = nrows(u_X);
-    const int p = ncols(u_X);
-    int nThresholds=length(u_thresholdIdx);
+    const int n = Rf_nrows(u_X);
+    const int p = Rf_ncols(u_X);
+    int nThresholds=Rf_length(u_thresholdIdx);
         
     // The rows and colns are organized in a way now that they can be directly casted and there is no need to do things as in the JSS paper on sycthe or MCMCpack MCMCmetrop1R.cc
     Matrix<double,Col,Concrete> Xcol (n, p, uX_dat); //column major     
@@ -194,7 +194,7 @@ SEXP fastgrid_gaussian(
     if (nBoot<0.1) {
     // a single search
         //output variables: logliks will be stored in ans and returned, stats won't be returned
-        SEXP _ans=PROTECT(allocVector(REALSXP, nThresholds));
+        SEXP _ans=PROTECT(Rf_allocVector(REALSXP, nThresholds));
         double *ans=REAL(_ans);        
         double * stats = (double *) malloc((p+1) * sizeof(double));
         
@@ -212,7 +212,7 @@ SEXP fastgrid_gaussian(
     // bootstrap
         //output variables: rsses won't be returned to R, estimates from each bootstrap copy will be stored in ans and returned
         double * rsses = (double *) malloc((nThresholds) * sizeof(double));
-        SEXP _ans=PROTECT(allocVector(REALSXP, nBoot*(p+1)));// p slopes, 1 threshold, 1 goodness of fit stat
+        SEXP _ans=PROTECT(Rf_allocVector(REALSXP, nBoot*(p+1)));// p slopes, 1 threshold, 1 goodness of fit stat
         double *ans=REAL(_ans);    
         
         for (int b=0; b<nBoot; b++) {        

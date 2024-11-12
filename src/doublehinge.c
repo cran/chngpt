@@ -51,18 +51,18 @@ SEXP double_hinge_fit(
     double* Y=REAL(u_Y); 
     double* chngpts_1=REAL(u_chngpts_1);    
     double* chngpts_2=REAL(u_chngpts_2);    
-    double lower_y = asReal(u_lower_y);
-    double upper_y = asReal(u_upper_y);
+    double lower_y = Rf_asReal(u_lower_y);
+    double upper_y = Rf_asReal(u_upper_y);
     
-    int n_1=length(u_chngpts_1);
-    int n_2=length(u_chngpts_2);
-    int n  =length(u_X);
+    int n_1=Rf_length(u_chngpts_1);
+    int n_2=Rf_length(u_chngpts_2);
+    int n  =Rf_length(u_X);
     
     int i, j, k;
     double x, y_hat, mse, e_1, e_2;    
        
     // allocate memory for return variables and other variables
-    SEXP _coef=PROTECT(allocVector(REALSXP, 4));// 2 thresholds, 1 slope, 1 mse
+    SEXP _coef=PROTECT(Rf_allocVector(REALSXP, 4));// 2 thresholds, 1 slope, 1 mse
     double *coef=REAL(_coef);    
     double * mses = (double *) malloc(n_1 * n_2 * sizeof(double));
     
@@ -124,14 +124,14 @@ SEXP double_hinge_fit_2(
      
     double* X = REAL(u_X);
     double* Y=REAL(u_Y); 
-    double lower_y = asReal(u_lower_y);
-    double upper_y = asReal(u_upper_y);
+    double lower_y = Rf_asReal(u_lower_y);
+    double upper_y = Rf_asReal(u_upper_y);
     
     // allocate memory for return variables and other variables
-    SEXP _coef=PROTECT(allocVector(REALSXP, 4));// 2 thresholds, 1 slope, 1 mse
+    SEXP _coef=PROTECT(Rf_allocVector(REALSXP, 4));// 2 thresholds, 1 slope, 1 mse
     double *coef=REAL(_coef);        
 
-    int i, j, k, n=length(u_X);    
+    int i, j, k, n=Rf_length(u_X);    
     double y_hat, mse, e_1, e_2, e_1_min=X[0], e_2_min=X[1], mse_min=INFINITY;
     
     for(i=0; i<n; i++) {

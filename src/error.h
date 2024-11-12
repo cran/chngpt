@@ -213,7 +213,7 @@ namespace scythe
       std::set_terminate (scythe_terminate);
       if (halt) {
 #ifdef SCYTHE_RPACK
-        error("Aborting Scythe C++ execution");
+        perror("Aborting Scythe C++ execution");
 #else
         error("Aborting Scythe C++ execution");
 //        std::terminate ();// violates CRAN policy
@@ -627,7 +627,7 @@ namespace scythe
   {
 #ifdef SCYTHE_RPACK
 //    Rprintf(serr->what());
-    error("Aborting Scythe C++ execution");
+    perror("Aborting Scythe C++ execution");
 #else
     std::cerr << serr->what() << std::endl;
     std::cerr << std::endl;
